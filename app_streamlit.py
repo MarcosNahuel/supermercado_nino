@@ -16,6 +16,11 @@ import os
 import warnings
 warnings.filterwarnings('ignore')
 
+DEFAULT_PROCESSED_DIR = Path("data/processed/FASE1_OUTPUT")
+DEFAULT_SAMPLE_DIR = Path("data/sample/FASE1_OUTPUT_SAMPLE")
+LEGACY_PROCESSED_DIR = Path("FASE1_OUTPUT")
+LEGACY_SAMPLE_DIR = Path("FASE1_OUTPUT_SAMPLE")
+
 # =============================================================================
 # CONFIGURACIÓN DE PÁGINA
 # =============================================================================
@@ -152,13 +157,41 @@ st.markdown("""
 # =============================================================================
 # CARGAR DATOS
 # =============================================================================
-@st.cache_data
-def load_data():
-    """Carga todos los archivos CSV generados por el análisis"""
-    base_path = Path(os.environ.get("NINO_DATA_DIR", "FASE1_OUTPUT"))
-    if not base_path.exists() and Path("FASE1_OUTPUT_SAMPLE").exists():
-        base_path = Path("FASE1_OUTPUT_SAMPLE")
+def resolve_data_dir():
+    """Devuelve la carpeta con los datasets procesados disponibles."""
+    candidates = []
 
+    env_dir = os.environ.get("NINO_DATA_DIR")
+    if env_dir:
+        env_path = Path(env_dir).expanduser()
+        if not env_path.is_absolute():
+            env_path = Path.cwd() / env_path
+        candidates.append(env_path.resolve())
+
+    candidates.extend([
+        DEFAULT_PROCESSED_DIR,
+        LEGACY_PROCESSED_DIR,
+        DEFAULT_SAMPLE_DIR,
+        LEGACY_SAMPLE_DIR,
+    ])
+
+    seen = set()
+    for candidate in candidates:
+        if candidate is None:
+            continue
+        key = str(candidate)
+        if key in seen:
+            continue
+        seen.add(key)
+        if candidate.exists():
+            return candidate
+    return None
+
+
+@st.cache_data(show_spinner=False)
+def load_data(base_path):
+    """Carga todos los archivos CSV generados por el análisis."""
+    base_path = Path(base_path)
     data = {}
     try:
         data['items'] = pd.read_csv(base_path / '01_ITEMS_VENTAS.csv', sep=';', encoding='utf-8-sig')
@@ -170,22 +203,34 @@ def load_data():
         data['clusters'] = pd.read_csv(base_path / '07_PERFILES_CLUSTERS.csv', sep=';', encoding='utf-8-sig')
         data['kpi_dia'] = pd.read_csv(base_path / '08_KPI_DIA_SEMANA.csv', sep=';', encoding='utf-8-sig')
 
-        # Convertir fechas
         data['items']['fecha'] = pd.to_datetime(data['items']['fecha'])
         data['tickets']['fecha'] = pd.to_datetime(data['tickets']['fecha'])
-
         return data
-    except Exception as e:
-        st.error(f"Error cargando datos: {e}")
+    except Exception as exc:
+        st.error(f"Error cargando datos desde {base_path}: {exc}")
         return None
 
-# Cargar datos
+
+DATA_DIR = resolve_data_dir()
+
+if DATA_DIR is None:
+    st.error(
+        "No se encontraron datasets procesados. Ejecuta `FASE1_ANALISIS_COMPLETO.py` "
+        "o usa la carpeta de muestra en `data/sample/FASE1_OUTPUT_SAMPLE`."
+    )
+    st.stop()
+
 with st.spinner('Cargando datos...'):
-    data = load_data()
+    data = load_data(DATA_DIR)
 
 if data is None:
-    st.error("No se pudieron cargar los datos. Asegúrate de ejecutar primero FASE1_ANALISIS_COMPLETO.py")
     st.stop()
+
+USING_SAMPLE_DATA = DATA_DIR.name == "FASE1_OUTPUT_SAMPLE"
+if USING_SAMPLE_DATA:
+    st.sidebar.info("Mostrando datos de muestra (ideal para Streamlit Cloud).")
+else:
+    st.sidebar.success(f"Datos cargados desde: {DATA_DIR}")
 
 # =============================================================================
 # HEADER
@@ -355,97 +400,76 @@ if pagina == "🏠 Resumen Ejecutivo":
     margen_objetivo = 28  # Objetivo industria
     upside_margen = margen_objetivo - margen_actual
 
+    # Métrica anualizada para valoraciones financieras
+    ventas_anualizadas = total_ventas * 12 / 365
     st.markdown(f"""
-    <div class="wallstreet-insight">
-        <h3>📊 Análisis de Valoración y Oportunidades</h3>
-        <p><strong>1. CONCENTRACIÓN DE RIESGO (Pareto Analysis)</strong></p>
-        <ul>
-            <li>Concentración de productos clase A: <span class="highlight">{concentracion_pareto:.1f}%</span></li>
-            <li>Nivel de riesgo: {"ALTO" if concentracion_pareto < 20 else "MEDIO"} - Dependencia excesiva en productos vitales</li>
-            <li>Recomendación: Diversificar portafolio y proteger supply chain de productos A</li>
-        </ul>
+### 📊 Análisis de Valoración y Oportunidades
 
-        <p><strong>2. MARGEN OPERATIVO Y EFICIENCIA</strong></p>
-        <ul>
-            <li>Margen operativo actual: <span class="highlight">{margen_pct:.2f}%</span></li>
-            <li>Benchmark industria retail: 25-28%</li>
-            <li>Gap de margen: <span class="highlight">{upside_margen:.2f}pp</span></li>
-            <li>Oportunidad de valor: Optimizar mix de productos hacia categorías de alta rentabilidad (Fiambrería 45%, Bazar 45%)</li>
-        </ul>
+#### 1. CONCENTRACIÓN DE RIESGO (Pareto Analysis)
+- **Concentración de productos clase A:** {concentracion_pareto:.1f}%
+- **Nivel de riesgo:** {'ALTO' if concentracion_pareto < 20 else 'MEDIO'} - Dependencia excesiva en productos vitales
+- **Recomendación:** Diversificar portafolio y proteger supply chain de productos A
 
-        <p><strong>3. CUSTOMER LIFETIME VALUE (CLV) PROJECTION</strong></p>
-        <ul>
-            <li>Ticket promedio: <span class="highlight">${ticket_promedio:,.0f}</span></li>
-            <li>Frecuencia estimada: {(total_tickets / 365):.0f} tickets/día</li>
-            <li>Asumiendo 2 visitas/mes por cliente: CLV anual = ${ticket_promedio * 24:,.0f}</li>
-            <li>Estrategia: Programas de fidelización pueden incrementar CLV 15-25%</li>
-        </ul>
+#### 2. MARGEN OPERATIVO Y EFICIENCIA
+- **Margen operativo actual:** {margen_pct:.2f}%
+- **Benchmark industria retail:** 25-28%
+- **Gap de margen:** {upside_margen:.2f}pp
+- **Oportunidad de valor:** Optimizar mix de productos hacia categorías de alta rentabilidad (Fiambrería 45%, Bazar 45%)
 
-        <p><strong>4. INVENTORY TURNOVER & WORKING CAPITAL</strong></p>
-        <ul>
-            <li>Días de inventario óptimos (ALMACÉN): 15-20 días</li>
-            <li>Días de inventario óptimos (CARNES): 3-5 días</li>
-            <li>Reducción potencial de capital de trabajo: 20-30%</li>
-            <li>Impacto en flujo de caja: Liberación de $150M-$250M ARS (estimado)</li>
-        </ul>
+#### 3. CUSTOMER LIFETIME VALUE (CLV) PROJECTION
+- **Ticket promedio:** ${ticket_promedio:,.0f}
+- **Frecuencia estimada:** {(total_tickets / 365):.0f} tickets/día
+- **CLV anual (2 visitas/mes):** ${ticket_promedio * 24:,.0f}
+- **Estrategia:** Programas de fidelización pueden incrementar CLV 15-25%
 
-        <p><strong>5. PRECIO ELASTICIDAD & PODER DE PRICING</strong></p>
-        <ul>
-            <li>Categorías inelásticas (essentials): ALMACÉN, LACTEOS - Poder de pricing limitado</li>
-            <li>Categorías elásticas: BAZAR, PERFUMERÍA - Oportunidad de premiumización</li>
-            <li>Recomendación: Implementar pricing dinámico basado en elasticidad por categoría</li>
-        </ul>
+#### 4. INVENTORY TURNOVER & WORKING CAPITAL
+- **Días de inventario óptimos (ALMACÉN):** 15-20 días
+- **Días de inventario óptimos (CARNES):** 3-5 días
+- **Reducción potencial de capital de trabajo:** 20-30%
+- **Impacto en flujo de caja:** Liberación de $150M-$250M ARS (estimado)
 
-        <p><strong>6. MARKET BASKET OPTIMIZATION (Cross-Selling)</strong></p>
-        <ul>
-            <li>Regla estrella: FERNET + COCA COLA (Lift 33.44x)</li>
-            <li>Oportunidad: Bundling estratégico puede incrementar ticket 8-12%</li>
-            <li>ROI estimado: $582M-$874M ARS anuales en ventas incrementales</li>
-        </ul>
+#### 5. PRECIO ELASTICIDAD & PODER DE PRICING
+- **Categorías inelásticas (essentials):** ALMACÉN, LACTEOS - Poder de pricing limitado
+- **Categorías elásticas:** BAZAR, PERFUMERÍA - Oportunidad de premiumización
+- **Recomendación:** Implementar pricing dinámico basado en elasticidad por categoría
 
-        <p><strong>7. PROYECCIÓN DE VALORACIÓN (DCF Approach)</strong></p>
-        <ul>
-            <li>Ventas anuales actuales: <span class="highlight">${total_ventas * 12 / 365:,.0f}</span> (anualizado)</li>
-            <li>EBITDA estimado (@ 8% margen): ${total_ventas * 12 / 365 * 0.08:,.0f}</li>
-            <li>Múltiplo EV/Ventas (retail food): 0.3-0.5x</li>
-            <li>Valoración enterprise: ${total_ventas * 12 / 365 * 0.4:,.0f} ARS (mid-point)</li>
-        </ul>
-    </div>
-    """, unsafe_allow_html=True)
+#### 6. MARKET BASKET OPTIMIZATION (Cross-Selling)
+- **Regla estrella:** FERNET + COCA COLA (Lift 33.44x)
+- **Oportunidad:** Bundling estratégico puede incrementar ticket 8-12%
+- **ROI estimado:** $582M-$874M ARS anuales en ventas incrementales
+
+#### 7. PROYECCIÓN DE VALORACIÓN (DCF Approach)
+- **Ventas anuales actuales:** ${ventas_anualizadas:,.0f} (anualizado)
+- **EBITDA estimado (@ 8% margen):** ${ventas_anualizadas * 0.08:,.0f}
+- **Múltiplo EV/Ventas (retail food):** 0.3-0.5x
+- **Valoración enterprise:** ${ventas_anualizadas * 0.4:,.0f} ARS (mid-point)
+""")
 
     # Recomendaciones accionables
+    st.markdown("---")
     st.markdown("""
-    <div class="recommendation-box">
-        <h3>🎯 Recomendaciones Estratégicas Priorizadas</h3>
-        <p><strong>PRIORIDAD 1 - QUICK WINS (0-3 meses):</strong></p>
-        <ul>
-            <li>✅ Implementar combos FERNET+COCA COLA en punto de venta (+$50M ARS mensuales estimados)</li>
-            <li>✅ Ajustar precios en categorías de alta elasticidad (BAZAR, PERFUMERÍA) +3-5%</li>
-            <li>✅ Redistribuir espacio de góndola: +30% a productos categoría A</li>
-        </ul>
+### 🎯 Recomendaciones Estratégicas Priorizadas
 
-        <p><strong>PRIORIDAD 2 - TRANSFORMACIÓN OPERATIVA (3-6 meses):</strong></p>
-        <ul>
-            <li>📊 Implementar sistema ABC de gestión de inventario</li>
-            <li>📊 Programa de fidelización con rewards basados en CLV</li>
-            <li>📊 Dynamic pricing engine basado en elasticidad</li>
-        </ul>
+#### PRIORIDAD 1 - QUICK WINS (0-3 meses)
+- ✅ Implementar combos FERNET+COCA COLA en punto de venta (+$50M ARS mensuales estimados)
+- ✅ Ajustar precios en categorías de alta elasticidad (BAZAR, PERFUMERÍA) +3-5%
+- ✅ Redistribuir espacio de góndola: +30% a productos categoría A
 
-        <p><strong>PRIORIDAD 3 - CRECIMIENTO SOSTENIBLE (6-12 meses):</strong></p>
-        <ul>
-            <li>🚀 Expansión de categorías de alta rentabilidad (FIAMBRERÍA, BAZAR)</li>
-            <li>🚀 Programa de marca propia (private label) en productos A</li>
-            <li>🚀 Canal digital/e-commerce para capturar mercado adicional</li>
-        </ul>
+#### PRIORIDAD 2 - TRANSFORMACIÓN OPERATIVA (3-6 meses)
+- 📊 Implementar sistema ABC de gestión de inventario
+- 📊 Programa de fidelización con rewards basados en CLV
+- 📊 Dynamic pricing engine basado en elasticidad
 
-        <p><strong>ROI PROYECTADO (12 meses):</strong></p>
-        <ul>
-            <li>Incremento en ventas: 10-15% = $728M-$1,093M ARS</li>
-            <li>Mejora en margen: +3-5pp = $218M-$364M ARS en EBITDA</li>
-            <li>ROI total: <span class="highlight">300-500%</span> sobre inversión en tecnología/procesos</li>
-        </ul>
-    </div>
-    """, unsafe_allow_html=True)
+#### PRIORIDAD 3 - CRECIMIENTO SOSTENIBLE (6-12 meses)
+- 🚀 Expansión de categorías de alta rentabilidad (FIAMBRERÍA, BAZAR)
+- 🚀 Programa de marca propia (private label) en productos A
+- 🚀 Canal digital/e-commerce para capturar mercado adicional
+
+#### ROI PROYECTADO (12 meses)
+- **Incremento en ventas:** 10-15% = $728M-$1,093M ARS
+- **Mejora en margen:** +3-5pp = $218M-$364M ARS en EBITDA
+- **ROI total:** 300-500% sobre inversión en tecnología/procesos
+""")
 
 # =============================================================================
 # PÁGINA: ANÁLISIS PARETO
@@ -453,13 +477,7 @@ if pagina == "🏠 Resumen Ejecutivo":
 elif pagina == "📈 Análisis Pareto":
     st.header("📈 Análisis de Pareto (Ley 80/20)")
 
-    st.markdown("""
-    <div class="insight-box">
-    <strong>💡 Insight:</strong> El análisis de Pareto revela que el <strong>17.8%</strong> de los productos
-    (1,824 items) genera el <strong>80%</strong> de las ventas. Esto permite enfocar recursos en los
-    productos más rentables.
-    </div>
-    """, unsafe_allow_html=True)
+    st.info("💡 **Insight:** El análisis de Pareto revela que el **17.8%** de los productos (1,824 items) genera el **80%** de las ventas. Esto permite enfocar recursos en los productos más rentables.")
 
     # Estadísticas ABC
     col1, col2, col3 = st.columns(3)
@@ -534,12 +552,7 @@ elif pagina == "📈 Análisis Pareto":
 elif pagina == "🛒 Market Basket":
     st.header("🛒 Análisis de Cesta de Compra")
 
-    st.markdown("""
-    <div class="insight-box">
-    <strong>💡 Insight:</strong> Las reglas de asociación revelan patrones de compra conjunta.
-    Por ejemplo: <strong>FERNET + COCA COLA</strong> tiene un Lift de 34x, indicando una fuerte asociación.
-    </div>
-    """, unsafe_allow_html=True)
+    st.info("💡 **Insight:** Las reglas de asociación revelan patrones de compra conjunta. Por ejemplo: **FERNET + COCA COLA** tiene un Lift de 34x, indicando una fuerte asociación.")
 
     # Filtros
     min_lift = st.slider("Lift Mínimo", 1.0, 35.0, 5.0, 0.5)
@@ -589,12 +602,7 @@ elif pagina == "🛒 Market Basket":
 elif pagina == "👥 Segmentación":
     st.header("👥 Segmentación de Tickets (Clustering)")
 
-    st.markdown("""
-    <div class="insight-box">
-    <strong>💡 Insight:</strong> Los tickets se agrupan en 4 clusters principales:
-    <strong>Compra de Conveniencia, Compra Mediana, Compra Grande Semanal</strong>.
-    </div>
-    """, unsafe_allow_html=True)
+    st.info("💡 **Insight:** Los tickets se agrupan en 4 clusters principales: **Compra de Conveniencia, Compra Mediana, Compra Grande Semanal**.")
 
     # Mostrar perfiles
     st.subheader("Perfiles de Clusters")
@@ -802,7 +810,7 @@ elif pagina == "📊 Datos Exportables":
     st.subheader("Archivos Disponibles")
 
     for nombre, archivo in archivos.items():
-        file_path = Path("FASE1_OUTPUT") / archivo
+        file_path = DATA_DIR / archivo
         if file_path.exists():
             with open(file_path, 'rb') as f:
                 st.download_button(

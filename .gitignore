@@ -9,15 +9,41 @@ venv/
 .venv/
 ENV/
 
-# Streamlit
+# Environment variables and secrets
+.env
+.env.local
 .streamlit/secrets.toml
 
+# Supabase
+.supabase/
+
 # Data files (exclude large datasets)
+data/raw/
+data/raw/**
+!data/raw/
+!data/raw/README.md
+data/processed/FASE1_OUTPUT/
+data/processed/FASE1_OUTPUT/**
+!data/processed/
+!data/processed/README.md
+!data/sample/FASE1_OUTPUT_SAMPLE/**
+
+# Archivos CSV grandes (>100MB)
+*.csv
+!FASE1_OUTPUT_SAMPLE/*.csv
+!datos/*.csv.gz
+
+# Permitir archivos comprimidos pequeños
+!datos/RENTABILIDAD.csv
+
+# Carpetas con datos procesados grandes
 FASE1_OUTPUT/
-outputs/
-datos/*.csv
-datos/*.xlsx
-!datos/.gitkeep
+comprobantes completos/
+outputs/*.csv
+outputs/*.html
+
+# HTML reports
+*.html
 
 # IDE
 .vscode/
@@ -31,3 +57,6 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Windows temp files
+nul

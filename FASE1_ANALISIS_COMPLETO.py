@@ -46,12 +46,14 @@ print("=" * 100)
 # =============================================================================
 # CONFIGURACIÓN
 # =============================================================================
-BASE_DIR = Path(__file__).parent  # Ruta del script
-OUTPUT_DIR = BASE_DIR / "outputs"
-OUTPUT_DIR.mkdir(exist_ok=True)
+BASE_DIR = Path(__file__).resolve().parent  # Raíz del proyecto
+DATA_DIR = BASE_DIR / "data"
+RAW_DIR = DATA_DIR / "raw"
+PROCESSED_DIR = DATA_DIR / "processed" / "FASE1_OUTPUT"
+PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
 
-# Rutas de datos
-DATOS_DIR = BASE_DIR / "datos"
+# Alias para compatibilidad con el resto del script
+OUTPUT_DIR = PROCESSED_DIR
 
 # Parámetros de análisis
 MIN_SUPPORT = 0.005  # 0.5% de tickets para Market Basket
@@ -68,7 +70,7 @@ print("=" * 100)
 
 print("\n[1.1] Cargando archivo de ventas...")
 df_raw = pd.read_csv(
-    BASE_DIR / 'SERIE_COMPROBANTES_COMPLETOS.csv',
+    RAW_DIR / 'SERIE_COMPROBANTES_COMPLETOS2.csv',
     sep=';',
     decimal=',',  # CRÍTICO: Formato argentino con coma decimal
     encoding='utf-8',
@@ -129,6 +131,7 @@ print(f"  Precios unitarios válidos: {df['precio_unitario'].notna().sum():,}/{l
 
 # Texto normalizado (convertir a string primero)
 df['categoria'] = df['categoria'].astype(str).str.strip().str.upper()
+df['categoria'] = df['categoria'].replace({'NAN': pd.NA})
 df['marca'] = df['marca'].astype(str).str.strip().str.upper()
 df['descripcion'] = df['descripcion'].astype(str).str.strip().str.upper()
 
@@ -201,7 +204,19 @@ print(f"  - Períodos únicos: {df['periodo'].nunique()}")
 print(f"  - Días únicos: {df['fecha_corta'].nunique()}")
 
 print("\n[3.2] Vinculando con datos de rentabilidad por departamento...")
-df_rentabilidad = pd.read_csv(BASE_DIR / 'RENTABILIDAD.csv', encoding='utf-8', decimal=',')
+df_rentabilidad = pd.read_csv(RAW_DIR / 'RENTABILIDAD.csv', encoding='utf-8', decimal=',')
+df_rentabilidad['Departamento'] = (
+    df_rentabilidad['Departamento']
+    .astype(str)
+    .str.strip()
+    .str.replace('"', '', regex=False)
+    .str.upper()
+)
+df_rentabilidad['Clasificación'] = (
+    df_rentabilidad['Clasificación']
+    .astype(str)
+    .str.strip()
+)
 df_rentabilidad['Departamento'] = df_rentabilidad['Departamento'].str.strip().str.upper()
 # Convertir rentabilidad de string "28%" a float 28.0
 if df_rentabilidad['% Rentabilidad'].dtype == 'object':
@@ -209,12 +224,13 @@ if df_rentabilidad['% Rentabilidad'].dtype == 'object':
 else:
     df_rentabilidad['rentabilidad_pct'] = df_rentabilidad['% Rentabilidad']
 
-df = df.merge(
-    df_rentabilidad[['Departamento', 'Clasificación', 'rentabilidad_pct']],
-    left_on='categoria',
-    right_on='Departamento',
-    how='left'
-)
+# Crear diccionario para mapping (más eficiente en memoria)
+rent_dict = df_rentabilidad.set_index('Departamento')['rentabilidad_pct'].to_dict()
+clas_dict = df_rentabilidad.set_index('Departamento')['Clasificación'].to_dict()
+
+# Mapear en lugar de merge (evita duplicación de memoria)
+df['rentabilidad_pct'] = df['categoria'].map(rent_dict).fillna(0)
+df['Clasificación'] = df['categoria'].map(clas_dict).fillna('SIN CLASIFICACION')
 
 # Calcular margen estimado
 df['margen_estimado'] = df['importe_total'] * (df['rentabilidad_pct'] / 100)
@@ -510,13 +526,19 @@ print("=" * 100)
 print("\n[8.1] Exportando tablas a CSV...")
 
 # 1. Tabla de ítems (fact table)
-df_items = df[[
+items_cols = [
     'fecha', 'ticket_id', 'producto_id', 'descripcion', 'categoria', 'marca',
     'cantidad', 'precio_unitario', 'importe_total', 'margen_estimado',
     'rentabilidad_pct', 'anio', 'mes', 'dia', 'dia_semana', 'periodo'
-]].copy()
-df_items.to_csv(OUTPUT_DIR / '01_ITEMS_VENTAS.csv', index=False, encoding='utf-8-sig', sep=';')
-print(f"  ✓ 01_ITEMS_VENTAS.csv ({len(df_items):,} registros)")
+]
+df.to_csv(
+    OUTPUT_DIR / '01_ITEMS_VENTAS.csv',
+    columns=items_cols,
+    index=False,
+    encoding='utf-8-sig',
+    sep=';'
+)
+print(f"  ✓ 01_ITEMS_VENTAS.csv ({len(df):,} registros)")
 
 # 2. Tabla de tickets (aggregated)
 df_tickets.to_csv(OUTPUT_DIR / '02_TICKETS.csv', index=False, encoding='utf-8-sig', sep=';')
