@@ -12,15 +12,16 @@ import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from pathlib import Path
-import os
 import warnings
-from supabase import create_client, Client
-from dotenv import load_dotenv
+from typing import Dict, Set
 
 warnings.filterwarnings('ignore')
 
-# Cargar variables de entorno
-load_dotenv()
+# =============================================================================
+# RUTAS DE DATOS
+# =============================================================================
+APP_DATASET_DIR = Path("data/app_dataset")
+SAMPLE_DATASET_DIR = Path("data/sample/FASE1_OUTPUT_SAMPLE")
 
 # =============================================================================
 # CONFIGURACIÓN DE PÁGINA
@@ -228,105 +229,142 @@ st.markdown("""
 # =============================================================================
 # CONFIGURACIÓN DE DATOS (Supabase o Local)
 # =============================================================================
-@st.cache_resource
-def init_supabase():
-    """Inicializa conexión con Supabase si las credenciales están disponibles"""
-    supabase_url = os.getenv("SUPABASE_URL") or st.secrets.get("SUPABASE_URL")
-    supabase_key = os.getenv("SUPABASE_KEY") or st.secrets.get("SUPABASE_KEY")
+# Minimal required columns per dataset to avoid downstream errors
+REQUIRED_DATASETS: Dict[str, Set[str]] = {
+    'kpi_periodo': {'periodo', 'ventas', 'margen', 'tickets'},
+    'kpi_categoria': {'categoria', 'ventas', 'margen', 'rentabilidad_pct', 'pct_ventas'},
+    'kpi_dia': {'dia_semana', 'ventas'},
+    'pareto': {'producto_id', 'descripcion', 'categoria', 'ventas', 'pct_acumulado', 'clasificacion_abc'},
+    'clusters': {'cluster', 'cantidad_tickets', 'ticket_promedio', 'items_promedio', 'pct_tickets', 'etiqueta'},
+    'tickets': {'fecha', 'monto_total_ticket'},
+}
 
-    if supabase_url and supabase_key:
+
+def normalize_dataframe_columns(df: pd.DataFrame) -> pd.DataFrame:
+    """Normalize column names to lowercase and strip spaces."""
+    if df is None or not isinstance(df, pd.DataFrame):
+        return pd.DataFrame()
+    normalized_df = df.copy()
+    normalized_df.columns = [str(col).strip().lower() for col in normalized_df.columns]
+    return normalized_df
+
+
+def normalize_data_dict(data: Dict[str, pd.DataFrame]) -> Dict[str, pd.DataFrame]:
+    """Apply column normalization across all loaded dataframes."""
+    return {key: normalize_dataframe_columns(value) for key, value in (data or {}).items()}
+
+
+def validate_required_columns(data: Dict[str, pd.DataFrame]) -> Dict[str, str]:
+    """Ensure each dataset contains the minimal required columns."""
+    issues: Dict[str, str] = {}
+    for dataset, required_columns in REQUIRED_DATASETS.items():
+        df = data.get(dataset)
+        if df is None or df.empty:
+            issues[dataset] = 'sin datos disponibles'
+            continue
+        missing_columns = [col for col in required_columns if col not in df.columns]
+        if missing_columns:
+            issues[dataset] = f"faltan columnas: {', '.join(missing_columns)}"
+    return issues
+
+
+APP_DATA_FILES = {
+    'kpi_periodo': 'kpi_periodo.parquet',
+    'kpi_categoria': 'kpi_categoria.parquet',
+    'kpi_dia': 'kpi_dia.parquet',
+    'pareto': 'pareto.parquet',
+    'clusters': 'clusters.parquet',
+    'reglas': 'reglas.parquet',
+    'tickets': 'tickets.parquet',
+}
+
+@st.cache_resource(show_spinner=False)
+def load_data_from_app_dataset():
+    """Carga datos desde el paquete de archivos Parquet versionado en el repositorio."""
+    if not APP_DATASET_DIR.exists():
+        return None
+
+    data = {}
+    for key, filename in APP_DATA_FILES.items():
+        file_path = APP_DATASET_DIR / filename
+        if not file_path.exists():
+            data[key] = pd.DataFrame()
+            continue
         try:
-            client = create_client(supabase_url, supabase_key)
-            return client
-        except Exception as e:
-            st.sidebar.warning(f"Error al conectar con Supabase: {e}")
-            return None
-    return None
+            df = pd.read_parquet(file_path)
+            if key == 'tickets' and 'fecha' in df.columns:
+                df['fecha'] = pd.to_datetime(df['fecha'])
+            data[key] = df
+        except Exception as exc:
+            st.sidebar.warning(f"⚠️ Error al leer {filename}: {exc}")
+            data[key] = pd.DataFrame()
 
-@st.cache_data(ttl=3600)  # Cache por 1 hora
-def load_data_from_supabase(_supabase_client):
-    """Carga datos desde Supabase"""
+    data = normalize_data_dict(data)
+    return data
+
+
+@st.cache_resource(show_spinner=False)
+def load_data_from_sample():
+    """Carga datos desde la muestra CSV liviana (fallback)."""
+    if not SAMPLE_DATASET_DIR.exists():
+        return None, None
+
     try:
         data = {}
+        data['kpi_periodo'] = pd.read_csv(SAMPLE_DATASET_DIR / '03_KPI_PERIODO.csv', sep=';', encoding='utf-8-sig')
+        data['kpi_categoria'] = pd.read_csv(SAMPLE_DATASET_DIR / '04_KPI_CATEGORIA.csv', sep=';', encoding='utf-8-sig')
+        data['pareto'] = pd.read_csv(SAMPLE_DATASET_DIR / '05_PARETO_PRODUCTOS.csv', sep=';', encoding='utf-8-sig')
+        data['clusters'] = pd.read_csv(SAMPLE_DATASET_DIR / '07_PERFILES_CLUSTERS.csv', sep=';', encoding='utf-8-sig')
+        data['kpi_dia'] = pd.read_csv(SAMPLE_DATASET_DIR / '08_KPI_DIA_SEMANA.csv', sep=';', encoding='utf-8-sig')
 
-        # Cargar tablas
-        data['kpi_periodo'] = pd.DataFrame(_supabase_client.table('kpi_periodo').select('*').execute().data)
-        data['kpi_categoria'] = pd.DataFrame(_supabase_client.table('kpi_categoria').select('*').execute().data)
-        data['kpi_dia'] = pd.DataFrame(_supabase_client.table('kpi_dia_semana').select('*').execute().data)
-        data['pareto'] = pd.DataFrame(_supabase_client.table('pareto_productos').select('*').execute().data)
-        data['clusters'] = pd.DataFrame(_supabase_client.table('perfiles_clusters').select('*').execute().data)
-
-        # Intentar cargar reglas (puede no existir)
         try:
-            data['reglas'] = pd.DataFrame(_supabase_client.table('reglas_asociacion').select('*').execute().data)
+            data['reglas'] = pd.read_csv(SAMPLE_DATASET_DIR / '06_REGLAS_ASOCIACION.csv', sep=';', encoding='utf-8-sig')
         except:
             data['reglas'] = pd.DataFrame()
 
-        # Cargar muestra de tickets e items para análisis temporal
-        data['tickets'] = pd.DataFrame(_supabase_client.table('tickets').select('*').limit(10000).execute().data)
-
-        # Convertir fechas
-        if 'fecha' in data['tickets'].columns:
+        try:
+            data['tickets'] = pd.read_csv(SAMPLE_DATASET_DIR / '02_TICKETS.csv', sep=';', encoding='utf-8-sig')
             data['tickets']['fecha'] = pd.to_datetime(data['tickets']['fecha'])
+        except:
+            data['tickets'] = pd.DataFrame()
 
-        return data
-    except Exception as e:
-        st.error(f"Error cargando datos desde Supabase: {e}")
-        return None
-
-@st.cache_data
-def load_data_from_local():
-    """Carga datos desde archivos CSV locales (fallback)"""
-    DEFAULT_PROCESSED_DIR = Path("data/processed/FASE1_OUTPUT")
-    DEFAULT_SAMPLE_DIR = Path("data/sample/FASE1_OUTPUT_SAMPLE")
-
-    for base_path in [DEFAULT_PROCESSED_DIR, DEFAULT_SAMPLE_DIR]:
-        if base_path.exists():
-            try:
-                data = {}
-                data['kpi_periodo'] = pd.read_csv(base_path / '03_KPI_PERIODO.csv', sep=';', encoding='utf-8-sig')
-                data['kpi_categoria'] = pd.read_csv(base_path / '04_KPI_CATEGORIA.csv', sep=';', encoding='utf-8-sig')
-                data['pareto'] = pd.read_csv(base_path / '05_PARETO_PRODUCTOS.csv', sep=';', encoding='utf-8-sig')
-                data['clusters'] = pd.read_csv(base_path / '07_PERFILES_CLUSTERS.csv', sep=';', encoding='utf-8-sig')
-                data['kpi_dia'] = pd.read_csv(base_path / '08_KPI_DIA_SEMANA.csv', sep=';', encoding='utf-8-sig')
-
-                try:
-                    data['reglas'] = pd.read_csv(base_path / '06_REGLAS_ASOCIACION.csv', sep=';', encoding='utf-8-sig')
-                except:
-                    data['reglas'] = pd.DataFrame()
-
-                try:
-                    data['tickets'] = pd.read_csv(base_path / '02_TICKETS.csv', sep=';', encoding='utf-8-sig')
-                    data['tickets']['fecha'] = pd.to_datetime(data['tickets']['fecha'])
-                except:
-                    data['tickets'] = pd.DataFrame()
-
-                return data, base_path
-            except Exception as e:
-                continue
-
-    return None, None
+        data = normalize_data_dict(data)
+        return data, SAMPLE_DATASET_DIR
+    except Exception:
+        return None, None
 
 # =============================================================================
 # CARGAR DATOS
 # =============================================================================
-supabase = init_supabase()
 data = None
-data_source = "local"
+data_source = "app_dataset"
 
 with st.spinner('🔄 Cargando datos...'):
-    if supabase:
-        st.sidebar.success("✅ Conectado a Supabase")
-        data = load_data_from_supabase(supabase)
-        if data:
-            data_source = "supabase"
-
-    if not data:
-        data, local_path = load_data_from_local()
-        if data:
-            st.sidebar.info(f"📁 Datos locales: {local_path.name}")
+    packaged_data = load_data_from_app_dataset()
+    if packaged_data:
+        packaged_issues = validate_required_columns(packaged_data)
+        if packaged_issues:
+            issues_text = "; ".join(f"{key}: {value}" for key, value in packaged_issues.items())
+            st.sidebar.warning(f"⚠️ Datos incompletos en data/app_dataset ({issues_text}). Se intentará usar la muestra liviana.")
+            data = None
         else:
-            st.error("❌ No se pudieron cargar los datos. Verifica la configuración.")
+            data = packaged_data
+            st.sidebar.success("✅ Datos cargados desde data/app_dataset")
+
+    if data is None:
+        data_sample, sample_path = load_data_from_sample()
+        if data_sample:
+            sample_issues = validate_required_columns(data_sample)
+            if sample_issues:
+                issues_text = "; ".join(f"{key}: {value}" for key, value in sample_issues.items())
+                st.error(f"❌ La muestra liviana no contiene todas las columnas requeridas ({issues_text}).")
+                st.stop()
+            data = data_sample
+            data_source = "sample"
+            origen = sample_path.name if sample_path else "sample"
+            st.sidebar.info(f"📁 Usando dataset de muestra: {origen}")
+        else:
+            st.error("❌ No se pudieron cargar los datos locales. Verifica la carpeta data/app_dataset o la muestra en data/sample.")
             st.stop()
 
 # =============================================================================
@@ -340,10 +378,10 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # Indicador de fuente de datos
-if data_source == "supabase":
-    st.sidebar.markdown("🌐 **Fuente:** Supabase Cloud")
+if data_source == "app_dataset":
+    st.sidebar.markdown("💾 **Fuente:** data/app_dataset (Parquet)")
 else:
-    st.sidebar.markdown("💾 **Fuente:** Archivos Locales")
+    st.sidebar.markdown("🧪 **Fuente:** Dataset de muestra (data/sample)")
 
 # =============================================================================
 # MENÚ DE NAVEGACIÓN
@@ -968,7 +1006,7 @@ st.sidebar.markdown(f"""
 <div style="text-align: center; font-size: 0.85rem; color: #666; padding: 15px;">
 <strong>🏪 Supermercado NINO</strong><br>
 Analytics Dashboard v2.0<br>
-📊 Datos: {'Supabase Cloud ☁️' if data_source == 'supabase' else 'Local 💾'}<br>
+📊 Datos: {'Paquete Parquet 💾' if data_source == 'app_dataset' else 'Muestra Liviana 🧪'}<br>
 🚀 pymeinside.com<br>
 Powered by Streamlit + Supabase
 </div>

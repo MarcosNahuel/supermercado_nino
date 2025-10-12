@@ -27,6 +27,8 @@ data/processed/FASE1_OUTPUT/**
 !data/processed/
 !data/processed/README.md
 !data/sample/FASE1_OUTPUT_SAMPLE/**
+!data/app_dataset/
+!data/app_dataset/**
 
 # Archivos CSV grandes (>100MB)
 *.csv

@@ -1,201 +1,122 @@
-# 🏪 Supermercado NINO - Dashboard de Análisis Estratégico
+# Supermercado NINO – Analytics Dashboard
 
 [![Streamlit](https://img.shields.io/badge/Streamlit-FF4B4B?style=for-the-badge&logo=Streamlit&logoColor=white)](https://streamlit.io/)
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
-[![Supabase](https://img.shields.io/badge/Supabase-3ECF8E?style=for-the-badge&logo=supabase&logoColor=white)](https://supabase.com/)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](LICENSE)
 
-Dashboard interactivo de análisis de ventas para Supermercado NINO. Procesa 3M+ transacciones y genera insights accionables basados en datos reales.
+Dashboard interactivo para analizar 3M+ transacciones de Supermercado NINO, con KPIs ejecutivos, Pareto, Market Basket y segmentación de tickets.
 
-## 🎯 Características Principales
+## Características clave
 
-- 📊 **Resumen Ejecutivo** con KPIs clave actualizados en tiempo real
-- 📈 **Análisis Pareto (80/20)** para identificar productos vitales
-- 🛒 **Market Basket Analysis** con reglas de asociación
-- 👥 **Segmentación de Tickets** mediante clustering K-Means
-- 💰 **Análisis de Rentabilidad** por categoría y producto
-- 📅 **Análisis Temporal** con patrones semanales y tendencias
-- ☁️ **Integración con Supabase** para deploy sin límites de tamaño
-- 🎨 **Visualizaciones Interactivas** con Plotly
+- **KPIs ejecutivos** con métricas globales y tendencias mensuales.
+- **Pareto 80/20** para identificar productos críticos y oportunidades de margen.
+- **Market Basket** con reglas Apriori y filtros dinámicos.
+- **Segmentación de tickets** basada en clustering K-Means.
+- **Dataset ligero en Parquet** incluido en `data/app_dataset/` (sin depender de Supabase).
+- **UI moderna** con Plotly y animaciones personalizadas en Streamlit.
 
-## 📊 KPIs del Dashboard
-
-**Período Analizado:** Oct 2024 - Oct 2025 (13 meses)
+## KPIs destacados
 
 | Métrica | Valor |
-|---------|-------|
-| 💰 **Ventas Totales** | $8,218.5M ARS |
-| 💎 **Margen Bruto** | $2,236.1M ARS (27.2%) |
-| 📝 **Total Tickets** | 306,011 |
-| 🛒 **Ticket Promedio** | $26,849 ARS |
-| 📦 **Items/Ticket** | 9.8 unidades |
-| 🏪 **Categorías** | 45 departamentos |
-| 📈 **Productos Únicos** | 10,372 SKUs |
+| --- | --- |
+| Ventas totales | $8.218,5M ARS |
+| Margen bruto | $2.236,1M ARS (27,2%) |
+| Tickets | 306.011 |
+| Ticket promedio | $26.849 ARS |
+| Items por ticket | 9,8 |
+| Categorías activas | 45 |
+| SKUs únicos | 10.372 |
 
-## 🚀 Quick Start
+Periodo analizado: octubre 2024 – octubre 2025.
 
-### Instalación Local
+## Quick start
 
 ```bash
-# Clonar el repositorio
 git clone https://github.com/MarcosNahuel/supermercado_nino.git
 cd supermercado_nino
 
-# Crear entorno virtual
 python -m venv .venv
-.venv\Scripts\activate  # Windows
-# source .venv/bin/activate  # Linux / macOS
+.venv\Scripts\activate        # Windows
+# source .venv/bin/activate   # Linux / macOS
 
-# Instalar dependencias
 pip install -r requirements.txt
 
-# Ejecutar la app (con Supabase)
-streamlit run app_streamlit_supabase.py
+# Opcional: regenerar el paquete Parquet si actualizaste los CSV procesados
+python scripts/build_app_dataset.py
 
-# O la versión legacy (datos locales)
-streamlit run app_streamlit.py
-```
-
-### Configuración de Supabase (Recomendado)
-
-1. **Crea un proyecto en [Supabase](https://supabase.com)**
-2. **Copia tus credenciales** (URL + anon key)
-3. **Crea un archivo `.env`:**
-
-```env
-SUPABASE_URL=https://tu-proyecto.supabase.co
-SUPABASE_KEY=tu-anon-key-aqui
-```
-
-4. **Migra los datos:**
-
-```bash
-python scripts/migrate_to_supabase.py
-```
-
-5. **Lanza la app:**
-
-```bash
 streamlit run app_streamlit_supabase.py
 ```
 
-📖 **Guía completa:** [docs/DEPLOY_SUPABASE.md](docs/DEPLOY_SUPABASE.md)
+El dashboard cargará por defecto los archivos Parquet de `data/app_dataset/`. Si esa carpeta no existe, se usa la muestra liviana `data/sample/FASE1_OUTPUT_SAMPLE/` para mantener la demo operativa.
 
-## 📁 Estructura del Proyecto
+> ¿Necesitas cargar la base completa en Supabase? El soporte sigue disponible en `docs/DEPLOY_SUPABASE.md` y `docs/SUPABASE_SQL_SCRIPTS.md`, pero ya no es obligatorio para desplegar en Streamlit Cloud.
+
+## Estructura del proyecto
 
 ```
 supermercado_nino/
-├── 📱 app_streamlit_supabase.py    # Dashboard v2.0 (Supabase + mejoras UI)
-├── 📱 app_streamlit.py             # Dashboard legacy (archivos locales)
-├── 🔧 FASE1_ANALISIS_COMPLETO.py   # Pipeline de procesamiento principal
+├── app_streamlit_supabase.py      # Dashboard principal (ahora solo datos locales)
+├── FASE1_ANALISIS_COMPLETO.py     # Pipeline ETL de la fase 1
 │
-├── 📁 scripts/
-│   ├── migrate_to_supabase.py      # Script de migración a Supabase
-│   ├── analisis/                   # Scripts de análisis adicionales
-│   └── validaciones/               # Herramientas de validación
+├── scripts/
+│   ├── build_app_dataset.py       # Convierte los CSV procesados a Parquet
+│   ├── migrate_to_supabase.py     # (Opcional) migración a Supabase
+│   ├── setup_supabase_tables.py   # (Opcional) creación de tablas
+│   └── clean_supabase.py          # (Opcional) limpieza de Supabase
 │
-├── 📁 data/
-│   ├── raw/                        # CSV originales (ignorado por Git)
-│   ├── processed/FASE1_OUTPUT/     # Datos procesados (ignorado por Git)
-│   └── sample/FASE1_OUTPUT_SAMPLE/ # Datos de muestra para demo
+├── data/
+│   ├── raw/                       # Datasets originales (gitignored)
+│   ├── processed/FASE1_OUTPUT/    # Salida del pipeline (gitignored)
+│   ├── app_dataset/               # Parquet listo para la app (versionado)
+│   └── sample/FASE1_OUTPUT_SAMPLE/# Muestra liviana para demos
 │
-├── 📁 docs/
-│   ├── DEPLOY_SUPABASE.md          # Guía completa de deploy
-│   ├── RESUMEN_EJECUTIVO_ACTUALIZADO.md  # KPIs y análisis
-│   └── investigacion_supermercados.md    # Research secundario
+├── docs/                          # Documentación funcional y técnica
+│   ├── DEPLOY_SUPABASE.md
+│   ├── SUPABASE_SQL_SCRIPTS.md
+│   ├── RESUMEN_EJECUTIVO_ACTUALIZADO.md
+│   ├── RESUMEN_PROYECTO_FINAL.md
+│   └── CONCLUSIONES_ESTRATEGIAS_FINALES.md
 │
-├── 📄 requirements.txt             # Dependencias Python
-├── 📄 .env.example                 # Plantilla de variables de entorno
-├── 📄 .gitignore                   # Archivos excluidos de Git
-└── 📄 README.md                    # Este archivo
+├── requirements.txt
+└── README.md
 ```
 
-## 🔧 Tecnologías
+## Tecnologías
 
-### Backend & Data Processing
-- **Python 3.10+** - Lenguaje principal
-- **Pandas & NumPy** - Manipulación de datos
-- **Scikit-learn** - Clustering y machine learning
-- **MLxtend** - Market basket analysis (Apriori)
+- **Streamlit + Plotly** para la capa de visualización.
+- **Pandas, NumPy, Scikit-learn y MLxtend** para procesamiento analítico.
+- **PyArrow** para empaquetar los datasets en Parquet (5,5 MB en vez de ~420 MB de CSV).
+- **Scripts opcionales con Supabase** para quien desee escalar la base de datos en la nube.
 
-### Frontend & Visualization
-- **Streamlit** - Framework de dashboard
-- **Plotly** - Gráficos interactivos
-- **CSS personalizado** - UI moderna con animaciones
+## Metodología analítica
 
-### Cloud & Database
-- **Supabase** - Base de datos PostgreSQL en la nube
-- **Streamlit Cloud** - Hosting de la aplicación
-- **python-dotenv** - Gestión de variables de entorno
+1. Limpieza y enriquecimiento de 3M+ comprobantes.
+2. Cálculo de KPIs mensuales y por categoría.
+3. Clasificación ABC para Pareto.
+4. Reglas de asociación (Apriori) para Market Basket.
+5. Clustering K-Means para segmentar tickets.
+6. Empaquetado a Parquet + visualización en Streamlit.
 
-## 📊 Metodología de Análisis
+## Roadmap
 
-1. **Ingesta y Consolidación:** Carga de 2.9M+ registros de POS
-2. **Limpieza Profunda:** Eliminación de duplicados y normalización
-3. **Feature Engineering:** Variables temporales y categóricas
-4. **Cálculo de KPIs:** Métricas clave por período, categoría y producto
-5. **Análisis de Pareto:** Clasificación ABC de productos (80/20)
-6. **Market Basket Analysis:** Reglas de asociación con Apriori
-7. **Clustering:** Segmentación de tickets con K-Means
-8. **Visualización:** Dashboard interactivo con insights accionables
+- [x] ETL fase 1 completo (Oct 2024 – Oct 2025).
+- [x] Dashboard Streamlit v2 con UI moderna.
+- [x] Paquete Parquet local para deploy sin Supabase.
+- [ ] Sistema de alertas (stock y ventas).
+- [ ] Modelos predictivos de demanda.
+- [ ] Integración con ERP/POS en tiempo real.
+- [ ] App mobile para gerencia.
 
-## 🎯 Insights Clave
+## Documentación relacionada
 
-### 📈 Pareto Analysis
-- **13.4%** de productos generan **80%** de ventas
-- **1,389** productos vitales (categoría A)
-- Recomendación: Gestión ABC diferenciada
+- `docs/DEPLOY_SUPABASE.md` – guía opcional para usar Supabase.
+- `docs/SUPABASE_SQL_SCRIPTS.md` – sentencias SQL para limpiar/repoblar Supabase.
+- `docs/RESUMEN_EJECUTIVO_ACTUALIZADO.md` – KPIs consolidados.
+- `docs/RESUMEN_PROYECTO_FINAL.md` y `docs/CONCLUSIONES_ESTRATEGIAS_FINALES.md` – insights y recomendaciones.
 
-### 💰 Rentabilidad
-- Margen global: **27.2%** (dentro del rango industria)
-- Categorías premium (Fiambrería, Bazar): **45%** rentabilidad
-- Oportunidad: Expandir categorías de alto margen
+## Contacto y licencia
 
-### 🛒 Ticket Promedio
-- Actual: **$26,849 ARS**
-- Items por ticket: **9.8 unidades**
-- Oportunidad: Aumentar a 12-15 items (+22-53% ventas)
+- Email: contacto@pymeinside.com
+- Web: [https://pymeinside.com](https://pymeinside.com)
 
-### 📅 Estacionalidad
-- Pico: **Diciembre** (+30% vs promedio)
-- Valle: **Febrero/Junio** (-7% vs promedio)
-- Recomendación: Ajustar staffing y promociones
-
-## 🚀 Roadmap
-
-- [x] Análisis completo de datos (Oct 2024 - Oct 2025)
-- [x] Dashboard interactivo v1.0
-- [x] Integración con Supabase
-- [x] Dashboard mejorado v2.0 con UI moderna
-- [x] Documentación completa de deploy
-- [ ] Sistema de alertas automáticas (stock, ventas)
-- [ ] Predicción de demanda con ML
-- [ ] Integración con ERP/POS en tiempo real
-- [ ] App móvil para gerentes
-
-## 📚 Documentación
-
-- 📖 [Guía de Deploy con Supabase](docs/DEPLOY_SUPABASE.md)
-- 📊 [Resumen Ejecutivo Actualizado](docs/RESUMEN_EJECUTIVO_ACTUALIZADO.md)
-- 🔍 [Investigación de Mercado](docs/investigacion_supermercados.md)
-- 🛠️ [Scripts de Validación](scripts/validaciones/)
-
-## 🤝 Contribuciones
-
-Este es un proyecto privado para Supermercado NINO. Para consultas o propuestas:
-
-- 📧 Email: contacto@pymeinside.com
-- 🌐 Web: [pymeinside.com](https://pymeinside.com)
-
-## 📄 Licencia
-
-Proyecto propietario - Supermercado NINO © 2025
-
----
-
-**Desarrollado por:** [pymeinside.com](https://pymeinside.com)
-**Cliente:** Supermercado NINO
-**Versión:** 2.0 (Octubre 2025)
-**Última actualización:** Octubre 2025
-
-🏪 **Transformando datos en decisiones estratégicas**
+Proyecto propietario – Supermercado NINO © 2025. Desarrollado por pymeinside.com.
