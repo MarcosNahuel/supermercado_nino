@@ -377,9 +377,9 @@ if pagina == "🏠 Resumen Ejecutivo":
 
     st.dataframe(top_cat, width="stretch", hide_index=True)
 
-    # WALL STREET INSIGHTS
+    # INSIGHT
     st.markdown("---")
-    st.markdown("## 💼 Insights de Wall Street")
+    st.markdown("## 💼 INSIGHT")
 
     # Calcular métricas avanzadas
     total_productos = data['pareto']['producto_id'].nunique()
@@ -756,6 +756,12 @@ elif pagina == "📅 Análisis Temporal":
 
     # Heatmap hora vs día
     st.subheader("Heatmap: Ventas por Hora y Día de Semana")
+
+    # Diccionario de traducción de días
+    dias_esp = {
+        'Monday': 'Lunes', 'Tuesday': 'Martes', 'Wednesday': 'Miércoles',
+        'Thursday': 'Jueves', 'Friday': 'Viernes', 'Saturday': 'Sábado', 'Sunday': 'Domingo'
+    }
 
     df_hora = df_filtrado.copy()
     df_hora['hora'] = pd.to_datetime(df_hora['fecha']).dt.hour

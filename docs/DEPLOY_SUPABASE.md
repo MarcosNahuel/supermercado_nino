@@ -1,4 +1,4 @@
-# 🚀 Guía Completa de Deploy con Supabase
+si# 🚀 Guía Completa de Deploy con Supabase
 
 ## 📋 Tabla de Contenidos
 

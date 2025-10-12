@@ -230,10 +230,11 @@ if csv_raw.exists():
             continue
 
         # Limitar a 100k registros para demo (quitar esto para migración completa)
-        if total_processed >= 100000:
-            print(f"\n[WARNING]  Detenido en {total_processed:,} registros (modo demo)")
-            print("   Para migración completa, comenta la línea 'if total_processed >= 100000'")
-            break
+        # COMENTADO PARA MIGRACIÓN COMPLETA
+        # if total_processed >= 100000:
+        #     print(f"\n[WARNING]  Detenido en {total_processed:,} registros (modo demo)")
+        #     print("   Para migración completa, comenta la línea 'if total_processed >= 100000'")
+        #     break
 
     print(f"\n[OK] Migración de items completada: {total_processed:,} registros")
 else:

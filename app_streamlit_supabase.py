@@ -458,11 +458,11 @@ if pagina == "🏠 Resumen Ejecutivo":
         fig_dia.update_layout(height=400, showlegend=False)
         st.plotly_chart(fig_dia, use_container_width=True)
 
-    # Wall Street Insights
+    # INSIGHT
     st.markdown("---")
     st.markdown("""
     <div class="wallstreet-insight">
-        <h3>💼 Insights Estratégicos</h3>
+        <h3>💼 INSIGHT</h3>
         <p style="font-size: 1.1rem; line-height: 1.8;">
         <strong>📊 CONCENTRACIÓN DE VALOR:</strong> El 13.4% de los productos (1,389 items) generan el 80% de las ventas.
         <br><strong>💰 OPORTUNIDAD DE MARGEN:</strong> Las categorías de Fiambrería y Bazar tienen 45% de rentabilidad vs 27% promedio.
