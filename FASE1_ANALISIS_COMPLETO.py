@@ -24,19 +24,306 @@ METODOLOGÍA:
 
 import sys
 import io
+import argparse
+import logging
+import textwrap
+import unicodedata
+from typing import Dict, Optional, Tuple
+
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
 import pandas as pd
 import numpy as np
 import warnings
+
 warnings.filterwarnings('ignore')
 
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timedelta
+
 from sklearn.cluster import KMeans
+from sklearn.metrics import silhouette_score
 from sklearn.preprocessing import StandardScaler
 from mlxtend.frequent_patterns import apriori, association_rules
 from mlxtend.preprocessing import TransactionEncoder
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        prog="NINO FASE 1 Pipeline",
+        description=(
+            "Procesa los tickets del Supermercado NINO generando salidas listas "
+            "para Power BI, dashboard y evaluación de estrategias."
+        ),
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
+    parser.add_argument("--input_dir", type=Path, default=None, help="Directorio que contiene el CSV maestro de ventas.")
+    parser.add_argument("--sales_file", type=Path, default=None, help="Ruta directa al CSV maestro de ventas.")
+    parser.add_argument("--rentabilidad_file", type=Path, default=None, help="Ruta alternativa al archivo RENTABILIDAD.csv.")
+    parser.add_argument("--output_dir", type=Path, default=None, help="Directorio de salida para los CSV procesados.")
+    parser.add_argument("--cost_file", type=Path, default=None, help="Archivo de costos unitarios opcional.")
+    parser.add_argument(
+        "--cost_imputation",
+        choices=["category", "global", "none"],
+        default="category",
+        help="Estrategia para imputar costos faltantes.",
+    )
+    parser.add_argument(
+        "--margin_pct_fallback",
+        type=float,
+        default=0.18,
+        help="Margen porcentual (0-1) a utilizar como fallback cuando no haya información.",
+    )
+    parser.add_argument("--min_support", type=float, default=0.005, help="Support mínimo para Apriori.")
+    parser.add_argument("--min_confidence", type=float, default=0.15, help="Confianza mínima para Apriori.")
+    parser.add_argument("--min_lift", type=float, default=1.0, help="Lift mínimo para filtrar reglas de asociación.")
+    parser.add_argument("--k_min", type=int, default=3, help="Cantidad mínima de clusters a testear.")
+    parser.add_argument("--k_max", type=int, default=6, help="Cantidad máxima de clusters a testear.")
+    parser.add_argument("--before_start", type=str, default=None, help="Fecha inicio del período BEFORE (YYYY-MM-DD).")
+    parser.add_argument("--before_end", type=str, default=None, help="Fecha fin del período BEFORE (YYYY-MM-DD).")
+    parser.add_argument("--after_start", type=str, default=None, help="Fecha inicio del período AFTER (YYYY-MM-DD).")
+    parser.add_argument("--after_end", type=str, default=None, help="Fecha fin del período AFTER (YYYY-MM-DD).")
+    parser.add_argument("--preview", action="store_true", help="Muestra resúmenes de las tablas generadas.")
+    parser.add_argument("--verbose", action="store_true", help="Activa logging verbose.")
+    return parser.parse_args()
+
+
+ARGS = parse_args()
+
+
+logging.basicConfig(
+    level=logging.INFO if ARGS.verbose else logging.WARNING,
+    format="%(asctime)s | %(levelname)s | %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
+logger = logging.getLogger("nino_fase1")
+
+
+def info(msg: str) -> None:
+    print(f"[INFO] {msg}")
+
+
+def warn(msg: str) -> None:
+    print(f"[WARN] {msg}")
+
+try:
+    from scipy import stats as scipy_stats
+except Exception:  # pragma: no cover - dependencia opcional
+    scipy_stats = None
+
+
+def normalize_ascii(value: Optional[str]) -> str:
+    """Normaliza texto a ASCII simple (elimina acentos y espacios extras)."""
+    if value is None:
+        return ""
+    normalized = unicodedata.normalize("NFKD", str(value)).encode("ascii", "ignore").decode("ascii")
+    return normalized.strip()
+
+
+def load_cost_master(path: Path) -> pd.DataFrame:
+    """Carga y normaliza la tabla de costos opcional."""
+    info(f"Cargando archivo de costos: {path}")
+    df_cost = pd.read_csv(path)
+
+    # Normalizar nombres de columnas
+    col_map: Dict[str, str] = {}
+    for col in df_cost.columns:
+        clean = normalize_ascii(col).lower().replace("%", "pct").replace(" ", "_")
+        col_map[col] = clean
+    df_cost = df_cost.rename(columns=col_map)
+
+    producto_col = next(
+        (col for col in ["producto_id", "productoid", "producto", "codigo", "sku"] if col in df_cost.columns), None
+    )
+    if not producto_col:
+        raise SystemExit("El archivo de costos debe incluir la columna 'ProductoID' (o equivalente).")
+
+    costo_col = next(
+        (col for col in ["costo_unitario", "costounitario", "costo", "costo_unit"] if col in df_cost.columns), None
+    )
+    if not costo_col:
+        raise SystemExit("El archivo de costos debe incluir la columna 'CostoUnitario' (o equivalente).")
+
+    df_cost = df_cost.rename(columns={producto_col: "producto_id", costo_col: "costo_unitario"})
+    df_cost["producto_id"] = df_cost["producto_id"].astype(str).str.strip().str.upper()
+    df_cost["costo_unitario"] = pd.to_numeric(
+        df_cost["costo_unitario"].astype(str).str.replace(",", ".", regex=False), errors="coerce"
+    )
+
+    if "fecha_vigencia" in df_cost.columns:
+        df_cost["fecha_vigencia"] = pd.to_datetime(df_cost["fecha_vigencia"], errors="coerce")
+    else:
+        df_cost["fecha_vigencia"] = pd.NaT
+
+    df_cost = df_cost.sort_values(["producto_id", "fecha_vigencia"], na_position="first")
+    return df_cost.reset_index(drop=True)
+
+
+def compute_ticket_kpis(df_tickets: pd.DataFrame, group_key: str, label_name: str) -> pd.DataFrame:
+    """Agrega KPIs de rentabilidad por ticket según la llave indicada."""
+    grouped = (
+        df_tickets.groupby(group_key)
+        .agg(
+            ventas=('monto_total_ticket', 'sum'),
+            costo=('costo_total_ticket', 'sum'),
+            rentabilidad=('rentabilidad_ticket', 'sum'),
+            tickets=('ticket_id', 'count'),
+            rentabilidad_promedio_ticket=('rentabilidad_ticket', 'mean'),
+            desv_std_rentabilidad=('rentabilidad_ticket', 'std'),
+            rentabilidad_pct_promedio=('rentabilidad_pct_ticket', 'mean'),
+            p25=('rentabilidad_ticket', lambda x: np.nanpercentile(x, 25)),
+            p50=('rentabilidad_ticket', 'median'),
+            p75=('rentabilidad_ticket', lambda x: np.nanpercentile(x, 75)),
+            pct_tickets_con_costo=('pct_lineas_con_costo', 'mean'),
+            pct_tickets_costo_imputado=('pct_lineas_costo_imputado', 'mean'),
+        )
+        .reset_index()
+    )
+    grouped = grouped.rename(
+        columns={
+            group_key: label_name,
+            'p25': 'p25_rentabilidad_ticket',
+            'p50': 'p50_rentabilidad_ticket',
+            'p75': 'p75_rentabilidad_ticket',
+        }
+    )
+    grouped['desv_std_rentabilidad'] = grouped['desv_std_rentabilidad'].fillna(0)
+    grouped['rentabilidad_pct'] = np.where(
+        grouped['ventas'] > 0,
+        grouped['rentabilidad'] / grouped['ventas'],
+        np.nan,
+    )
+    return grouped
+
+
+def bootstrap_p_value(before: np.ndarray, after: np.ndarray, iterations: int = 3000) -> float:
+    """Calcula un p-value aproximado mediante bootstrap de la media."""
+    rng = np.random.default_rng(seed=42)
+    observed = after.mean() - before.mean()
+    combined = np.concatenate([before, after])
+    count = 0
+    for _ in range(iterations):
+        rng.shuffle(combined)
+        sample_after = combined[: len(after)]
+        sample_before = combined[len(after) :]
+        diff = sample_after.mean() - sample_before.mean()
+        if abs(diff) >= abs(observed):
+            count += 1
+    return count / iterations
+
+
+def compute_p_value(before: np.ndarray, after: np.ndarray) -> float:
+    """Obtiene el p-value usando Welch o bootstrap si SciPy no está disponible."""
+    if len(before) < 2 or len(after) < 2:
+        return float("nan")
+    if scipy_stats is not None:
+        _, p_val = scipy_stats.ttest_ind(after, before, equal_var=False, nan_policy="omit")
+        return float(p_val)
+    return bootstrap_p_value(before, after)
+
+
+def evaluate_strategy_periods(
+    df_tickets: pd.DataFrame,
+    before_period: Optional[Tuple[Optional[datetime], Optional[datetime]]],
+    after_period: Optional[Tuple[Optional[datetime], Optional[datetime]]],
+    control_matching: str = "dow",
+    categoria_tickets: Optional[pd.DataFrame] = None,
+) -> pd.DataFrame:
+    """Evalúa variaciones before/after sobre KPIs de rentabilidad."""
+    if not before_period or not after_period:
+        return pd.DataFrame()
+
+    def _filter_period(df: pd.DataFrame, period: Tuple[Optional[datetime], Optional[datetime]]) -> pd.DataFrame:
+        start, end = period
+        mask = pd.Series(True, index=df.index)
+        if start:
+            mask &= df['fecha'] >= start
+        if end:
+            mask &= df['fecha'] <= end
+        return df.loc[mask].copy()
+
+    before_df = _filter_period(df_tickets, before_period)
+    after_df = _filter_period(df_tickets, after_period)
+
+    if control_matching == "dow" and not after_df.empty:
+        dow_after = after_df['dia_semana'].unique()
+        before_df = before_df[before_df['dia_semana'].isin(dow_after)]
+
+    results = []
+
+    def _quality_flag(df_scope: pd.DataFrame) -> float:
+        return df_scope['pct_lineas_con_costo'].mean() if not df_scope.empty else 0.0
+
+    def _evaluate(scope: str, group_value: str, df_before_scope: pd.DataFrame, df_after_scope: pd.DataFrame) -> None:
+        if df_before_scope.empty or df_after_scope.empty:
+            return
+        coverage_before = _quality_flag(df_before_scope)
+        coverage_after = _quality_flag(df_after_scope)
+        coverage_flag = min(coverage_before, coverage_after)
+        quality_note = "interpretar con cautela" if coverage_flag < 0.70 else ""
+
+        metrics = [
+            ("rentabilidad_promedio_ticket", 'rentabilidad_ticket'),
+            ("rentabilidad_pct_ticket", 'rentabilidad_pct_ticket'),
+            ("ticket_promedio", 'monto_total_ticket'),
+        ]
+
+        for metric_name, field in metrics:
+            before_values = df_before_scope[field].dropna().to_numpy()
+            after_values = df_after_scope[field].dropna().to_numpy()
+            if len(before_values) == 0 or len(after_values) == 0:
+                continue
+
+            before_mean = before_values.mean()
+            after_mean = after_values.mean()
+            delta_abs = after_mean - before_mean
+            delta_pct = delta_abs / abs(before_mean) if before_mean != 0 else np.nan
+            p_val = compute_p_value(before_values, after_values)
+
+            results.append(
+                {
+                    "scope": scope,
+                    "segmento": group_value,
+                    "metric": metric_name,
+                    "before": before_mean,
+                    "after": after_mean,
+                    "delta_abs": delta_abs,
+                    "delta_pct": delta_pct,
+                    "p_value": p_val,
+                    "n_before": len(before_values),
+                    "n_after": len(after_values),
+                    "nota": quality_note,
+                }
+            )
+
+    _evaluate("global", "total", before_df, after_df)
+
+    if 'cluster' in df_tickets.columns:
+        clusters = sorted(set(before_df['cluster'].dropna()) | set(after_df['cluster'].dropna()))
+        for cluster in clusters:
+            _evaluate(
+                "cluster",
+                str(cluster),
+                before_df[before_df['cluster'] == cluster],
+                after_df[after_df['cluster'] == cluster],
+            )
+
+    if categoria_tickets is not None:
+        before_cat = _filter_period(categoria_tickets, before_period)
+        after_cat = _filter_period(categoria_tickets, after_period)
+        if control_matching == "dow" and not after_cat.empty:
+            dow_after = after_cat['dia_semana'].unique()
+            before_cat = before_cat[before_cat['dia_semana'].isin(dow_after)]
+        categorias = sorted(set(before_cat['categoria']) | set(after_cat['categoria']))
+        for categoria in categorias:
+            _evaluate(
+                "categoria",
+                categoria,
+                before_cat[before_cat['categoria'] == categoria],
+                after_cat[after_cat['categoria'] == categoria],
+            )
+
+    return pd.DataFrame(results)
 
 print("=" * 100)
 print("FASE 1 - ACCESIBILIDAD A LOS DATOS | SUPERMERCADO NINO")
@@ -48,18 +335,79 @@ print("=" * 100)
 # =============================================================================
 BASE_DIR = Path(__file__).resolve().parent  # Raíz del proyecto
 DATA_DIR = BASE_DIR / "data"
-RAW_DIR = DATA_DIR / "raw"
-PROCESSED_DIR = DATA_DIR / "processed" / "FASE1_OUTPUT"
+RAW_DIR = Path(ARGS.input_dir) if ARGS.input_dir else DATA_DIR / "raw"
+RAW_DIR = RAW_DIR.resolve()
+PROCESSED_DIR = Path(ARGS.output_dir) if ARGS.output_dir else DATA_DIR / "processed" / "FASE1_OUTPUT"
+PROCESSED_DIR = PROCESSED_DIR.resolve()
 PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
 
 # Alias para compatibilidad con el resto del script
 OUTPUT_DIR = PROCESSED_DIR
 
+DEFAULT_SALES_FILE = RAW_DIR / "SERIE_COMPROBANTES_COMPLETOS2.csv"
+if ARGS.sales_file:
+    SALES_FILE = Path(ARGS.sales_file).resolve()
+elif DEFAULT_SALES_FILE.exists():
+    SALES_FILE = DEFAULT_SALES_FILE
+else:
+    csv_candidates = sorted(RAW_DIR.glob("*.csv"))
+    if not csv_candidates:
+        raise SystemExit(f"No se encontraron CSV en {RAW_DIR}. Proporcione --sales_file.")
+    SALES_FILE = csv_candidates[0]
+    warn(
+        f"No se halló 'SERIE_COMPROBANTES_COMPLETOS2.csv'; se utilizará {SALES_FILE.name}. "
+        "Configura --sales_file para seleccionar otro archivo."
+    )
+
+RENTABILIDAD_FILE = (
+    Path(ARGS.rentabilidad_file).resolve() if ARGS.rentabilidad_file else RAW_DIR / "RENTABILIDAD.csv"
+)
+if not RENTABILIDAD_FILE.exists():
+    raise SystemExit(f"No se encontró la tabla de rentabilidad en {RENTABILIDAD_FILE}.")
+
+COST_FILE = Path(ARGS.cost_file).resolve() if ARGS.cost_file else None
+COST_MASTER = load_cost_master(COST_FILE) if COST_FILE else None
+
 # Parámetros de análisis
-MIN_SUPPORT = 0.005  # 0.5% de tickets para Market Basket
-MIN_CONFIDENCE = 0.15  # 15% confianza mínima
-MIN_LIFT = 1.0  # Lift > 1 indica asociación positiva
-NUM_CLUSTERS = 4  # Segmentos de comportamiento de compra
+MIN_SUPPORT = ARGS.min_support  # 0.5% de tickets para Market Basket
+MIN_CONFIDENCE = ARGS.min_confidence  # 15% confianza mínima
+MIN_LIFT = ARGS.min_lift  # Lift > 1 indica asociación positiva
+K_MIN = max(2, ARGS.k_min)
+K_MAX = max(K_MIN, ARGS.k_max)
+
+MARGIN_PCT_FALLBACK = (
+    ARGS.margin_pct_fallback if ARGS.margin_pct_fallback <= 1 else ARGS.margin_pct_fallback / 100
+)
+if not 0 <= MARGIN_PCT_FALLBACK < 1:
+    raise SystemExit("--margin_pct_fallback debe estar entre 0 y 1 (o 0-100).")
+
+COST_IMPUTATION = ARGS.cost_imputation
+
+
+def _parse_period(
+    start: Optional[str], end: Optional[str]
+) -> Optional[Tuple[Optional[datetime], Optional[datetime]]]:
+    if not start and not end:
+        return None
+    try:
+        start_dt = datetime.fromisoformat(start) if start else None
+        end_dt = datetime.fromisoformat(end) if end else None
+        return (start_dt, end_dt)
+    except ValueError as exc:
+        raise SystemExit(f"Fechas inválidas en argumentos: {exc}") from exc
+
+
+BEFORE_PERIOD = _parse_period(ARGS.before_start, ARGS.before_end)
+AFTER_PERIOD = _parse_period(ARGS.after_start, ARGS.after_end)
+
+if (BEFORE_PERIOD and not AFTER_PERIOD) or (AFTER_PERIOD and not BEFORE_PERIOD):
+    warn("Se recibieron fechas parciales de before/after; se ignorará la evaluación de estrategias.")
+    BEFORE_PERIOD = AFTER_PERIOD = None
+
+CONTROL_MATCHING = "dow"
+
+COST_RATIO_OUTPUT = None
+
 
 # =============================================================================
 # PASO 1: INGESTA Y CONSOLIDACIÓN DE DATOS
@@ -69,8 +417,9 @@ print("PASO 1: INGESTA Y CONSOLIDACIÓN DE DATOS")
 print("=" * 100)
 
 print("\n[1.1] Cargando archivo de ventas...")
+print(f"[INFO] Archivo seleccionado: {SALES_FILE}")
 df_raw = pd.read_csv(
-    RAW_DIR / 'SERIE_COMPROBANTES_COMPLETOS2.csv',
+    SALES_FILE,
     sep=';',
     decimal=',',  # CRÍTICO: Formato argentino con coma decimal
     encoding='utf-8',
@@ -204,7 +553,7 @@ print(f"  - Períodos únicos: {df['periodo'].nunique()}")
 print(f"  - Días únicos: {df['fecha_corta'].nunique()}")
 
 print("\n[3.2] Vinculando con datos de rentabilidad por departamento...")
-df_rentabilidad = pd.read_csv(RAW_DIR / 'RENTABILIDAD.csv', encoding='utf-8', decimal=',')
+df_rentabilidad = pd.read_csv(RENTABILIDAD_FILE, encoding='utf-8', decimal=',')
 df_rentabilidad['Departamento'] = (
     df_rentabilidad['Departamento']
     .astype(str)
@@ -238,6 +587,158 @@ df['margen_estimado'] = df['importe_total'] * (df['rentabilidad_pct'] / 100)
 print(f"Departamentos con rentabilidad: {df['rentabilidad_pct'].notna().sum():,} ({df['rentabilidad_pct'].notna().sum()/len(df)*100:.1f}%)")
 print(f"Margen estimado total: ${df['margen_estimado'].sum():,.2f}")
 
+print("\n[3.2b] Calculando costos unitarios y margen real por línea...")
+df['rentabilidad_ratio'] = (df['rentabilidad_pct'] / 100).replace([np.inf, -np.inf], np.nan)
+df['rentabilidad_ratio'] = df['rentabilidad_ratio'].fillna(MARGIN_PCT_FALLBACK).clip(lower=0.0, upper=0.9)
+df['clasificacion_departamento'] = df.get('Clasificación', 'SIN CLASIFICACION')
+
+df['precio_unitario_base'] = df['precio_unitario'].copy()
+mask_precio_na = df['precio_unitario_base'].isna() & df['cantidad'].notna() & (df['cantidad'] != 0)
+df.loc[mask_precio_na, 'precio_unitario_base'] = df.loc[mask_precio_na, 'importe_total'] / df.loc[mask_precio_na, 'cantidad']
+
+df['row_order'] = np.arange(len(df))
+df['producto_id'] = df['producto_id'].astype(str).str.strip().str.upper()
+
+for col_cost in ['CostoUnitario', 'costounitario']:
+    if col_cost in df.columns:
+        df[col_cost] = pd.to_numeric(df[col_cost].astype(str).str.replace(',', '.', regex=False), errors='coerce')
+
+df['costo_unitario'] = np.nan
+df['costo_fuente'] = 'sin_dato'
+df['costo_imputado'] = 0
+df['tiene_costo'] = 0
+
+for col_cost in ['CostoUnitario', 'costounitario']:
+    if col_cost in df.columns:
+        mask_direct = df[col_cost].notna()
+        df.loc[mask_direct, 'costo_unitario'] = df.loc[mask_direct, col_cost]
+        df.loc[mask_direct, 'costo_fuente'] = 'linea'
+        df.loc[mask_direct, 'tiene_costo'] = 1
+
+if COST_MASTER is not None and not COST_MASTER.empty:
+    cost_sorted = COST_MASTER.rename(columns={'costo_unitario': 'costo_unitario_master'}).copy()
+    df_cost_index = df[['producto_id', 'fecha', 'row_order']].copy().sort_values(['producto_id', 'fecha', 'row_order'])
+    if cost_sorted['fecha_vigencia'].notna().any():
+        cost_sorted = cost_sorted.sort_values(['producto_id', 'fecha_vigencia'])
+        merged_cost = pd.merge_asof(
+            df_cost_index,
+            cost_sorted,
+            by='producto_id',
+            left_on='fecha',
+            right_on='fecha_vigencia',
+            direction='backward',
+            suffixes=('', '_costfile'),
+        )
+    else:
+        merged_cost = df_cost_index.merge(
+            cost_sorted.drop(columns=['fecha_vigencia']),
+            on='producto_id',
+            how='left',
+            suffixes=('', '_costfile'),
+        )
+    df = df.merge(merged_cost[['row_order', 'costo_unitario_master']], on='row_order', how='left')
+    mask_costfile = df['costo_unitario_master'].notna()
+    df.loc[mask_costfile, 'costo_unitario'] = df.loc[mask_costfile, 'costo_unitario_master']
+    df.loc[mask_costfile, 'costo_fuente'] = 'cost_file'
+    df.loc[mask_costfile, 'tiene_costo'] = 1
+    df = df.drop(columns=['costo_unitario_master'])
+
+mask_teorico = df['costo_unitario'].isna() & df['precio_unitario_base'].notna()
+if mask_teorico.any():
+    df.loc[mask_teorico, 'costo_unitario'] = df.loc[mask_teorico, 'precio_unitario_base'] * (1 - df.loc[mask_teorico, 'rentabilidad_ratio'])
+    df.loc[mask_teorico, 'costo_fuente'] = 'rentabilidad_depto'
+    df.loc[mask_teorico, 'tiene_costo'] = 1
+
+df['ratio_costo_precio'] = np.where(
+    (df['costo_unitario'].notna()) & (df['precio_unitario_base'] > 0),
+    df['costo_unitario'] / df['precio_unitario_base'],
+    np.nan,
+)
+
+ratio_global = float(df['ratio_costo_precio'].median(skipna=True)) if df['ratio_costo_precio'].notna().any() else np.nan
+if np.isnan(ratio_global):
+    ratio_global = 1 - MARGIN_PCT_FALLBACK
+
+category_ratios = (
+    df.loc[df['ratio_costo_precio'].notna()]
+    .groupby('categoria')['ratio_costo_precio']
+    .median()
+    .dropna()
+    .reset_index(name='ratio_categoria')
+)
+
+if COST_IMPUTATION != 'none':
+    mask_missing_cost = df['costo_unitario'].isna() & df['precio_unitario_base'].notna()
+    if mask_missing_cost.any():
+        if COST_IMPUTATION == 'category' and not category_ratios.empty:
+            ratio_map = category_ratios.set_index('categoria')['ratio_categoria'].to_dict()
+            ratio_cat_series = df['categoria'].map(ratio_map)
+            mask_cat = mask_missing_cost & ratio_cat_series.notna()
+            if mask_cat.any():
+                df.loc[mask_cat, 'costo_unitario'] = df.loc[mask_cat, 'precio_unitario_base'] * ratio_cat_series[mask_cat]
+                df.loc[mask_cat, 'costo_fuente'] = 'imputacion_categoria'
+                df.loc[mask_cat, 'costo_imputado'] = 1
+                df.loc[mask_cat, 'tiene_costo'] = 1
+            mask_global = mask_missing_cost & df['costo_unitario'].isna()
+        else:
+            mask_global = mask_missing_cost
+        if mask_global.any():
+            df.loc[mask_global, 'costo_unitario'] = df.loc[mask_global, 'precio_unitario_base'] * ratio_global
+            df.loc[mask_global, 'costo_fuente'] = 'imputacion_global'
+            df.loc[mask_global, 'costo_imputado'] = 1
+            df.loc[mask_global, 'tiene_costo'] = 1
+
+df['costo_total_linea'] = df['costo_unitario'] * df['cantidad']
+df['margen_linea'] = df['importe_total'] - df['costo_total_linea']
+df['margen_estimado'] = df['margen_linea']
+
+lineas_total = len(df)
+lineas_con_costo = int(df['tiene_costo'].sum())
+lineas_imputadas = int(df['costo_imputado'].sum())
+lineas_sin_costo = lineas_total - lineas_con_costo
+
+info(
+    f"Cobertura de costos: {lineas_con_costo/lineas_total:.1%} con costo, "
+    f"{lineas_imputadas/lineas_total:.1%} imputadas, "
+    f"{lineas_sin_costo/lineas_total:.1%} sin costo."
+)
+
+cobertura_categoria = (
+    df.groupby('categoria', dropna=False).agg(
+        lineas=('ticket_id', 'count'),
+        con_costo=('tiene_costo', 'sum'),
+        imputadas=('costo_imputado', 'sum'),
+    )
+    .reset_index()
+)
+cobertura_categoria['pct_costo'] = cobertura_categoria['con_costo'] / cobertura_categoria['lineas']
+cobertura_categoria['pct_imputado'] = cobertura_categoria['imputadas'] / cobertura_categoria['lineas']
+for _, row in cobertura_categoria.sort_values('pct_costo').head(5).iterrows():
+    if row['pct_costo'] < 0.7:
+        warn(
+            f"Cobertura de costos baja en {row['categoria']}: {row['pct_costo']:.1%} con costo, "
+            f"{row['pct_imputado']:.1%} imputado."
+        )
+
+ratio_records = []
+for _, row in category_ratios.iterrows():
+    ratio_records.append(
+        {
+            'categoria': row['categoria'],
+            'ratio_costo_precio': row['ratio_categoria'],
+            'origen': 'categoria',
+        }
+    )
+ratio_records.append({'categoria': '__GLOBAL__', 'ratio_costo_precio': ratio_global, 'origen': 'global'})
+COST_RATIO_OUTPUT = pd.DataFrame(ratio_records)
+
+print(
+    f"Cobertura final de costos: {lineas_con_costo:,} lineas con costo ({lineas_con_costo/lineas_total*100:.1f}%), "
+    f"{lineas_imputadas:,} imputadas."
+)
+
+df = df.sort_values('row_order').drop(columns=['row_order'])
+
 print("\n[3.3] Asegurando unicidad de ticket_id...")
 # Verificar que ticket_id sea único por transacción
 tickets_unicos = df['ticket_id'].nunique()
@@ -252,48 +753,104 @@ print("=" * 100)
 
 print("\n[4.1] KPIs Globales...")
 
-# IMPORTANTE: Calcular totales ANTES del merge para evitar duplicación
-# Usar df original sin merge para totales exactos
-df_original_limpio = df[['fecha', 'ticket_id', 'importe_total', 'cantidad']].copy()
+df_tickets = (
+    df.groupby('ticket_id')
+    .agg(
+        monto_total_ticket=('importe_total', 'sum'),
+        items_ticket=('cantidad', 'sum'),
+        costo_total_ticket=('costo_total_linea', 'sum'),
+        rentabilidad_ticket=('margen_estimado', 'sum'),
+        fecha=('fecha', 'first'),
+        periodo=('periodo', 'first'),
+        dia_semana=('dia_semana', 'first'),
+        es_fin_semana=('es_fin_semana', 'first'),
+        lineas_total=('ticket_id', 'size'),
+        lineas_con_costo=('tiene_costo', 'sum'),
+        lineas_costo_imputado=('costo_imputado', 'sum'),
+        skus_ticket=('producto_id', 'nunique'),
+        hora_promedio=('hora', 'mean'),
+    )
+    .reset_index()
+)
 
-# Agregar por ticket (SIN rentabilidad para evitar duplicados)
-df_tickets_limpio = df_original_limpio.groupby('ticket_id').agg({
-    'importe_total': 'sum',
-    'cantidad': 'sum',
-    'fecha': 'first'
-}).reset_index()
+df_tickets['rentabilidad_pct_ticket'] = np.where(
+    df_tickets['monto_total_ticket'] > 0,
+    df_tickets['rentabilidad_ticket'] / df_tickets['monto_total_ticket'],
+    np.nan,
+)
+df_tickets['pct_lineas_con_costo'] = np.where(
+    df_tickets['lineas_total'] > 0,
+    df_tickets['lineas_con_costo'] / df_tickets['lineas_total'],
+    0.0,
+)
+df_tickets['pct_lineas_costo_imputado'] = np.where(
+    df_tickets['lineas_total'] > 0,
+    df_tickets['lineas_costo_imputado'] / df_tickets['lineas_total'],
+    0.0,
+)
+df_tickets['margen_ticket'] = df_tickets['rentabilidad_ticket']
 
-df_tickets_limpio.columns = ['ticket_id', 'monto_total_ticket', 'items_ticket', 'fecha']
+df_tickets['fecha_corta'] = df_tickets['fecha'].dt.date
+iso_calendar = df_tickets['fecha'].dt.isocalendar()
+df_tickets['semana_iso'] = iso_calendar['year'].astype(str) + '-W' + iso_calendar['week'].astype(str).str.zfill(2)
+df_tickets['mes'] = df_tickets['fecha'].dt.to_period('M').astype(str)
 
-# KPIs principales (CORRECTOS - sin duplicación)
-total_ventas = df_tickets_limpio['monto_total_ticket'].sum()
-total_tickets = len(df_tickets_limpio)
-ticket_promedio = df_tickets_limpio['monto_total_ticket'].mean()
-ticket_mediano = df_tickets_limpio['monto_total_ticket'].median()
-items_promedio = df_tickets_limpio['items_ticket'].mean()
+kpi_rentabilidad_diaria = compute_ticket_kpis(df_tickets, 'fecha_corta', 'fecha')
+kpi_rentabilidad_diaria['fecha'] = pd.to_datetime(kpi_rentabilidad_diaria['fecha'])
+kpi_rentabilidad_semanal = compute_ticket_kpis(df_tickets, 'semana_iso', 'semana_iso')
+kpi_rentabilidad_mensual = compute_ticket_kpis(df_tickets, 'mes', 'mes')
 
-# Margen calculado sobre items (con rentabilidad)
-margen_total = df['margen_estimado'].sum()
-margen_pct_global = (margen_total / total_ventas * 100) if total_ventas > 0 else 0
+categoria_tickets = (
+    df.groupby(['ticket_id', 'categoria'])
+    .agg(
+        monto_total_ticket=('importe_total', 'sum'),
+        costo_total_ticket=('costo_total_linea', 'sum'),
+        rentabilidad_ticket=('margen_linea', 'sum'),
+        lineas_total=('ticket_id', 'size'),
+        lineas_con_costo=('tiene_costo', 'sum'),
+        lineas_costo_imputado=('costo_imputado', 'sum'),
+    )
+    .reset_index()
+)
+categoria_tickets = categoria_tickets.merge(
+    df_tickets[['ticket_id', 'fecha', 'dia_semana']],
+    on='ticket_id',
+    how='left'
+)
+categoria_tickets['rentabilidad_pct_ticket'] = np.where(
+    categoria_tickets['monto_total_ticket'] > 0,
+    categoria_tickets['rentabilidad_ticket'] / categoria_tickets['monto_total_ticket'],
+    np.nan,
+)
+categoria_tickets['pct_lineas_con_costo'] = np.where(
+    categoria_tickets['lineas_total'] > 0,
+    categoria_tickets['lineas_con_costo'] / categoria_tickets['lineas_total'],
+    0.0,
+)
+categoria_tickets['pct_lineas_costo_imputado'] = np.where(
+    categoria_tickets['lineas_total'] > 0,
+    categoria_tickets['lineas_costo_imputado'] / categoria_tickets['lineas_total'],
+    0.0,
+)
 
-# Crear df_tickets completo para clustering
-df_tickets = df.groupby('ticket_id').agg({
-    'importe_total': 'sum',
-    'cantidad': 'sum',
-    'margen_estimado': 'sum',
-    'fecha': 'first',
-    'periodo': 'first',
-    'dia_semana': 'first',
-    'es_fin_semana': 'first'
-}).reset_index()
+total_ventas = df_tickets['monto_total_ticket'].sum()
+total_tickets = len(df_tickets)
+ticket_promedio = df_tickets['monto_total_ticket'].mean()
+ticket_mediano = df_tickets['monto_total_ticket'].median()
+items_promedio = df_tickets['items_ticket'].mean()
 
-df_tickets.columns = ['ticket_id', 'monto_total_ticket', 'items_ticket', 'margen_ticket', 'fecha', 'periodo', 'dia_semana', 'es_fin_semana']
+costo_total = df_tickets['costo_total_ticket'].sum()
+rentabilidad_total = df_tickets['rentabilidad_ticket'].sum()
+margen_pct_global = (rentabilidad_total / total_ventas * 100) if total_ventas > 0 else 0
+
+
 
 print(f"\n📊 MÉTRICAS PRINCIPALES")
 print(f"{'─' * 60}")
 print(f"Total Ventas:              ${total_ventas:>20,.2f}")
-print(f"Margen Estimado:           ${margen_total:>20,.2f}")
-print(f"Margen % Global:           {margen_pct_global:>19.2f}%")
+print(f"Costo Total:               ${costo_total:>20,.2f}")
+print(f"Rentabilidad Total:        ${rentabilidad_total:>20,.2f}")
+print(f"Rentabilidad % Global:     {margen_pct_global:>19.2f}%")
 print(f"Total Tickets:             {total_tickets:>20,}")
 print(f"Ticket Promedio:           ${ticket_promedio:>20,.2f}")
 print(f"Ticket Mediano:            ${ticket_mediano:>20,.2f}")
@@ -301,47 +858,81 @@ print(f"Items Promedio por Ticket: {items_promedio:>20.2f}")
 print(f"{'─' * 60}")
 
 print("\n[4.2] KPIs por Período...")
-kpi_periodo = df.groupby('periodo').agg({
-    'importe_total': 'sum',
-    'margen_estimado': 'sum',
-    'ticket_id': 'nunique'
-}).reset_index()
-
-kpi_periodo.columns = ['periodo', 'ventas', 'margen', 'tickets']
-kpi_periodo = kpi_periodo.sort_values('periodo')
-kpi_periodo['ticket_promedio'] = kpi_periodo['ventas'] / kpi_periodo['tickets']
+kpi_periodo = (
+    df_tickets.groupby('periodo')
+    .agg(
+        ventas=('monto_total_ticket', 'sum'),
+        costo=('costo_total_ticket', 'sum'),
+        rentabilidad=('rentabilidad_ticket', 'sum'),
+        tickets=('ticket_id', 'count'),
+        rentabilidad_promedio_ticket=('rentabilidad_ticket', 'mean'),
+        desv_std_rentabilidad=('rentabilidad_ticket', 'std'),
+        rentabilidad_pct_promedio=('rentabilidad_pct_ticket', 'mean'),
+        pct_tickets_con_costo=('pct_lineas_con_costo', 'mean'),
+        pct_tickets_costo_imputado=('pct_lineas_costo_imputado', 'mean'),
+    )
+    .reset_index()
+    .sort_values('periodo')
+)
+kpi_periodo['ticket_promedio'] = np.where(
+    kpi_periodo['tickets'] > 0, kpi_periodo['ventas'] / kpi_periodo['tickets'], np.nan
+)
+kpi_periodo['rentabilidad_pct'] = np.where(
+    kpi_periodo['ventas'] > 0, kpi_periodo['rentabilidad'] / kpi_periodo['ventas'], np.nan
+)
 
 print("\nTop 5 meses por ventas:")
 print(kpi_periodo.nlargest(5, 'ventas')[['periodo', 'ventas', 'tickets', 'ticket_promedio']].to_string(index=False))
 
 print("\n[4.3] KPIs por Día de Semana...")
-kpi_dia_semana = df.groupby('dia_semana').agg({
-    'importe_total': 'sum',
-    'ticket_id': 'nunique'
-}).reset_index()
-
-kpi_dia_semana.columns = ['dia_semana', 'ventas', 'tickets']
+kpi_dia_semana = (
+    df_tickets.groupby('dia_semana')
+    .agg(
+        ventas=('monto_total_ticket', 'sum'),
+        costo=('costo_total_ticket', 'sum'),
+        rentabilidad=('rentabilidad_ticket', 'sum'),
+        tickets=('ticket_id', 'count'),
+        rentabilidad_promedio_ticket=('rentabilidad_ticket', 'mean'),
+        desv_std_rentabilidad=('rentabilidad_ticket', 'std'),
+        rentabilidad_pct_promedio=('rentabilidad_pct_ticket', 'mean'),
+        pct_tickets_con_costo=('pct_lineas_con_costo', 'mean'),
+        pct_tickets_costo_imputado=('pct_lineas_costo_imputado', 'mean'),
+    )
+    .reset_index()
+)
 dias_orden = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
 kpi_dia_semana['dia_semana'] = pd.Categorical(kpi_dia_semana['dia_semana'], categories=dias_orden, ordered=True)
 kpi_dia_semana = kpi_dia_semana.sort_values('dia_semana')
+kpi_dia_semana['ticket_promedio'] = np.where(
+    kpi_dia_semana['tickets'] > 0, kpi_dia_semana['ventas'] / kpi_dia_semana['tickets'], np.nan
+)
+kpi_dia_semana['rentabilidad_pct'] = np.where(
+    kpi_dia_semana['ventas'] > 0, kpi_dia_semana['rentabilidad'] / kpi_dia_semana['ventas'], np.nan
+)
 
 print("\nVentas por día de semana:")
 print(kpi_dia_semana.to_string(index=False))
 
 print("\n[4.4] KPIs por Categoría...")
-kpi_categoria = df.groupby(['categoria', 'rentabilidad_pct']).agg({
-    'importe_total': 'sum',
-    'margen_estimado': 'sum',
-    'cantidad': 'sum',
-    'ticket_id': 'nunique'
-}).reset_index()
-
-kpi_categoria.columns = ['categoria', 'rentabilidad_pct', 'ventas', 'margen', 'unidades', 'tickets']
-kpi_categoria = kpi_categoria.sort_values('ventas', ascending=False)
+kpi_categoria = (
+    df.groupby('categoria')
+    .agg(
+        ventas=('importe_total', 'sum'),
+        costo=('costo_total_linea', 'sum'),
+        margen=('margen_linea', 'sum'),
+        unidades=('cantidad', 'sum'),
+        tickets=('ticket_id', 'nunique'),
+    )
+    .reset_index()
+    .sort_values('ventas', ascending=False)
+)
+kpi_categoria['margen_pct'] = np.where(
+    kpi_categoria['ventas'] > 0, kpi_categoria['margen'] / kpi_categoria['ventas'] * 100, np.nan
+)
 kpi_categoria['pct_ventas'] = (kpi_categoria['ventas'] / kpi_categoria['ventas'].sum() * 100).round(2)
 
 print("\nTop 10 categorías por ventas:")
-print(kpi_categoria.head(10)[['categoria', 'ventas', 'pct_ventas', 'rentabilidad_pct']].to_string(index=False))
+print(kpi_categoria.head(10)[['categoria', 'ventas', 'pct_ventas', 'margen_pct']].to_string(index=False))
 
 # =============================================================================
 # PASO 5: ANÁLISIS DE PARETO (80/20)
@@ -356,10 +947,14 @@ print("\n[5.1] Calculando Pareto por producto...")
 df_productos = df.groupby(['producto_id', 'descripcion', 'categoria']).agg({
     'importe_total': 'sum',
     'cantidad': 'sum',
-    'margen_estimado': 'sum'
+    'costo_total_linea': 'sum',
+    'margen_linea': 'sum'
 }).reset_index()
 
-df_productos.columns = ['producto_id', 'descripcion', 'categoria', 'ventas', 'unidades', 'margen']
+df_productos.columns = ['producto_id', 'descripcion', 'categoria', 'ventas', 'unidades', 'costo', 'margen']
+df_productos['margen_pct'] = np.where(
+    df_productos['ventas'] > 0, df_productos['margen'] / df_productos['ventas'] * 100, np.nan
+)
 
 # Ordenar por ventas descendente
 df_productos = df_productos.sort_values('ventas', ascending=False).reset_index(drop=True)
@@ -467,32 +1062,71 @@ print("PASO 7: SEGMENTACIÓN DE TICKETS (K-Means Clustering)")
 print("=" * 100)
 
 print(f"\n[7.1] Preparando variables para clustering...")
-print(f"Número de clusters: {NUM_CLUSTERS}")
+print(f"Rango de clusters a evaluar: {K_MIN}-{K_MAX}")
 
-# Features para clustering
 features_clustering = df_tickets[['monto_total_ticket', 'items_ticket']].copy()
-
-# Escalar variables
 scaler = StandardScaler()
 features_scaled = scaler.fit_transform(features_clustering)
 
 print(f"Tickets a segmentar: {len(features_clustering):,}")
 
-print("\n[7.2] Ejecutando K-Means...")
-kmeans = KMeans(n_clusters=NUM_CLUSTERS, random_state=42, n_init=10)
-df_tickets['cluster'] = kmeans.fit_predict(features_scaled)
+if len(features_clustering) < 2:
+    warn("No hay suficientes tickets para clustering. Se asigna cluster único 0.")
+    df_tickets['cluster'] = 0
+else:
+    max_k = min(K_MAX, len(features_clustering) - 1)
+    candidate_scores = []
+    best_k = max(2, K_MIN)
+    best_score = -np.inf
+
+    for k in range(max(2, K_MIN), max_k + 1):
+        model = KMeans(n_clusters=k, random_state=42, n_init=10)
+        labels = model.fit_predict(features_scaled)
+        unique_labels = np.unique(labels)
+        if len(unique_labels) < 2:
+            score = -np.inf
+        else:
+            try:
+                score = silhouette_score(features_scaled, labels)
+            except Exception:
+                score = -np.inf
+        candidate_scores.append((k, score))
+        if score > best_score:
+            best_score = score
+            best_k = k
+
+    if not candidate_scores:
+        best_k = max(2, min(K_MAX, len(features_clustering)))
+        best_score = float("nan")
+
+    print("Resultados de Silhouette por k:")
+    for k, score in candidate_scores:
+        print(f"  - k={k}: silhouette={score:.4f}")
+    print(f"Clusters seleccionados: {best_k} (silhouette={best_score:.4f})")
+
+    kmeans = KMeans(n_clusters=best_k, random_state=42, n_init=10)
+    df_tickets['cluster'] = kmeans.fit_predict(features_scaled)
 
 # Caracterizar clusters
-cluster_profiles = df_tickets.groupby('cluster').agg({
-    'ticket_id': 'count',
-    'monto_total_ticket': 'mean',
-    'items_ticket': 'mean',
-    'margen_ticket': 'mean',
-    'es_fin_semana': lambda x: (x.sum() / len(x) * 100)
-}).reset_index()
-
-cluster_profiles.columns = ['cluster', 'cantidad_tickets', 'ticket_promedio', 'items_promedio', 'margen_promedio', 'pct_fin_semana']
-cluster_profiles['pct_tickets'] = (cluster_profiles['cantidad_tickets'] / cluster_profiles['cantidad_tickets'].sum() * 100).round(1)
+cluster_profiles = (
+    df_tickets.groupby('cluster')
+    .agg(
+        cantidad_tickets=('ticket_id', 'count'),
+        ticket_promedio=('monto_total_ticket', 'mean'),
+        items_promedio=('items_ticket', 'mean'),
+        rentabilidad_promedio=('rentabilidad_ticket', 'mean'),
+        desv_std_rentabilidad=('rentabilidad_ticket', 'std'),
+        skus_promedio=('skus_ticket', 'mean'),
+        hora_promedio=('hora_promedio', 'mean'),
+        pct_costo_imputado=('pct_lineas_costo_imputado', 'mean'),
+        pct_fin_semana=('es_fin_semana', lambda x: (x.sum() / len(x) * 100)),
+    )
+    .reset_index()
+)
+cluster_profiles['desv_std_rentabilidad'] = cluster_profiles['desv_std_rentabilidad'].fillna(0)
+cluster_profiles['pct_tickets'] = (
+    cluster_profiles['cantidad_tickets'] / cluster_profiles['cantidad_tickets'].sum() * 100
+).round(1)
 
 # Etiquetar clusters
 def etiquetar_cluster(row):
@@ -514,7 +1148,25 @@ for idx, row in cluster_profiles.iterrows():
     print(f"  Tickets: {row['cantidad_tickets']:,} ({row['pct_tickets']:.1f}%)")
     print(f"  Ticket Promedio: ${row['ticket_promedio']:,.2f}")
     print(f"  Items Promedio: {row['items_promedio']:.1f}")
+    print(f"  Rentabilidad Promedio: ${row['rentabilidad_promedio']:,.2f}")
+    print(f"  Desv. Rentabilidad: ${row['desv_std_rentabilidad']:,.2f}")
+    print(f"  SKUs Promedio: {row['skus_promedio']:.1f}")
+    print(f"  % Costo Imputado: {row['pct_costo_imputado'] * 100:.1f}%")
     print(f"  % Fin de Semana: {row['pct_fin_semana']:.1f}%")
+
+eval_results = evaluate_strategy_periods(
+    df_tickets,
+    BEFORE_PERIOD,
+    AFTER_PERIOD,
+    control_matching=CONTROL_MATCHING,
+    categoria_tickets=categoria_tickets,
+)
+
+if eval_results.empty:
+    info("No se generó evaluación before/after (sin rango de fechas válido).")
+else:
+    print("\n[7.3] Evaluación de estrategias BEFORE/AFTER generada.")
+    print(eval_results.head().to_string(index=False))
 
 # =============================================================================
 # PASO 8: EXPORTACIÓN DE RESULTADOS
@@ -528,8 +1180,11 @@ print("\n[8.1] Exportando tablas a CSV...")
 # 1. Tabla de ítems (fact table)
 items_cols = [
     'fecha', 'ticket_id', 'producto_id', 'descripcion', 'categoria', 'marca',
-    'cantidad', 'precio_unitario', 'importe_total', 'margen_estimado',
-    'rentabilidad_pct', 'anio', 'mes', 'dia', 'dia_semana', 'periodo'
+    'cantidad', 'precio_unitario', 'precio_unitario_base', 'importe_total',
+    'costo_unitario', 'costo_total_linea', 'margen_linea', 'margen_estimado',
+    'rentabilidad_pct', 'rentabilidad_ratio', 'ratio_costo_precio',
+    'costo_fuente', 'costo_imputado', 'tiene_costo', 'clasificacion_departamento',
+    'anio', 'mes', 'dia', 'dia_semana', 'periodo'
 ]
 df.to_csv(
     OUTPUT_DIR / '01_ITEMS_VENTAS.csv',
@@ -552,6 +1207,20 @@ print(f"  ✓ 03_KPI_PERIODO.csv ({len(kpi_periodo):,} registros)")
 kpi_categoria.to_csv(OUTPUT_DIR / '04_KPI_CATEGORIA.csv', index=False, encoding='utf-8-sig', sep=';')
 print(f"  ✓ 04_KPI_CATEGORIA.csv ({len(kpi_categoria):,} registros)")
 
+# 4b. Rentabilidad diaria/semanal/mensual
+kpi_rentabilidad_diaria.to_csv(OUTPUT_DIR / '13_kpi_rentabilidad_diaria.csv', index=False, encoding='utf-8-sig', sep=';')
+print(f"  ✓ 13_kpi_rentabilidad_diaria.csv ({len(kpi_rentabilidad_diaria):,} registros)")
+
+kpi_rentabilidad_semanal.to_csv(OUTPUT_DIR / '14_kpi_rentabilidad_semanal.csv', index=False, encoding='utf-8-sig', sep=';')
+print(f"  ✓ 14_kpi_rentabilidad_semanal.csv ({len(kpi_rentabilidad_semanal):,} registros)")
+
+kpi_rentabilidad_mensual.to_csv(OUTPUT_DIR / '15_kpi_rentabilidad_mensual.csv', index=False, encoding='utf-8-sig', sep=';')
+print(f"  ✓ 15_kpi_rentabilidad_mensual.csv ({len(kpi_rentabilidad_mensual):,} registros)")
+
+(kpi_categoria[['categoria', 'ventas', 'costo', 'margen', 'margen_pct', 'unidades', 'tickets']]
+ .to_csv(OUTPUT_DIR / '21_ventas_por_categoria.csv', index=False, encoding='utf-8-sig', sep=';'))
+print(f"  ✓ 21_ventas_por_categoria.csv ({len(kpi_categoria):,} registros)")
+
 # 5. Análisis de Pareto
 df_productos.to_csv(OUTPUT_DIR / '05_PARETO_PRODUCTOS.csv', index=False, encoding='utf-8-sig', sep=';')
 print(f"  ✓ 05_PARETO_PRODUCTOS.csv ({len(df_productos):,} registros)")
@@ -571,9 +1240,38 @@ else:
 cluster_profiles.to_csv(OUTPUT_DIR / '07_PERFILES_CLUSTERS.csv', index=False, encoding='utf-8-sig', sep=';')
 print(f"  ✓ 07_PERFILES_CLUSTERS.csv ({len(cluster_profiles)} registros)")
 
+# 7b. Resumen de rentabilidad por cluster
+clusters_profit_summary = cluster_profiles[
+    [
+        'cluster',
+        'cantidad_tickets',
+        'ticket_promedio',
+        'rentabilidad_promedio',
+        'desv_std_rentabilidad',
+        'items_promedio',
+        'skus_promedio',
+        'hora_promedio',
+        'pct_costo_imputado',
+        'pct_fin_semana',
+    ]
+].copy()
+clusters_profit_summary.to_csv(OUTPUT_DIR / '52_clusters_profit_summary.csv', index=False, encoding='utf-8-sig', sep=';')
+print(f"  ✓ 52_clusters_profit_summary.csv ({len(clusters_profit_summary)} registros)")
+
 # 8. KPIs por día de semana
 kpi_dia_semana.to_csv(OUTPUT_DIR / '08_KPI_DIA_SEMANA.csv', index=False, encoding='utf-8-sig', sep=';')
 print(f"  ✓ 08_KPI_DIA_SEMANA.csv ({len(kpi_dia_semana)} registros)")
+
+if COST_IMPUTATION != 'none' and COST_RATIO_OUTPUT is not None:
+    COST_RATIO_OUTPUT.to_csv(OUTPUT_DIR / '23_cost_imputation_ratios.csv', index=False, encoding='utf-8-sig', sep=';')
+    print(f"  ✓ 23_cost_imputation_ratios.csv ({len(COST_RATIO_OUTPUT)} registros)")
+
+if not eval_results.empty:
+    eval_results.to_csv(OUTPUT_DIR / '95_eval_estrategias.csv', index=False, encoding='utf-8-sig', sep=';')
+    print(f"  ✓ 95_eval_estrategias.csv ({len(eval_results)} registros)")
+
+categoria_mas_rentable = kpi_categoria.nlargest(1, 'margen_pct').iloc[0] if not kpi_categoria.empty else None
+categoria_menos_rentable = kpi_categoria.nsmallest(1, 'margen_pct').iloc[0] if not kpi_categoria.empty else None
 
 # =============================================================================
 # PASO 9: SÍNTESIS Y RECOMENDACIONES DE NEGOCIO

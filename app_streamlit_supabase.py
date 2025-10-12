@@ -411,22 +411,105 @@ if pagina == "🏠 Resumen Ejecutivo":
     total_tickets = data['kpi_periodo']['tickets'].sum()
     margen_pct = (total_margen / total_ventas * 100) if total_ventas > 0 else 0
     ticket_promedio = total_ventas / total_tickets if total_tickets > 0 else 0
+    
+    # Calcular rentabilidad por ticket uniendo con datos de items_ventas
+    rentabilidad_ticket_promedio = 0
+    rentabilidad_ticket_desviacion = 0
+    rentabilidad_ticket_evolucion = None
+    tickets_con_rentabilidad = pd.DataFrame()
+    
+    # Intentar cargar datos de items_ventas si no están en data
+    items_ventas = None
+    if 'items_ventas' in data:
+        items_ventas = data['items_ventas']
+    else:
+        # Intentar cargar desde archivos de muestra
+        try:
+            if SAMPLE_DATASET_DIR.exists():
+                items_ventas = pd.read_csv(SAMPLE_DATASET_DIR / '01_ITEMS_VENTAS.csv', sep=';', encoding='utf-8-sig')
+                items_ventas = normalize_dataframe_columns(items_ventas)
+        except Exception:
+            items_ventas = None
+    
+    if items_ventas is not None and len(items_ventas) > 0:
+        # Calcular rentabilidad real por ticket uniendo con items_ventas
+        rentabilidad_por_ticket = items_ventas.groupby('ticket_id').agg({
+            'importe_total': 'sum',  # Ventas totales del ticket
+            'margen_estimado': 'sum',  # Margen total del ticket
+            'fecha': 'first',  # Fecha del ticket
+            'periodo': 'first'  # Período del ticket
+        }).reset_index()
+        
+        # Calcular rentabilidad porcentual por ticket
+        rentabilidad_por_ticket['rentabilidad_ticket'] = (
+            rentabilidad_por_ticket['margen_estimado'] / 
+            rentabilidad_por_ticket['importe_total'] * 100
+        )
+        
+        # Filtrar tickets válidos
+        tickets_validos = rentabilidad_por_ticket[
+            (rentabilidad_por_ticket['importe_total'] > 0) & 
+            (rentabilidad_por_ticket['margen_estimado'] > 0)
+        ].copy()
+        
+        if len(tickets_validos) > 0:
+            # Estadísticas de rentabilidad
+            rentabilidad_ticket_promedio = tickets_validos['rentabilidad_ticket'].mean()
+            rentabilidad_ticket_desviacion = tickets_validos['rentabilidad_ticket'].std()
+            
+            # Preparar datos para evolución mensual
+            tickets_validos['fecha'] = pd.to_datetime(tickets_validos['fecha'])
+            tickets_con_rentabilidad = tickets_validos.copy()
+            
+            # Evolución mensual de rentabilidad por ticket
+            rentabilidad_mensual = tickets_validos.groupby('periodo').agg({
+                'rentabilidad_ticket': ['mean', 'std', 'count']
+            }).round(2)
+            
+            rentabilidad_mensual.columns = ['rentabilidad_promedio', 'desviacion', 'cantidad_tickets']
+            rentabilidad_mensual = rentabilidad_mensual.reset_index()
+            rentabilidad_ticket_evolucion = rentabilidad_mensual
 
-    # KPIs en tarjetas
+    # KPIs en tarjetas - Primera fila
     col1, col2, col3, col4 = st.columns(4)
 
     with col1:
-        st.metric("💰 Total Ventas", f"${total_ventas/1e6:.1f}M", f"+{margen_pct:.1f}% margen")
+        st.metric("💰 Total Ventas", f"${total_ventas/1e6:,.1f}M", f"+{margen_pct:.1f}% margen")
 
     with col2:
         st.metric("📝 Total Tickets", f"{total_tickets:,.0f}", f"${ticket_promedio:,.0f} promedio")
 
     with col3:
-        st.metric("💎 Margen Total", f"${total_margen/1e6:.1f}M", f"{margen_pct:.1f}%")
+        st.metric("💎 Margen Total", f"${total_margen/1e6:,.1f}M", f"{margen_pct:.1f}%")
 
     with col4:
         categorias_activas = len(data['kpi_categoria'])
         st.metric("🏪 Categorías", f"{categorias_activas}", "departamentos")
+
+    # Segunda fila - Métricas de rentabilidad por ticket
+    if rentabilidad_ticket_promedio > 0:
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            st.metric("📊 Rentabilidad/Ticket", f"{rentabilidad_ticket_promedio:.1f}%", "promedio")
+        
+        with col2:
+            st.metric("📈 Desviación Estándar", f"{rentabilidad_ticket_desviacion:.1f}%", "variabilidad")
+        
+        with col3:
+            if len(tickets_con_rentabilidad) > 0:
+                tickets_alto_margen = len(tickets_con_rentabilidad[tickets_con_rentabilidad['rentabilidad_ticket'] > rentabilidad_ticket_promedio + rentabilidad_ticket_desviacion])
+                st.metric("🎯 Tickets Alto Margen", f"{tickets_alto_margen}", f"{tickets_alto_margen/len(tickets_con_rentabilidad)*100:.1f}%")
+            else:
+                st.metric("🎯 Tickets Alto Margen", "0", "0%")
+        
+        with col4:
+            if len(tickets_con_rentabilidad) > 0:
+                rentabilidad_min = tickets_con_rentabilidad['rentabilidad_ticket'].min()
+                rentabilidad_max = tickets_con_rentabilidad['rentabilidad_ticket'].max()
+                st.metric("📊 Rango Rentabilidad", f"{rentabilidad_min:.1f}% - {rentabilidad_max:.1f}%", "min - max")
+            else:
+                st.metric("📊 Rango Rentabilidad", "N/A", "sin datos")
 
     st.markdown("---")
 
@@ -496,19 +579,140 @@ if pagina == "🏠 Resumen Ejecutivo":
         fig_dia.update_layout(height=400, showlegend=False)
         st.plotly_chart(fig_dia, use_container_width=True)
 
+    # Gráficos de rentabilidad por ticket
+    if len(tickets_con_rentabilidad) > 0:
+        st.markdown("---")
+        st.subheader("📊 Análisis de Rentabilidad por Ticket")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.subheader("🎻 Distribución de Rentabilidad por Ticket")
+            
+            # Gráfico de violín para distribución de rentabilidad
+            fig_violin = px.violin(
+                tickets_con_rentabilidad,
+                y='rentabilidad_ticket',
+                title='Distribución de Rentabilidad por Ticket',
+                labels={'rentabilidad_ticket': 'Rentabilidad (%)'},
+                color_discrete_sequence=['#667eea']
+            )
+            
+            # Agregar líneas de referencia
+            fig_violin.add_hline(
+                y=rentabilidad_ticket_promedio, 
+                line_dash="dash", 
+                line_color="red",
+                annotation_text=f"Promedio: {rentabilidad_ticket_promedio:.1f}%"
+            )
+            
+            fig_violin.add_hline(
+                y=rentabilidad_ticket_promedio + rentabilidad_ticket_desviacion, 
+                line_dash="dot", 
+                line_color="orange",
+                annotation_text=f"+1σ: {rentabilidad_ticket_promedio + rentabilidad_ticket_desviacion:.1f}%"
+            )
+            
+            fig_violin.add_hline(
+                y=rentabilidad_ticket_promedio - rentabilidad_ticket_desviacion, 
+                line_dash="dot", 
+                line_color="orange",
+                annotation_text=f"-1σ: {rentabilidad_ticket_promedio - rentabilidad_ticket_desviacion:.1f}%"
+            )
+            
+            fig_violin.update_layout(height=500)
+            st.plotly_chart(fig_violin, use_container_width=True)
+        
+        with col2:
+            st.subheader("📈 Evolución Mensual de Rentabilidad")
+            
+            if rentabilidad_ticket_evolucion is not None and len(rentabilidad_ticket_evolucion) > 0:
+                # Gráfico de evolución mensual
+                fig_evolucion = go.Figure()
+                
+                # Línea de rentabilidad promedio
+                fig_evolucion.add_trace(go.Scatter(
+                    x=rentabilidad_ticket_evolucion['periodo'],
+                    y=rentabilidad_ticket_evolucion['rentabilidad_promedio'],
+                    mode='lines+markers',
+                    name='Rentabilidad Promedio',
+                    line=dict(color='#667eea', width=3),
+                    marker=dict(size=10),
+                    hovertemplate='<b>%{x}</b><br>Rentabilidad: %{y:.1f}%<extra></extra>'
+                ))
+                
+                # Banda de desviación estándar
+                fig_evolucion.add_trace(go.Scatter(
+                    x=rentabilidad_ticket_evolucion['periodo'],
+                    y=rentabilidad_ticket_evolucion['rentabilidad_promedio'] + rentabilidad_ticket_evolucion['desviacion'],
+                    mode='lines',
+                    name='+1 Desviación',
+                    line=dict(color='rgba(102, 126, 234, 0.3)'),
+                    showlegend=False
+                ))
+                
+                fig_evolucion.add_trace(go.Scatter(
+                    x=rentabilidad_ticket_evolucion['periodo'],
+                    y=rentabilidad_ticket_evolucion['rentabilidad_promedio'] - rentabilidad_ticket_evolucion['desviacion'],
+                    mode='lines',
+                    name='-1 Desviación',
+                    line=dict(color='rgba(102, 126, 234, 0.3)'),
+                    fill='tonexty',
+                    fillcolor='rgba(102, 126, 234, 0.1)',
+                    showlegend=False
+                ))
+                
+                fig_evolucion.update_layout(
+                    title='Evolución Mensual de Rentabilidad por Ticket',
+                    xaxis_title='Período',
+                    yaxis_title='Rentabilidad (%)',
+                    height=500,
+                    hovermode='x unified'
+                )
+                
+                st.plotly_chart(fig_evolucion, use_container_width=True)
+            else:
+                st.info("📊 No hay suficientes datos para mostrar la evolución mensual.")
+
     # INSIGHT
     st.markdown("---")
-    st.markdown("""
+    
+    # Generar insight dinámico basado en datos disponibles
+    insight_text = """
     <div class="wallstreet-insight">
-        <h3>💼 INSIGHT</h3>
+        <h3>💼 INSIGHT EJECUTIVO</h3>
         <p style="font-size: 1.1rem; line-height: 1.8;">
-        <strong>📊 CONCENTRACIÓN DE VALOR:</strong> El 13.4% de los productos (1,389 items) generan el 80% de las ventas.
-        <br><strong>💰 OPORTUNIDAD DE MARGEN:</strong> Las categorías de Fiambrería y Bazar tienen 45% de rentabilidad vs 27% promedio.
-        <br><strong>🎯 TICKET PROMEDIO:</strong> $26,849 con 9.8 items por compra - Oportunidad de aumentar UPT (units per transaction).
-        <br><strong>📈 ROI POTENCIAL:</strong> Implementando las recomendaciones se proyecta un aumento de 10-15% en ventas y 15-25% en margen.
+    """
+    
+    # Insight sobre concentración de valor
+    if len(data['pareto']) > 0:
+        productos_a = len(data['pareto'][data['pareto']['clasificacion_abc'] == 'A'])
+        total_productos = len(data['pareto'])
+        pct_productos_a = (productos_a / total_productos * 100) if total_productos > 0 else 0
+        insight_text += f"<strong>📊 CONCENTRACIÓN DE VALOR:</strong> El {pct_productos_a:.1f}% de los productos ({productos_a:,} items) generan el 80% de las ventas.<br>"
+    
+    # Insight sobre rentabilidad por ticket
+    if rentabilidad_ticket_promedio > 0:
+        insight_text += f"<strong>💎 RENTABILIDAD POR TICKET:</strong> Promedio {rentabilidad_ticket_promedio:.1f}% con desviación de {rentabilidad_ticket_desviacion:.1f}% - Variabilidad {'alta' if rentabilidad_ticket_desviacion > 5 else 'controlada'}.<br>"
+    
+    # Insight sobre ticket promedio
+    if ticket_promedio > 0:
+        insight_text += f"<strong>🎯 TICKET PROMEDIO:</strong> ${ticket_promedio:,.0f} con margen del {margen_pct:.1f}% - Oportunidad de optimizar mix de productos.<br>"
+    
+    # Insight sobre categorías más rentables
+    if len(data['kpi_categoria']) > 0:
+        categoria_mas_rentable = data['kpi_categoria'].nlargest(1, 'rentabilidad_pct').iloc[0]
+        rentabilidad_max = float(categoria_mas_rentable['rentabilidad_pct'])
+        insight_text += f"<strong>🏆 CATEGORÍA PREMIUM:</strong> {categoria_mas_rentable['categoria']} con {rentabilidad_max:.0f}% de rentabilidad vs {margen_pct:.1f}% promedio.<br>"
+    
+    insight_text += f"<strong>📈 ROI POTENCIAL:</strong> Implementando optimizaciones de mix y cross-selling se proyecta un aumento de 10-15% en ventas y 15-25% en margen."
+    
+    insight_text += """
         </p>
     </div>
-    """, unsafe_allow_html=True)
+    """
+    
+    st.markdown(insight_text, unsafe_allow_html=True)
 
 # =============================================================================
 # PÁGINA: ANÁLISIS PARETO
@@ -754,7 +958,7 @@ elif pagina == "💰 Rentabilidad":
         st.metric(
             "📊 Mayor Volumen",
             categoria_mayor_ventas['categoria'],
-            f"${float(categoria_mayor_ventas['ventas'])/1e6:.1f}M"
+            f"${float(categoria_mayor_ventas['ventas'])/1e6:,.1f}M"
         )
 
     # Gráfico de ventas vs rentabilidad

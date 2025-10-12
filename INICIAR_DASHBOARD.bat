@@ -39,6 +39,6 @@ echo.
 echo Presiona Ctrl+C para detener el servidor
 echo.
 
-streamlit run app_streamlit.py
+streamlit run app_streamlit_supabase.py
 
 pause
