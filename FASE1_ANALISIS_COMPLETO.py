@@ -108,8 +108,9 @@ def warn(msg: str) -> None:
 
 try:
     from scipy import stats as scipy_stats
-except Exception:  # pragma: no cover - dependencia opcional
+except Exception as exc:  # pragma: no cover - dependencia opcional
     scipy_stats = None
+    warn(f"SciPy no disponible ({exc}); se usara bootstrap para p-values.")
 
 
 def normalize_ascii(value: Optional[str]) -> str:
@@ -261,6 +262,11 @@ def evaluate_strategy_periods(
         coverage_after = _quality_flag(df_after_scope)
         coverage_flag = min(coverage_before, coverage_after)
         quality_note = "interpretar con cautela" if coverage_flag < 0.70 else ""
+        if coverage_flag < 0.70:
+            warn(
+                f"Baja cobertura de costos en {scope}:{group_value} "
+                f"(before={coverage_before:.1%}, after={coverage_after:.1%})"
+            )
 
         metrics = [
             ("rentabilidad_promedio_ticket", 'rentabilidad_ticket'),
@@ -1199,6 +1205,13 @@ print(f"  ✓ 01_ITEMS_VENTAS.csv ({len(df):,} registros)")
 df_tickets.to_csv(OUTPUT_DIR / '02_TICKETS.csv', index=False, encoding='utf-8-sig', sep=';')
 print(f"  ✓ 02_TICKETS.csv ({len(df_tickets):,} registros)")
 
+tickets_parquet_path = OUTPUT_DIR / 'tickets.parquet'
+try:
+    df_tickets.to_parquet(tickets_parquet_path, index=False)
+    print(f"  ✓ {tickets_parquet_path.name} ({len(df_tickets):,} registros)")
+except Exception as exc:
+    warn(f"No se pudo exportar {tickets_parquet_path.name}: {exc}")
+
 # 3. KPIs por período
 kpi_periodo.to_csv(OUTPUT_DIR / '03_KPI_PERIODO.csv', index=False, encoding='utf-8-sig', sep=';')
 print(f"  ✓ 03_KPI_PERIODO.csv ({len(kpi_periodo):,} registros)")
@@ -1269,6 +1282,130 @@ if COST_IMPUTATION != 'none' and COST_RATIO_OUTPUT is not None:
 if not eval_results.empty:
     eval_results.to_csv(OUTPUT_DIR / '95_eval_estrategias.csv', index=False, encoding='utf-8-sig', sep=';')
     print(f"  ✓ 95_eval_estrategias.csv ({len(eval_results)} registros)")
+
+data_dictionary_specs = [
+    ('01_ITEMS_VENTAS.csv', df, 'precio_unitario_base', 'Precio unitario recalculado cuando faltaba el valor original.'),
+    ('01_ITEMS_VENTAS.csv', df, 'costo_unitario', 'Costo unitario final asignado a la línea.'),
+    ('01_ITEMS_VENTAS.csv', df, 'costo_total_linea', 'Costo total por línea (costo_unitario * cantidad).'),
+    ('01_ITEMS_VENTAS.csv', df, 'margen_linea', 'Rentabilidad (importe - costo) en pesos por línea.'),
+    ('01_ITEMS_VENTAS.csv', df, 'margen_estimado', 'Rentabilidad final de la línea (igual a margen_linea tras imputaciones).'),
+    ('01_ITEMS_VENTAS.csv', df, 'rentabilidad_pct', 'Porcentaje de margen teórico del departamento.'),
+    ('01_ITEMS_VENTAS.csv', df, 'rentabilidad_ratio', 'Ratio teórico de costo/precio usado para imputar costos.'),
+    ('01_ITEMS_VENTAS.csv', df, 'ratio_costo_precio', 'Relación costo/precio observada en la línea.'),
+    ('01_ITEMS_VENTAS.csv', df, 'costo_fuente', 'Origen del costo (línea, cost_file, imputación, etc.).'),
+    ('01_ITEMS_VENTAS.csv', df, 'costo_imputado', 'Indicador (1/0) si el costo se imputó.'),
+    ('01_ITEMS_VENTAS.csv', df, 'tiene_costo', 'Indicador (1/0) si la línea cuenta con costo válido.'),
+    ('01_ITEMS_VENTAS.csv', df, 'clasificacion_departamento', 'Clasificación ABC del departamento.'),
+    ('02_TICKETS.csv', df_tickets, 'costo_total_ticket', 'Suma de costos de todas las líneas del ticket.'),
+    ('02_TICKETS.csv', df_tickets, 'rentabilidad_ticket', 'Rentabilidad total del ticket en pesos.'),
+    ('02_TICKETS.csv', df_tickets, 'rentabilidad_pct_ticket', 'Rentabilidad relativa del ticket (margen / monto).'),
+    ('02_TICKETS.csv', df_tickets, 'lineas_total', 'Cantidad de líneas asociadas al ticket.'),
+    ('02_TICKETS.csv', df_tickets, 'lineas_con_costo', 'Líneas con costo real disponible.'),
+    ('02_TICKETS.csv', df_tickets, 'lineas_costo_imputado', 'Líneas cuyo costo fue imputado.'),
+    ('02_TICKETS.csv', df_tickets, 'pct_lineas_con_costo', 'Porcentaje de líneas con costo real sobre el total.'),
+    ('02_TICKETS.csv', df_tickets, 'pct_lineas_costo_imputado', 'Porcentaje de líneas con costo imputado sobre el total.'),
+    ('02_TICKETS.csv', df_tickets, 'margen_ticket', 'Alias de rentabilidad_ticket para compatibilidad con reportes.'),
+]
+
+data_dictionary_rows = []
+for tabla, dataframe, columna, descripcion in data_dictionary_specs:
+    if columna in dataframe.columns:
+        data_dictionary_rows.append(
+            {
+                'tabla': tabla,
+                'columna': columna,
+                'tipo': str(dataframe[columna].dtype),
+                'descripcion': descripcion,
+            }
+        )
+
+if data_dictionary_rows:
+    data_dictionary_df = pd.DataFrame(data_dictionary_rows)
+    data_dictionary_df.to_csv(
+        OUTPUT_DIR / '00_data_dictionary.csv',
+        index=False,
+        encoding='utf-8-sig',
+        sep=';',
+    )
+    print(f"  ✓ 00_data_dictionary.csv ({len(data_dictionary_df)} registros)")
+
+resumen_path = OUTPUT_DIR / '90_resumen_ejecutivo.md'
+resumen_lines = ["# KPI Faro - Rentabilidad por Ticket", ""]
+
+if df_tickets.empty:
+    resumen_lines.append("No se identificaron tickets para calcular la rentabilidad reciente.")
+else:
+    fecha_max = df_tickets['fecha'].max()
+    ventana_inicio = max(df_tickets['fecha'].min(), fecha_max - timedelta(days=29))
+    recientes = df_tickets[df_tickets['fecha'] >= ventana_inicio].copy()
+    if recientes.empty:
+        recientes = df_tickets.copy()
+        ventana_inicio = df_tickets['fecha'].min()
+
+    rent_promedio = recientes['rentabilidad_ticket'].mean()
+    rent_desv = recientes['rentabilidad_ticket'].std(ddof=1)
+    rent_pct_prom = recientes['rentabilidad_pct_ticket'].mean()
+    tickets_analizados = len(recientes)
+    pct_costos_reales = recientes['pct_lineas_con_costo'].mean()
+    pct_costos_imputados = recientes['pct_lineas_costo_imputado'].mean()
+
+    def _fmt_currency(value: float) -> str:
+        return f"${value:,.2f}" if pd.notna(value) else "NA"
+
+    def _fmt_percent(value: float) -> str:
+        return f"{value * 100:,.2f}%" if pd.notna(value) else "NA"
+
+    resumen_lines.append(f"**Últimos 30 días ({ventana_inicio.date()} -> {fecha_max.date()})**")
+    resumen_lines.append(f"- Rentabilidad promedio por ticket: {_fmt_currency(rent_promedio)}")
+    resumen_lines.append(f"- Desviación estándar de la rentabilidad: {_fmt_currency(rent_desv)}")
+    resumen_lines.append(f"- Rentabilidad porcentual promedio: {_fmt_percent(rent_pct_prom)}")
+    resumen_lines.append(f"- Tickets considerados: {tickets_analizados:,}")
+    resumen_lines.append(f"- % líneas con costo real: {_fmt_percent(pct_costos_reales)}")
+    resumen_lines.append(f"- % líneas con costo imputado: {_fmt_percent(pct_costos_imputados)}")
+    resumen_lines.append("")
+
+    if not kpi_categoria.empty:
+        resumen_lines.append("**Top 3 categorías por margen**")
+        top_categorias = kpi_categoria.nlargest(3, 'margen').copy()
+        for rank, (_, row) in enumerate(top_categorias.iterrows(), start=1):
+            contrib = (row['margen'] / rentabilidad_total * 100) if rentabilidad_total else 0.0
+            resumen_lines.append(
+                f"{rank}. {row['categoria']}: margen ${row['margen']:,.2f} ({contrib:.2f}% del margen total)"
+            )
+        resumen_lines.append("")
+
+    if not eval_results.empty:
+        resumen_lines.append("**Evaluación de estrategias (before/after)**")
+
+        def _fmt_metric(metric_name: str, value: float, is_delta: bool = False) -> str:
+            if pd.isna(value):
+                return "NA"
+            if 'pct' in metric_name:
+                return f"{value * 100:,.2f}%"
+            if is_delta:
+                return f"{value:,.2f}"
+            return f"${value:,.2f}"
+
+        resumen_lines.append("| Segmento | Métrica | Before | After | Delta absoluta | Delta % | p-value | Nota |")
+        resumen_lines.append("|----------|---------|--------|-------|----------------|---------|---------|------|")
+        resumen_eval = eval_results.copy()
+        for _, row in resumen_eval.iterrows():
+            before_fmt = _fmt_metric(row['metric'], row['before'])
+            after_fmt = _fmt_metric(row['metric'], row['after'])
+            delta_fmt = _fmt_metric(row['metric'], row['delta_abs'], is_delta=True)
+            delta_pct_fmt = f"{row['delta_pct'] * 100:,.2f}%" if not pd.isna(row['delta_pct']) else "NA"
+            p_value_fmt = f"{row['p_value']:.4f}" if not pd.isna(row['p_value']) else "NA"
+            nota = row.get('nota', '')
+            resumen_lines.append(
+                f"| {row['scope']}:{row['segmento']} | {row['metric']} | {before_fmt} | {after_fmt} | "
+                f"{delta_fmt} | {delta_pct_fmt} | {p_value_fmt} | {nota or ''} |"
+            )
+        resumen_lines.append("")
+    else:
+        resumen_lines.append("_No se proporcionaron rangos before/after en la ejecución actual._")
+
+resumen_path.write_text("\n".join(resumen_lines).strip() + "\n", encoding='utf-8')
+print(f"  ✓ {resumen_path.name} actualizado")
 
 categoria_mas_rentable = kpi_categoria.nlargest(1, 'margen_pct').iloc[0] if not kpi_categoria.empty else None
 categoria_menos_rentable = kpi_categoria.nsmallest(1, 'margen_pct').iloc[0] if not kpi_categoria.empty else None
