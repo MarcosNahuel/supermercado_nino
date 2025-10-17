@@ -1,0 +1,16 @@
+paths:
+  raw_items: data/raw/SERIE_COMPROBANTES_COMPLETOS3.csv
+  rentabilidad_por_departamento: data/raw/RENTABILIDAD.csv
+  processed_dir: data/processed
+  reports_dir: reports
+settings:
+  currency: ARS
+  date_column: fecha
+  ticket_column: ticket_id
+  department_column: departamento
+  medio_pago_column: medio_pago
+  emisor_column: emisor
+  rentabilidad_default_pct: 0.12
+  medios_pago_period:
+    start: 2025-02-01
+    end: 2025-10-07

@@ -1,0 +1,12 @@
+{
+  "null_percentage": {
+    "fecha": 0.0,
+    "ticket_id": 0.0,
+    "producto_id": 0.0,
+    "departamento": 0.00014573313379301434,
+    "importe_total": 0.0
+  },
+  "duplicate_rows": 695420,
+  "importe_diff_outliers_pct": 0.1680456840690229,
+  "rentabilidad_default_pct": 0.12
+}
