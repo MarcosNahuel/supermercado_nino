@@ -263,27 +263,25 @@ with tabs[0]:
         # -------------------------
         # Diario (tickets cada 30 minutos)
         # -------------------------
-        kpi_hora = data.get('kpi_hora')
-        distribucion_media_hora = None
-        if kpi_hora is not None and not kpi_hora.empty:
-            kpi_hora = kpi_hora.copy()
-            kpi_hora['fecha_hora'] = pd.to_datetime(kpi_hora['fecha_hora'])
-            kpi_hora['datetime'] = kpi_hora['fecha_hora'] + pd.to_timedelta(kpi_hora['hora'], unit='h')
-            serie_30 = (
-                kpi_hora[['datetime', 'tickets']]
-                .set_index('datetime')
-                .resample('30min')
-                .sum()
-                .reset_index()
+        kpi_dia = data.get('kpi_dia')
+        tickets_dia = None
+        if kpi_dia is not None and not kpi_dia.empty:
+            mapa_dias = {
+                'Monday': 'Lunes', 'Tuesday': 'Martes', 'Wednesday': 'Miércoles',
+                'Thursday': 'Jueves', 'Friday': 'Viernes', 'Saturday': 'Sábado', 'Sunday': 'Domingo'
+            }
+            tickets_dia = (
+                kpi_dia[['dia_semana', 'tickets']]
+                .copy()
+                .assign(dia=lambda df: df['dia_semana'].map(mapa_dias))
+                .dropna(subset=['dia'])
+                .groupby('dia', as_index=False)['tickets']
+                .mean()
+                .rename(columns={'tickets': 'tickets_promedio'})
             )
-            serie_30['slot'] = serie_30['datetime'].dt.strftime('%H:%M')
-            distribucion_media_hora = (
-                serie_30.groupby('slot', as_index=False)['tickets']
-                .sum()
-                .rename(columns={'tickets': 'tickets_totales'})
-            )
-            distribucion_media_hora['slot_order'] = pd.to_datetime(distribucion_media_hora['slot'], format='%H:%M')
-            distribucion_media_hora = distribucion_media_hora.sort_values('slot_order')
+            orden = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
+            tickets_dia['dia'] = pd.Categorical(tickets_dia['dia'], categories=orden, ordered=True)
+            tickets_dia = tickets_dia.sort_values('dia')
 
         # -------------------------
         # Quincenal (tickets por quincena)
@@ -345,23 +343,19 @@ with tabs[0]:
 
         col_diario, col_anual = st.columns(2)
         with col_diario:
-            st.markdown("### Diario - Tickets cada 30 minutos (suma)")
-            if distribucion_media_hora is not None and not distribucion_media_hora.empty:
-                fig_media_hora = px.line(
-                    distribucion_media_hora,
-                    x='slot',
-                    y='tickets_totales',
-                    labels={'slot': 'Franja horaria', 'tickets_totales': 'Tickets acumulados'},
-                    markers=True
+            st.markdown("### Diario - Ticket promedio por día de semana")
+            if tickets_dia is not None and not tickets_dia.empty:
+                fig_media_dia = px.bar(
+                    tickets_dia,
+                    x='dia',
+                    y='tickets_promedio',
+                    labels={'dia': 'Día de la semana', 'tickets_promedio': 'Tickets promedio'},
+                    color_discrete_sequence=['#ff9800']
                 )
-                fig_media_hora.update_traces(line=dict(color='#ff9800', width=3))
-                fig_media_hora.update_layout(
-                    height=420,
-                    xaxis=dict(tickangle=-45)
-                )
-                st.plotly_chart(fig_media_hora, use_container_width=True)
+                fig_media_dia.update_layout(height=420)
+                st.plotly_chart(fig_media_dia, use_container_width=True)
             else:
-                st.info("No fue posible calcular la distribución en intervalos de 30 minutos con los datos disponibles.")
+                st.info("No fue posible calcular el promedio diario con los datos disponibles.")
 
         with col_anual:
             st.markdown("### Anual - Tickets por quincena")
@@ -396,15 +390,13 @@ with tabs[0]:
 
         if (
             not dow_summary.empty
-            and distribucion_media_hora is not None
-            and not distribucion_media_hora.empty
+            and tickets_dia is not None
+            and not tickets_dia.empty
             and not tickets_quincena.empty
         ):
             dow_summary['label'] = dow_summary['dia_semana_idx'].map(dias_map)
             dia_fuerte = dow_summary.loc[dow_summary['tickets'].idxmax(), 'label']
-            slot_top = distribucion_media_hora.loc[
-                distribucion_media_hora['tickets_totales'].idxmax(), 'slot'
-            ]
+            dia_top = tickets_dia.loc[tickets_dia['tickets_promedio'].idxmax(), 'dia']
             quincena_top = tickets_quincena.loc[tickets_quincena['tickets'].idxmax(), 'quincena_label']
             st.markdown(
                 f"""
@@ -412,7 +404,7 @@ with tabs[0]:
                     <h4 style='color: #4527a0; margin: 0;'>Ritmo clave para las campanas</h4>
                     <p style='margin: 10px 0 0 0;'>
                         &bull; <b>{dia_fuerte}</b> concentra el mayor flujo semanal de tickets.<br>
-                        &bull; El pico diario aparece cerca de las <b>{slot_top}</b>, sujeto a la granularidad disponible.<br>
+                        &bull; El día con mayor ticket promedio es <b>{dia_top}</b>.<br>
                         &bull; La <b>{quincena_top}</b> marca el tramo mas intenso del calendario, util para planificar abastecimiento y promociones.
                     </p>
                 </div>
