@@ -6,13 +6,13 @@ Este documento guía define el nuevo pipeline analítico para respaldar, con dat
 
 - Estado: borrador colaborativo v0.1 (co‑diseño)
 - Fuente estrategia: Estrategias_Analitica.md
-- Repositorio base: FASE1_ANALISIS_COMPLETO.py + app_streamlit_supabase.py + data/*
+- Repositorio base v2: `pipeline_estrategias.py` + `dashboard_cientifico.py` + `data/app_dataset/*` (componentes legacy en `legacy/`)
 
 
 ## 1) Alcance del Dataset (PRIORIDAD: mostrar estado actual)
 
 - Orígenes de datos
-  - `data/raw/SERIE_COMPROBANTES_COMPLETOS2.csv` (ventas POS, 2.99M+ líneas)
+  - `data/raw/SERIE_COMPROBANTES_COMPLETOS.csv` (ventas POS, 2.99M+ líneas)
   - `data/raw/RENTABILIDAD.csv` (rentabilidad por departamento/categoría)
 - Periodo analizado
   - Declarado: Octubre 2024 – Octubre 2025 (13 meses) según `data/raw/README.md`
@@ -153,7 +153,7 @@ Parquet para `data/app_dataset/`:
 - Clusters: `clusters_departamento.parquet`, `clusters_tickets.parquet`, `clusters_pago_tickets.parquet`, `clusters_productos_temporales.parquet`, `clasificacion_productos.parquet`
 - Pago: `kpi_medio_pago.parquet` (tipo_medio_pago, emisores, KPIs)
 
-Dashboard (app_streamlit_supabase.py):
+Dashboard (dashboard_cientifico.py):
 - Nueva portada “Estado del Dataset”: periodo exacto, n_tickets, n_items, facturación, KPIs base
 - Estacionalidad: vistas semanal, mensual y anual con filtros weekday/weekend
 - Pareto global y por weekday/weekend (categorías y productos)
@@ -199,7 +199,7 @@ Definiciones confirmadas:
 - App dashboard: `app_streamlit_supabase.py`
 - Builder Parquet: `scripts/build_app_dataset.py`
 - Datos app: `data/app_dataset/*.parquet`
-- Datos crudos: `data/raw/SERIE_COMPROBANTES_COMPLETOS2.csv`, `data/raw/RENTABILIDAD.csv`
+- Datos crudos: `data/raw/SERIE_COMPROBANTES_COMPLETOS.csv`, `data/raw/RENTABILIDAD.csv`
 - Documento estratégico: `Estrategias_Analitica.md`
 
 

@@ -1,68 +1,49 @@
-# 📁 Data Directory
+# Data Directory
 
-## Estructura
+## Estructura actual
 
 ```
 data/
-├── raw/                        # Datos originales (gitignored)
-│   ├── SERIE_COMPROBANTES_COMPLETOS2.csv  # Dataset principal (395MB)
-│   └── RENTABILIDAD.csv                   # Rentabilidad por departamento
-│
-├── processed/FASE1_OUTPUT/     # Datos procesados (gitignored)
-│   ├── 01_ITEMS_VENTAS.csv
-│   ├── 02_TICKETS.csv
-│   ├── 03_KPI_PERIODO.csv
-│   ├── 04_KPI_CATEGORIA.csv
-│   ├── 05_PARETO_PRODUCTOS.csv
-│   ├── 06_REGLAS_ASOCIACION.csv
-│   ├── 07_PERFILES_CLUSTERS.csv
-│   └── 08_KPI_DIA_SEMANA.csv
-│
-├── app_dataset/                # Paquete Parquet usado por Streamlit
-│   ├── clusters.parquet
-│   ├── kpi_categoria.parquet
-│   ├── kpi_dia.parquet
-│   ├── kpi_periodo.parquet
-│   ├── pareto.parquet
-│   ├── reglas.parquet
-│   └── tickets.parquet
-│
-└── sample/FASE1_OUTPUT_SAMPLE/ # Muestra liviana para demos
-    └── (archivos CSV)
+|- raw/          # CSV originales provistos por el POS (gitignored)
+|- app_dataset/  # Parquet consumidos por dashboard_cientifico.py (versionados)
+|- processed/    # Reservado para futuras salidas (vacío tras mover FASE1 a legacy/)
+\- sample/       # Reservado (dataset demo archivado en legacy/)
 ```
 
-## Archivos Finales en `raw/`
+### raw/
+- `SERIE_COMPROBANTES_COMPLETOS.csv`: comprobantes y líneas de venta (oct 2024 - oct 2025).
+- `RENTABILIDAD.csv`: rentabilidad objetivo por departamento.
 
-### SERIE_COMPROBANTES_COMPLETOS2.csv
-- **Descripción:** Dataset principal con todas las transacciones
-- **Periodo:** Octubre 2024 - Octubre 2025
-- **Registros:** 2.9M+ líneas
-- **Tamaño:** ~395 MB
-- **Formato:** CSV delimitado por `;`, decimal con `,`
+### app_dataset/
+Paquete generado por `pipeline_estrategias.py`. El dashboard científico utiliza estos archivos:
 
-### RENTABILIDAD.csv
-- **Descripción:** Porcentaje de rentabilidad por departamento
-- **Registros:** 45 categorías
-- **Formato:** CSV con columnas Departamento, % Rentabilidad, Clasificación
+| Archivo | Contenido principal |
+| ------- | ------------------- |
+| `alcance_dataset.parquet` | tamaño del dataset (fechas, tickets, ítems, ventas) |
+| `kpis_base.parquet` | KPIs globales (ticket medio, margen, rentabilidad) |
+| `kpi_diario.parquet`, `kpi_semana.parquet`, `kpi_periodo.parquet`, `kpi_dia.parquet` | temporalidad diaria / semanal / mensual / día de semana |
+| `pareto_cat_global.parquet`, `pareto_prod_global.parquet` | ranking ABC global |
+| `reglas.parquet`, `combos_recomendados.parquet`, `adjacency_pairs.parquet` | market basket y adyacencias |
+| `clusters_tickets.parquet`, `clusters_departamento.parquet` | segmentación de tickets y departamentos |
+| `kpi_medio_pago.parquet` | mezcla de medios de pago y emisores |
+| `rentabilidad_ticket.parquet` | margen estimado por ticket |
 
-## Generación de Datos Procesados
+El paquete incluye otros archivos auxiliares (ej. `kpi_hora.parquet`, `clasificacion_productos.parquet`) que se mantienen para extender el dashboard en el futuro.
 
-Para regenerar los archivos en `processed/`, ejecuta:
+## Regenerar el paquete Parquet
 
-```bash
-python FASE1_ANALISIS_COMPLETO.py
-```
+1. Asegurarse de que los CSV estén en `data/raw/`.
+2. Ejecutar:
+   ```bash
+   python pipeline_estrategias.py
+   ```
+3. Los Parquet se escribirán en `data/app_dataset/` y quedarán listos para `dashboard_cientifico.py`.
 
-Este script lee los archivos de `raw/` y genera 8 archivos CSV optimizados para análisis y visualización.
+## Datos legacy
 
-## Uso en la Aplicación
+Las salidas masivas en CSV (fase FASE1) y la muestra demo ligera fueron trasladadas a `legacy/data/`:
 
-La aplicación `app_streamlit_supabase.py` utiliza el contenido de `data/app_dataset/`
-por defecto. Si esa carpeta no está disponible, cae automáticamente a la muestra
-liviana en `data/sample/FASE1_OUTPUT_SAMPLE/`.
+- `legacy/data/processed/FASE1_OUTPUT/`
+- `legacy/data/sample/FASE1_OUTPUT_SAMPLE/`
 
-Para regenerar el paquete Parquet después de ejecutar el pipeline completo:
-
-```bash
-python scripts/build_app_dataset.py
-```
+Si se necesita reconstruir esas carpetas, utilizar los scripts correspondientes en `legacy/pipelines/` y `legacy/scripts/`.
