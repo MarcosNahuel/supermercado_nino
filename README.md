@@ -41,10 +41,12 @@ python -m venv .venv
 
 pip install -r requirements.txt
 
-# Opcional: regenerar el paquete Parquet si actualizaste los CSV procesados
-python scripts/build_app_dataset.py
+# Regenerar el paquete Parquet (usa pipeline unificado)
+python pipeline_estrategias.py
+# Alternativa legacy (CSV -> Parquet)
+# python scripts/build_app_dataset.py
 
-streamlit run app_streamlit_supabase.py
+streamlit run dashboard_cientifico.py
 ```
 
 El dashboard cargará por defecto los archivos Parquet de `data/app_dataset/`. Si esa carpeta no existe, se usa la muestra liviana `data/sample/FASE1_OUTPUT_SAMPLE/` para mantener la demo operativa.
@@ -53,33 +55,29 @@ El dashboard cargará por defecto los archivos Parquet de `data/app_dataset/`. S
 
 ## Estructura del proyecto
 
-```
+`
 supermercado_nino/
-├── app_streamlit_supabase.py      # Dashboard principal (ahora solo datos locales)
-├── FASE1_ANALISIS_COMPLETO.py     # Pipeline ETL de la fase 1
-│
-├── scripts/
-│   ├── build_app_dataset.py       # Convierte los CSV procesados a Parquet
-│   ├── migrate_to_supabase.py     # (Opcional) migración a Supabase
-│   ├── setup_supabase_tables.py   # (Opcional) creación de tablas
-│   └── clean_supabase.py          # (Opcional) limpieza de Supabase
-│
-├── data/
-│   ├── raw/                       # Datasets originales (gitignored)
-│   ├── processed/FASE1_OUTPUT/    # Salida del pipeline (gitignored)
-│   ├── app_dataset/               # Parquet listo para la app (versionado)
-│   └── sample/FASE1_OUTPUT_SAMPLE/# Muestra liviana para demos
-│
-├── docs/                          # Documentación funcional y técnica
-│   ├── DEPLOY_SUPABASE.md
-│   ├── SUPABASE_SQL_SCRIPTS.md
-│   ├── RESUMEN_EJECUTIVO_ACTUALIZADO.md
-│   ├── RESUMEN_PROYECTO_FINAL.md
-│   └── CONCLUSIONES_ESTRATEGIAS_FINALES.md
-│
-├── requirements.txt
-└── README.md
-```
+|- dashboard_cientifico.py        # Dashboard final (storytelling + KPIs)
+|- pipeline_estrategias.py        # Pipeline unificado (raw -> parquet)
+|- app_streamlit_supabase.py      # Dashboard legacy (mantiene soporte Supabase)
+|- dashboard.py                   # Dashboard legacy simplificado
+|- FASE1_ANALISIS_COMPLETO.py     # Pipeline ETL fase 1 (legacy CSV)
+|- scripts/
+|  \- build_app_dataset.py       # Legacy conversor CSV -> Parquet
+|- data/
+|  |- raw/                       # Datasets originales (gitignored)
+|  |- processed/FASE1_OUTPUT/    # Salida legacy del pipeline fase 1 (gitignored)
+|  |- app_dataset/               # Parquet listos para la app (versionados)
+|  \- sample/FASE1_OUTPUT_SAMPLE/# Muestra liviana para demos
+|- docs/                          # Documentacion funcional y tecnica
+|  |- DEPLOY_SUPABASE.md
+|  |- SUPABASE_SQL_SCRIPTS.md
+|  |- RESUMEN_EJECUTIVO_ACTUALIZADO.md
+|  |- RESUMEN_PROYECTO_FINAL.md
+|  \- CONCLUSIONES_ESTRATEGIAS_FINALES.md
+|- requirements.txt
+\- README.md
+`
 
 ## Tecnologías
 

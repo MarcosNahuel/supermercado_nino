@@ -786,9 +786,9 @@ info(f"✓ tickets.parquet ({len(df_tickets)} registros)")
 # FINALIZACIÓN
 # =============================================================================
 print("\n" + "=" * 100)
-print("✅ PIPELINE COMPLETADO")
+print("PIPELINE COMPLETADO")
 print("=" * 100)
-print(f"\n📁 Archivos generados en: {OUTPUT_DIR}")
-print(f"📊 Total de Parquet generados: {len(list(OUTPUT_DIR.glob('*.parquet')))}")
-print(f"\n🎯 Próximo paso: Ejecutar app_streamlit_supabase.py")
+print(f"\nArchivos generados en: {OUTPUT_DIR}")
+print(f"Total de archivos Parquet: {len(list(OUTPUT_DIR.glob('*.parquet')))}")
+print(f"\nPaso siguiente sugerido: streamlit run dashboard_cientifico.py")
 print("=" * 100)

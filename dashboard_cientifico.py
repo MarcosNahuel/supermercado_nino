@@ -187,13 +187,19 @@ with col3:
 with col4:
     st.metric("Margen/Ticket", f"{formatear_numero_argentino((kpis['rentabilidad_promedio_ticket']/kpis['ticket_promedio'])*100, 1)}%")
 
-st.markdown("""
+# Calcular los valores formateados ANTES de usarlos en el texto
+rentabilidad_global_pct = formatear_numero_argentino(kpis['rentabilidad_global']*100, 2)
+ticket_promedio = formatear_moneda_argentina(kpis['ticket_promedio'])
+margen_ticket_pct = formatear_numero_argentino((kpis['rentabilidad_promedio_ticket']/kpis['ticket_promedio'])*100, 1)
+mendocino_promedio = formatear_numero_argentino(10800)
+
+st.markdown(f"""
 <div style='background: #e8f5e9; border-left: 6px solid #4caf50; padding: 20px; margin: 20px 0; border-radius: 10px;'>
     <h4 style='color: #2e7d32; margin: 0;'>💡 Insight Clave</h4>
     <p style='margin: 10px 0 0 0;'>
-        Con <b>rentabilidad global del {formatear_numero_argentino(kpis['rentabilidad_global']*100, 2)}%</b> y <b>ticket promedio de {formatear_moneda_argentina(kpis['ticket_promedio'])}</b>,
-        NINO está <b>por encima del promedio</b> mendocino (${formatear_numero_argentino(10800)} según INDEC).
-        Sin embargo, el <b>margen por ticket ({formatear_numero_argentino((kpis['rentabilidad_promedio_ticket']/kpis['ticket_promedio'])*100, 1)}%)</b> indica oportunidad de optimizar
+        Con <b>rentabilidad global del {rentabilidad_global_pct}%</b> y <b>ticket promedio de {ticket_promedio}</b>,
+        NINO está <b>por encima del promedio</b> mendocino (${mendocino_promedio} según INDEC).
+        Sin embargo, el <b>margen por ticket ({margen_ticket_pct}%)</b> indica oportunidad de optimizar
         el <b>mix de productos</b> hacia categorías de mayor rentabilidad.
     </p>
 </div>
@@ -808,7 +814,7 @@ with tabs[5]:
             <li>Productos impulso (snacks, bebidas) en puntos de espera</li>
         </ul>
         <p><b>Meta:</b> UPT +0.5 ítems (de 10.07 a 10.57)</p>
-        <p><b>Inversión:</b> $50K (reposicionamiento, cartelería)</p>
+        <p><b>Inversión:</b> ${formatear_numero_argentino(50000)} (reposicionamiento, cartelería)</p>
         <p><b>Ticket esperado:</b> +3-5%</p>
     </div>
 
@@ -889,12 +895,9 @@ with tabs[5]:
 st.markdown("---")
 st.markdown("""
 <div style='text-align: center; color: #666; padding: 1.5rem; background: #f5f5f5; border-radius: 10px;'>
-    <p style='margin: 0; font-size: 1.1rem;'><b>Dashboard Científico - Supermercado NINO</b></p>
-    <p style='margin: 5px 0; font-size: 0.9rem;'>
-        Análisis realizado sobre <b>306,011 tickets</b> | <b>12,245 SKUs</b> | <b>13 meses de datos</b>
-    </p>
-    <p style='margin: 5px 0 0 0; font-size: 0.85rem; color: #999;'>
-        Generado por pipeline_estrategias.py | pymeinside.com
+    <p style='margin: 0; font-size: 1.1rem;'><b>Dashboard Supermercado NINO</b></p>
+    <p style='margin: 5px 0 0 0; font-size: 0.9rem; color: #999;'>
+        Pyme Inside
     </p>
 </div>
 """, unsafe_allow_html=True)
