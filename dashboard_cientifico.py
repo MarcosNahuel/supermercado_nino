@@ -124,6 +124,7 @@ def load_all_data():
         data['kpi_semana'] = pd.read_parquet(DATA_DIR / 'kpi_semana.parquet')
         data['kpi_dia'] = pd.read_parquet(DATA_DIR / 'kpi_dia.parquet')
         data['kpi_categoria'] = pd.read_parquet(DATA_DIR / 'kpi_categoria.parquet')
+        data['kpi_hora'] = pd.read_parquet(DATA_DIR / 'kpi_hora.parquet')
         data['pareto_cat'] = pd.read_parquet(DATA_DIR / 'pareto_cat_global.parquet')
         data['pareto_prod'] = pd.read_parquet(DATA_DIR / 'pareto_prod_global.parquet')
         data['reglas'] = pd.read_parquet(DATA_DIR / 'reglas.parquet')
@@ -219,142 +220,205 @@ tabs = st.tabs([
 ])
 
 # =============================================================================
-# TAB 1: ANÁLISIS TEMPORAL
+# TAB 1: ANALISIS TEMPORAL
 # =============================================================================
 with tabs[0]:
-    st.markdown("## 📈 Análisis Temporal - Detectar Patrones de Compra")
+    st.markdown("## Ritmo de comprobantes")
 
-    # Ventas diarias con cortes de mes
-    st.markdown("### Ventas Diarias (con cortes de mes)")
+    detalle_tickets = data.get('rentabilidad_ticket')
 
-    kpi_diario = data['kpi_diario'].copy()
-    kpi_diario['fecha'] = pd.to_datetime(kpi_diario['fecha'])
-    kpi_diario['mes'] = kpi_diario['fecha'].dt.to_period('M')
+    if detalle_tickets is None or detalle_tickets.empty:
+        st.warning("No se encontraron tickets para esta vista temporal.")
+    else:
+        detalle_tickets = detalle_tickets.copy()
+        detalle_tickets['fecha'] = pd.to_datetime(detalle_tickets['fecha'])
+        detalle_tickets['ticket_id'] = detalle_tickets['ticket_id'].astype(str)
 
-    fig_diario = go.Figure()
-    fig_diario.add_trace(go.Scatter(
-        x=kpi_diario['fecha'],
-        y=kpi_diario['ventas'],
-        mode='lines',
-        name='Ventas Diarias',
-        line=dict(color='#1a237e', width=2),
-        fill='tozeroy',
-        fillcolor='rgba(26, 35, 126, 0.1)'
-    ))
+        # -------------------------
+        # Mensual (tickets por mes)
+        # -------------------------
+        kpi_periodo = data.get('kpi_periodo')
+        if kpi_periodo is not None and not kpi_periodo.empty:
+            kpi_periodo_plot = kpi_periodo.copy()
+            kpi_periodo_plot['periodo_dt'] = pd.to_datetime(kpi_periodo_plot['periodo'].astype(str) + '-01')
+            kpi_periodo_plot = kpi_periodo_plot.sort_values('periodo_dt')
+            kpi_periodo_plot['periodo_label'] = kpi_periodo_plot['periodo_dt'].dt.strftime('%Y-%m')
+        else:
+            kpi_periodo_plot = pd.DataFrame(columns=['periodo_label', 'tickets'])
 
-    fig_diario.update_layout(
-        title="Evolución Diaria de Ventas (Período Completo)",
-        xaxis_title="Fecha",
-        yaxis_title="Ventas ($)",
-        height=500,
-        hovermode='x unified'
-    )
-    st.plotly_chart(fig_diario, use_container_width=True)
+        # -------------------------
+        # Semanal (tickets por semana)
+        # -------------------------
+        kpi_semana = data.get('kpi_semana')
+        if kpi_semana is not None and not kpi_semana.empty:
+            kpi_semana_plot = kpi_semana.copy()
+            kpi_semana_plot['semana_inicio'] = kpi_semana_plot['semana_iso'].apply(
+                lambda s: pd.to_datetime(s + '-1', format='%G-W%V-%u')
+            )
+            kpi_semana_plot = kpi_semana_plot.sort_values('semana_inicio')
+            kpi_semana_plot['semana_label'] = kpi_semana_plot['semana_inicio'].dt.strftime('%Y-%m-%d')
+        else:
+            kpi_semana_plot = pd.DataFrame(columns=['semana_label', 'tickets'])
 
-    st.markdown("""
-    <div style='background: #fff3e0; border-left: 6px solid #ff9800; padding: 20px; margin: 20px 0; border-radius: 10px;'>
-        <h4 style='color: #e65100; margin: 0;'>🔍 Insight: Estacionalidad Mensual</h4>
-        <p style='margin: 10px 0 0 0;'>
-            Se observan <b>picos de ventas al inicio/medio de mes</b> (cobro de salarios) y
-            <b>caídas hacia fin de mes</b>. <b>Estrategia sugerida:</b> Aplicar
-            <b>promociones umbral</b> ("$500 off en compras >$5000") en <b>días 1-15 de cada mes</b>
-            para capitalizar el mayor poder adquisitivo. En días 20-30, activar
-            <b>descuentos por combo</b> para mantener volumen.
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
+        # -------------------------
+        # Diario (tickets cada 30 minutos)
+        # -------------------------
+        kpi_hora = data.get('kpi_hora')
+        distribucion_media_hora = None
+        if kpi_hora is not None and not kpi_hora.empty:
+            kpi_hora = kpi_hora.copy()
+            kpi_hora['fecha_hora'] = pd.to_datetime(kpi_hora['fecha_hora'])
+            kpi_hora['datetime'] = kpi_hora['fecha_hora'] + pd.to_timedelta(kpi_hora['hora'], unit='h')
+            serie_30 = (
+                kpi_hora[['datetime', 'tickets']]
+                .set_index('datetime')
+                .resample('30min')
+                .sum()
+                .reset_index()
+            )
+            serie_30['slot'] = serie_30['datetime'].dt.strftime('%H:%M')
+            distribucion_media_hora = (
+                serie_30.groupby('slot', as_index=False)['tickets']
+                .sum()
+                .rename(columns={'tickets': 'tickets_totales'})
+            )
+            distribucion_media_hora['slot_order'] = pd.to_datetime(distribucion_media_hora['slot'], format='%H:%M')
+            distribucion_media_hora = distribucion_media_hora.sort_values('slot_order')
 
-    # Ventas por día del MES (último mes)
-    st.markdown("### Ventas por Día del Mes (Último Mes Completo)")
+        # -------------------------
+        # Quincenal (tickets por quincena)
+        # -------------------------
+        detalle_tickets['mes_periodo'] = detalle_tickets['fecha'].dt.to_period('M')
+        detalle_tickets['quincena'] = np.where(
+            detalle_tickets['fecha'].dt.day <= 15,
+            'Quincena 1',
+            'Quincena 2'
+        )
+        detalle_tickets['quincena_label'] = (
+            detalle_tickets['mes_periodo'].astype(str) + ' ' + detalle_tickets['quincena']
+        )
+        detalle_tickets['quincena_order'] = detalle_tickets['mes_periodo'].dt.to_timestamp()
+        detalle_tickets['quincena_idx'] = detalle_tickets['quincena'].map({'Quincena 1': 1, 'Quincena 2': 2})
 
-    ultimo_periodo = kpi_diario['mes'].max()
-    mes_anterior = ultimo_periodo - 1
-    kpi_ultimo_mes = kpi_diario[kpi_diario['mes'] == mes_anterior].copy()
-    kpi_ultimo_mes['dia_mes'] = kpi_ultimo_mes['fecha'].dt.day
+        tickets_quincena = (
+            detalle_tickets.groupby(['quincena_order', 'quincena_idx', 'quincena_label'], as_index=False)
+            .agg(tickets=('ticket_id', 'nunique'))
+            .sort_values(['quincena_order', 'quincena_idx'])
+        )
 
-    fig_dia_mes = px.bar(
-        kpi_ultimo_mes,
-        x='dia_mes',
-        y='ventas',
-        title=f"Ventas por Día del Mes ({mes_anterior})",
-        labels={'dia_mes': 'Día del Mes', 'ventas': 'Ventas ($)'}
-    )
-    fig_dia_mes.update_traces(marker_color='#283593')
-    st.plotly_chart(fig_dia_mes, use_container_width=True)
+        col_mensual, col_semanal = st.columns(2)
+        with col_mensual:
+            st.markdown("### Mensual - Tickets por mes")
+            if not kpi_periodo_plot.empty:
+                fig_mensual = px.bar(
+                    kpi_periodo_plot,
+                    x='periodo_label',
+                    y='tickets',
+                    labels={'periodo_label': 'Mes', 'tickets': 'Tickets unicos'},
+                    color_discrete_sequence=['#1a237e']
+                )
+                fig_mensual.update_layout(
+                    height=420,
+                    xaxis_tickangle=-35
+                )
+                st.plotly_chart(fig_mensual, use_container_width=True)
+            else:
+                st.info("No hay datos suficientes para el análisis mensual.")
 
-    st.markdown("""
-    <div style='background: #e8f5e9; border-left: 6px solid #4caf50; padding: 20px; margin: 20px 0; border-radius: 10px;'>
-        <h4 style='color: #2e7d32; margin: 0;'>💡 Acción: Promociones por Ciclo de Pago</h4>
-        <p style='margin: 10px 0 0 0;'>
-            <b>Días 1-10:</b> Mayor poder de compra → Promociones umbral ($X off en compras >$Y)<br>
-            <b>Días 15-20:</b> Refuerzo de quincena → Combos de alto margen<br>
-            <b>Días 25-30:</b> Fin de mes crítico → Descuentos focalizados en básicos
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
+        with col_semanal:
+            st.markdown("### Semanal - Tickets por semana")
+            if not kpi_semana_plot.empty:
+                fig_semanal = px.bar(
+                    kpi_semana_plot,
+                    x='semana_label',
+                    y='tickets',
+                    labels={'semana_label': 'Semana (inicio)', 'tickets': 'Tickets unicos'},
+                    color_discrete_sequence=['#3949ab']
+                )
+                fig_semanal.update_layout(
+                    height=420,
+                    xaxis_tickangle=-35
+                )
+                st.plotly_chart(fig_semanal, use_container_width=True)
+            else:
+                st.info("No hay datos suficientes para el análisis semanal.")
 
-    # Por día de semana (promedio)
-    st.markdown("### Ventas Promedio por Día de Semana")
+        col_diario, col_anual = st.columns(2)
+        with col_diario:
+            st.markdown("### Diario - Tickets cada 30 minutos (suma)")
+            if distribucion_media_hora is not None and not distribucion_media_hora.empty:
+                fig_media_hora = px.line(
+                    distribucion_media_hora,
+                    x='slot',
+                    y='tickets_totales',
+                    labels={'slot': 'Franja horaria', 'tickets_totales': 'Tickets acumulados'},
+                    markers=True
+                )
+                fig_media_hora.update_traces(line=dict(color='#ff9800', width=3))
+                fig_media_hora.update_layout(
+                    height=420,
+                    xaxis=dict(tickangle=-45)
+                )
+                st.plotly_chart(fig_media_hora, use_container_width=True)
+            else:
+                st.info("No fue posible calcular la distribución en intervalos de 30 minutos con los datos disponibles.")
 
-    kpi_dow = data['kpi_dia'].copy()
-    # Traducir días al español y ordenar
-    dias_map = {
-        'Monday': 'Lunes',
-        'Tuesday': 'Martes',
-        'Wednesday': 'Miércoles',
-        'Thursday': 'Jueves',
-        'Friday': 'Viernes',
-        'Saturday': 'Sábado',
-        'Sunday': 'Domingo'
-    }
-    kpi_dow['dia_esp'] = kpi_dow['dia_semana'].map(dias_map)
-    orden_dias = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
-    kpi_dow['dia_esp'] = pd.Categorical(kpi_dow['dia_esp'], categories=orden_dias, ordered=True)
-    kpi_dow = kpi_dow.sort_values('dia_esp')
+        with col_anual:
+            st.markdown("### Anual - Tickets por quincena")
+            if not tickets_quincena.empty:
+                fig_quincena = px.bar(
+                    tickets_quincena,
+                    x='quincena_label',
+                    y='tickets',
+                    labels={'quincena_label': 'Periodo', 'tickets': 'Tickets unicos'},
+                    color_discrete_sequence=['#3949ab']
+                )
+                fig_quincena.update_layout(
+                    height=420,
+                    xaxis_tickangle=-35
+                )
+                st.plotly_chart(fig_quincena, use_container_width=True)
+            else:
+                st.info("No hay datos suficientes para el análisis por quincena.")
 
-    # Calcular promedio por día
-    kpi_dow['ticket_promedio'] = kpi_dow['ventas'] / kpi_dow['tickets']
+        # Resumen para narrativa
+        detalle_tickets['dia_semana_idx'] = detalle_tickets['fecha'].dt.weekday
+        dias_map = {
+            0: 'Lunes', 1: 'Martes', 2: 'Miercoles', 3: 'Jueves',
+            4: 'Viernes', 5: 'Sabado', 6: 'Domingo'
+        }
+        dow_summary = (
+            detalle_tickets
+            .groupby('dia_semana_idx', as_index=False)
+            .agg(tickets=('ticket_id', 'nunique'))
+            .sort_values('dia_semana_idx')
+        )
 
-    fig_dow = go.Figure()
-    fig_dow.add_trace(go.Bar(
-        x=kpi_dow['dia_esp'],
-        y=kpi_dow['ventas'],
-        name='Ventas Promedio',
-        marker_color='#1a237e',
-        yaxis='y',
-        text=kpi_dow['ventas'].apply(lambda x: f'${x/1e6:.1f}M'),
-        textposition='outside'
-    ))
-    fig_dow.add_trace(go.Scatter(
-        x=kpi_dow['dia_esp'],
-        y=kpi_dow['ticket_promedio'],
-        name='Ticket Promedio',
-        line=dict(color='#ff9800', width=3),
-        yaxis='y2'
-    ))
-    fig_dow.update_layout(
-        title="Ventas y Ticket Promedio por Día de Semana (Promedio del Período)",
-        xaxis_title="Día de Semana",
-        yaxis=dict(title="Ventas ($)"),
-        yaxis2=dict(title="Ticket Promedio ($)", overlaying='y', side='right'),
-        height=500,
-        hovermode='x unified'
-    )
-    st.plotly_chart(fig_dow, use_container_width=True)
-
-    st.markdown("""
-    <div style='background: #fff3e0; border-left: 6px solid #ff9800; padding: 20px; margin: 20px 0; border-radius: 10px;'>
-        <h4 style='color: #e65100; margin: 0;'>🔍 Insight: Fin de Semana = Tickets Grandes</h4>
-        <p style='margin: 10px 0 0 0;'>
-            Los <b>sábados muestran ticket promedio más alto</b> (compras de abastecimiento familiar).
-            <b>Estrategia sugerida:</b> Implementar <b>upselling en cajas</b> los sábados
-            (sugerencia de vinos, snacks premium) puede aumentar ticket +2-3%.
-            <b>Lunes-miércoles:</b> Tickets más bajos → Ideal para <b>promociones de segundo producto</b>
-            para aumentar UPT (unidades por ticket).
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
-
+        if (
+            not dow_summary.empty
+            and distribucion_media_hora is not None
+            and not distribucion_media_hora.empty
+            and not tickets_quincena.empty
+        ):
+            dow_summary['label'] = dow_summary['dia_semana_idx'].map(dias_map)
+            dia_fuerte = dow_summary.loc[dow_summary['tickets'].idxmax(), 'label']
+            slot_top = distribucion_media_hora.loc[
+                distribucion_media_hora['tickets_totales'].idxmax(), 'slot'
+            ]
+            quincena_top = tickets_quincena.loc[tickets_quincena['tickets'].idxmax(), 'quincena_label']
+            st.markdown(
+                f"""
+                <div style='background: #ede7f6; border-left: 6px solid #5e35b1; padding: 20px; margin: 20px 0; border-radius: 10px;'>
+                    <h4 style='color: #4527a0; margin: 0;'>Ritmo clave para las campanas</h4>
+                    <p style='margin: 10px 0 0 0;'>
+                        &bull; <b>{dia_fuerte}</b> concentra el mayor flujo semanal de tickets.<br>
+                        &bull; El pico diario aparece cerca de las <b>{slot_top}</b>, sujeto a la granularidad disponible.<br>
+                        &bull; La <b>{quincena_top}</b> marca el tramo mas intenso del calendario, util para planificar abastecimiento y promociones.
+                    </p>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
 # =============================================================================
 # TAB 2: PARETO & MIX
 # =============================================================================
@@ -474,6 +538,76 @@ with tabs[1]:
             <b>Estrategia #4:</b> <b>Layout impulsor</b> - Colocar productos de alto margen
             en <b>zonas de alto tráfico</b> (fin de góndola, cajas) puede aumentar su
             participación en el ticket. Átomo logró <b>subir ventas 30%</b> tras remodelar layout.
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown("### Pareto de productos (Top 10 y participación acumulada)")
+
+    pareto_prod = data['pareto_prod'].copy()
+    top_prod_80 = pareto_prod[pareto_prod['pct_acumulado_ventas'] <= 80].head(10).copy()
+    if top_prod_80.empty:
+        top_prod_80 = pareto_prod.head(10).copy()
+
+    productos_ordenados = top_prod_80.sort_values('ventas')
+
+    fig_pareto_prod = go.Figure()
+    fig_pareto_prod.add_trace(go.Bar(
+        y=productos_ordenados['descripcion'],
+        x=productos_ordenados['ventas'],
+        orientation='h',
+        name='Ventas',
+        marker_color='#5b5bd6',
+        hovertemplate='<b>%{y}</b><br>Ventas: $%{x:,.0f}<extra></extra>'
+    ))
+    fig_pareto_prod.add_trace(go.Scatter(
+        y=productos_ordenados['descripcion'],
+        x=productos_ordenados['pct_acumulado_ventas'],
+        mode='lines+markers+text',
+        name='% acumulado',
+        line=dict(color='#ff6b6b', width=3),
+        marker=dict(size=8),
+        text=productos_ordenados['pct_acumulado_ventas'].round(1).astype(str) + '%',
+        textposition='top left',
+        xaxis='x2',
+        hovertemplate='<b>%{y}</b><br>% acumulado: %{x:.1f}%<extra></extra>'
+    ))
+    fig_pareto_prod.update_layout(
+        height=520,
+        margin=dict(t=60, r=20, l=140, b=40),
+        xaxis=dict(title='Ventas ($)', showgrid=False),
+        xaxis2=dict(
+            title='% acumulado',
+            overlaying='x',
+            side='top',
+            range=[0, max(20, productos_ordenados['pct_acumulado_ventas'].max() + 2)],
+            ticksuffix='%'
+        ),
+        yaxis=dict(title='Producto', showgrid=False),
+        legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1),
+        hovermode='y unified',
+        title="Top 10 productos y su aporte acumulado"
+    )
+    st.plotly_chart(fig_pareto_prod, use_container_width=True)
+
+    tabla_prod = top_prod_80[['descripcion', 'categoria', 'ventas', 'pct_acumulado_ventas', 'margen']].copy()
+    tabla_prod['ventas'] = tabla_prod['ventas'].apply(lambda x: formatear_moneda_argentina(x, 0))
+    tabla_prod['margen'] = tabla_prod['margen'].apply(lambda x: formatear_moneda_argentina(x, 0))
+    tabla_prod['pct_acumulado_ventas'] = tabla_prod['pct_acumulado_ventas'].round(1).astype(str) + '%'
+    tabla_prod.columns = ['Producto', 'Categoría', 'Ventas', '% acumulado', 'Margen']
+
+    st.dataframe(tabla_prod, use_container_width=True, hide_index=True)
+
+    cobertura = float(top_prod_80['pct_acumulado_ventas'].max())
+    categoria_dominante = top_prod_80['categoria'].value_counts().idxmax()
+
+    st.markdown(f"""
+    <div style='background: #ede7f6; border-left: 6px solid #5e35b1; padding: 20px; margin: 20px 0; border-radius: 10px;'>
+        <h4 style='color: #4527a0; margin: 0;'>🎯 Insight: Productos clave</h4>
+        <p style='margin: 10px 0 0 0;'>
+            Los <b>{len(top_prod_80)} productos</b> concentran el <b>{cobertura:.1f}%</b> de las ventas acumuladas. 
+            <b>{categoria_dominante}</b> reúne la mayor cantidad de ítems en este grupo, por lo que las
+            campañas de abastecimiento, señalética en góndola y programas de fidelización deberían priorizarlos.
         </p>
     </div>
     """, unsafe_allow_html=True)
@@ -888,6 +1022,117 @@ with tabs[5]:
         </p>
     </div>
     """, unsafe_allow_html=True)
+
+# =============================================================================
+# TAB 7: INFORME EJECUTIVO
+# =============================================================================
+with tabs[6]:
+    st.markdown("## �Y\"� Informe Ejecutivo")
+
+    alcance = data['alcance'].iloc[0]
+    kpis_resumen = data['kpis_base'].iloc[0]
+
+    min_fecha = pd.to_datetime(alcance['min_fecha']).strftime('%d/%m/%Y')
+    max_fecha = pd.to_datetime(alcance['max_fecha']).strftime('%d/%m/%Y')
+    total_tickets = formatear_numero_argentino(int(alcance['n_tickets']))
+    total_items = formatear_numero_argentino(int(alcance['n_registros']))
+    ventas_totales = formatear_moneda_argentina(alcance['ventas_total'], 0)
+    margen_total = formatear_moneda_argentina(alcance['margen_total'], 0)
+    ticket_promedio = formatear_moneda_argentina(kpis_resumen['ticket_promedio'], 0)
+    items_promedio = round(float(kpis_resumen['items_promedio_ticket']), 1)
+    rentabilidad_global_pct = round(float(kpis_resumen['rentabilidad_global']) * 100, 1)
+    margen_ticket = formatear_moneda_argentina(kpis_resumen['rentabilidad_promedio_ticket'], 0)
+
+    top_categorias = data['kpi_categoria'].head(3)
+    categorias_texto = ", ".join(
+        f"{str(row['categoria']).title()} ({round(row['pct_ventas'], 1)}% de las ventas)"
+        for _, row in top_categorias.iterrows()
+    )
+
+    pago_mix = (
+        data['kpi_pago']
+        .groupby('tipo_medio_pago', as_index=False)['ventas']
+        .sum()
+        .sort_values('ventas', ascending=False)
+    )
+    total_pagos = pago_mix['ventas'].sum()
+    pago_map = {
+        'TARJETA DE CR�DITO': 'tarjetas de credito',
+        'TARJETA DE CREDITO': 'tarjetas de credito',
+        'TARJETA DE D�BITO': 'tarjetas de debito',
+        'TARJETA DE DEBITO': 'tarjetas de debito',
+        'BILLETERA VITUAL': 'billeteras virtuales',
+        'BILLETERA VIRTUAL': 'billeteras virtuales',
+        'SIN_DATO': 'pagos en efectivo',
+        'EFECTIVO': 'pagos en efectivo',
+    }
+    principales_medios = []
+    for _, fila in pago_mix.head(3).iterrows():
+        clave = str(fila['tipo_medio_pago']).strip().upper()
+        descripcion = pago_map.get(clave, clave.title())
+        participacion = round(fila['ventas'] / total_pagos * 100, 1)
+        principales_medios.append(f"{descripcion} ({participacion}% del monto)")
+    medios_texto = ", ".join(principales_medios)
+
+    kpi_dia = data['kpi_dia'].copy()
+    dia_map = {
+        'Monday': 'los lunes',
+        'Tuesday': 'los martes',
+        'Wednesday': 'los miercoles',
+        'Thursday': 'los jueves',
+        'Friday': 'los viernes',
+        'Saturday': 'los sabados',
+        'Sunday': 'los domingos',
+    }
+    dia_pico = kpi_dia.loc[kpi_dia['ventas'].idxmax()]
+    dia_pico_nombre = dia_map.get(str(dia_pico['dia_semana']), str(dia_pico['dia_semana']).lower())
+    ventas_dia_pico = formatear_moneda_argentina(dia_pico['ventas'], 0)
+
+    informe_html = f"""
+    <div style='background: #fff8e1; border-left: 6px solid #f9a825; padding: 26px; border-radius: 12px; margin-bottom: 20px;'>
+        <h3 style='margin: 0 0 14px 0; color: #bf360c;'>Trabajo realizado y aprendizajes internos</h3>
+        <p style='margin: 0 0 12px 0;'>
+            La historia de este dashboard arranca con una operacion concreta: normalizamos la base de tickets, armamos indicadores accionables
+            y los conectamos con la hoja de ruta de rentabilidad. Tres oleadas de trabajo, documentadas en <i>Estrategias_Analitica.md</i>, dejaron huella.
+        </p>
+        <ul style='margin: 0; padding-left: 22px; line-height: 1.5;'>
+            <li><b>Ola 1 - Higiene y consistencia:</b> depuramos {total_tickets} comprobantes entre {min_fecha} y {max_fecha}, garantizando ticket unico por comprobante y completando campos como items_ticket y margen_ticket.</li>
+            <li><b>Ola 2 - Analitica descriptiva:</b> transformamos la materia prima en lecturas accionables: ticket promedio de {ticket_promedio}, {items_promedio} items por compra y margen acumulado de {margen_total} que marcan el punto de partida.</li>
+            <li><b>Ola 3 - Historias y estrategias:</b> cruzamos los hallazgos con benchmarks para construir narrativas claras (clientes cargan la alacena los {dia_pico_nombre}, los medios de pago dominantes son {medios_texto}) que sostienen decisiones comerciales.</li>
+        </ul>
+    </div>
+    <div style='background: #f1f8e9; border-left: 6px solid #7cb342; padding: 26px; border-radius: 12px; margin-bottom: 20px;'>
+        <h3 style='margin: 0 0 14px 0; color: #33691e;'>Lo que aprendimos mirando a la competencia</h3>
+        <p style='margin: 0 0 12px 0;'>
+            El repaso de jugadores mendocinos deja claro que nadie se queda quieto. Las referencias del informe analitico muestran tres jugadas que hoy marcan el paso.
+        </p>
+        <ul style='margin: 0; padding-left: 22px; line-height: 1.5;'>
+            <li><b>Carrefour Express:</b> expandio el formato de cercania tras adquirir 16 tiendas locales, privilegiando surtido curado y compras rapidas con promo bancaria semanal.</li>
+            <li><b>Vea Express:</b> replica la logica de proximidad con 3000 referencias de alta rotacion y fuerte activacion de codigo QR/bases barriales para fidelizar a pie de tienda.</li>
+            <li><b>Atomo:</b> apalanca precios bajos todos los dias y remodelaciones de layout; una sucursal escalo del puesto 90 al 8 solo por rediseniar salon y sumar categorias ancla.</li>
+        </ul>
+        <p style='margin: 14px 0 0 0;'>
+            Tres lecturas clave: foco en surtidos rentables, promociones financiadas y experiencia en tienda como anzuelo diario.
+        </p>
+    </div>
+    <div style='background: #e3f2fd; border-left: 6px solid #1976d2; padding: 26px; border-radius: 12px;'>
+        <h3 style='margin: 0 0 14px 0; color: #0d47a1;'>Como aterrizamos esas jugadas con los datos de NINO</h3>
+        <p style='margin: 0 0 12px 0;'>
+            Con el termometro propio en mano podemos adaptar lo que funciona afuera. Cada insight del dataset activa una palanca concreta.
+        </p>
+        <ul style='margin: 0; padding-left: 22px; line-height: 1.5;'>
+            <li><b>Plan de finde largo:</b> los {dia_pico_nombre} concentran el gasto (ventas de {ventas_dia_pico}); ideal para combos financiados que copien la cadencia Carrefour pero con surtido local.</li>
+            <li><b>Curar el mix core:</b> las categorias lideres ({categorias_texto}) son nuestra version del surtido express; hay que defender margen subiendo segunda marca y cross merchandising a la manera de Atomo.</li>
+            <li><b>Fidelizar bolsillo digital:</b> {medios_texto} confirman que el cliente ya usa medios bancarizados; se puede replicar la bateria de promociones ancla de Vea con acuerdos puntuales segun medio de pago.</li>
+            <li><b>Pizarra de seguimiento:</b> la rentabilidad global del {rentabilidad_global_pct}% y el margen de {margen_ticket} por ticket nos dan umbrales; cualquier estrategia nueva debe sostener o ampliar esos numeros.</li>
+        </ul>
+        <p style='margin: 14px 0 0 0;'>
+            Asi, el insight deja de ser un PDF y se convierte en agenda semanal: decidir, ejecutar y medir contra los mismos indicadores que hoy relatamos.
+        </p>
+    </div>
+    """
+
+    st.markdown(informe_html, unsafe_allow_html=True)
 
 # =============================================================================
 # FOOTER

@@ -195,14 +195,14 @@ Definiciones confirmadas:
 
 ## 13) Referencias de código y datos
 
-- Pipeline actual: `FASE1_ANALISIS_COMPLETO.py`
-- App dashboard: `app_streamlit_supabase.py`
-- Builder Parquet: `scripts/build_app_dataset.py`
+- Pipeline oficial: `pipeline_estrategias.py`
+- Dashboard oficial: `dashboard_cientifico.py`
+- Pipeline legacy (CSV): `legacy/pipelines/FASE1_ANALISIS_COMPLETO.py`
+- Dashboard legacy: `legacy/apps/app_streamlit_supabase.py`
+- Builder legacy (CSV -> Parquet): `legacy/scripts/build_app_dataset.py`
 - Datos app: `data/app_dataset/*.parquet`
 - Datos crudos: `data/raw/SERIE_COMPROBANTES_COMPLETOS.csv`, `data/raw/RENTABILIDAD.csv`
 - Documento estratégico: `Estrategias_Analitica.md`
-
-
 ## 14) Escenarios (simulación aceptada)
 
 - Escenario Mix y Margen

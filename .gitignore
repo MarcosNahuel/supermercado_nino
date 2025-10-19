@@ -30,6 +30,14 @@ data/processed/FASE1_OUTPUT/**
 !data/app_dataset/
 !data/app_dataset/**
 
+# Legacy archives
+legacy/data/processed/FASE1_OUTPUT/
+legacy/data/processed/FASE1_OUTPUT/**
+legacy/data/sample/FASE1_OUTPUT_SAMPLE/
+legacy/data/sample/FASE1_OUTPUT_SAMPLE/**
+legacy/outputs/
+legacy/outputs/**
+
 # Archivos CSV grandes (>100MB)
 *.csv
 !FASE1_OUTPUT_SAMPLE/*.csv

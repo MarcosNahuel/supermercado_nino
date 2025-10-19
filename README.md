@@ -47,9 +47,9 @@ python pipeline_estrategias.py
 streamlit run dashboard_cientifico.py
 ```
 
-El dashboard lee los Parquet versionados en data/app_dataset/. Si necesitas recrearlos, ejecuta pipeline_estrategias.py con los CSV de data/raw/. Las salidas y datasets heredados se archivaron en legacy/ para referencia.
+El dashboard lee los Parquet versionados en `data/app_dataset/`. Si necesitas recrearlos, ejecuta `pipeline_estrategias.py` con los CSV de `data/raw/`. Las salidas y datasets heredados se archivaron en `legacy/` para referencia.
 
-> ¿Necesitas cargar la base completa en Supabase? El soporte sigue disponible en `docs/DEPLOY_SUPABASE.md` y `docs/SUPABASE_SQL_SCRIPTS.md`, pero ya no es obligatorio para desplegar en Streamlit Cloud.
+> Necesitas revivir la version con Supabase? Revisa `legacy/apps/` y las notas guardadas en `legacy/`.
 
 ## Estructura del proyecto
 
@@ -57,23 +57,23 @@ El dashboard lee los Parquet versionados en data/app_dataset/. Si necesitas recr
 supermercado_nino/
 |- dashboard_cientifico.py        # Dashboard oficial (storytelling + KPIs)
 |- pipeline_estrategias.py        # Pipeline raw -> Parquet usado por el dashboard
-|- INICIAR_DASHBOARD.bat          # Lanzador rápido del dashboard científico
+|- INICIAR_DASHBOARD.bat          # Lanzador rapido del dashboard cientifico
 |- data/
 |  |- raw/                        # CSV originales (gitignored)
 |  |- app_dataset/                # Parquet que consume el dashboard
-|  |- processed/                  # Reservado (vacío tras mover FASE1 a legacy/)
-|  \- sample/                     # Reservado (vacío; dataset demo en legacy/)
+|  |- processed/                  # Reservado (vacio tras mover FASE1 a legacy/)
+|  \- sample/                     # Reservado (vacio; dataset demo en legacy/)
 |- docs/
 |  |- PIPELINE_ESTRATEGIAS.md
 |  |- VALIDACION_FINAL.txt
 |  |- FASE1_OUTPUT.log
-|  \- otros reportes auxiliares
+|  \- otros reportes y validaciones auxiliares
 |- legacy/
 |  |- apps/                       # Dashboards anteriores (Supabase, etc.)
 |  |- pipelines/                  # FASE1_ANALISIS_COMPLETO.py (pipeline CSV)
 |  |- scripts/                    # build_app_dataset.py (legacy) y pycache
 |  |- data/                       # processed/FASE1_OUTPUT y sample/FASE1_OUTPUT_SAMPLE
-|  \- outputs/                    # CSV auxiliares históricos
+|  \- outputs/                    # CSV auxiliares historicos
 |- Estrategias_Analitica.md
 |- requirements.txt
 \- README.md
@@ -107,10 +107,10 @@ supermercado_nino/
 
 ## Documentación relacionada
 
-- docs/PIPELINE_ESTRATEGIAS.md – blueprint del pipeline unificado y sus datasets Parquet.
-- docs/VALIDACION_FINAL.txt – checklist de verificación de KPIs y consistencia de datos.
-- docs/FASE1_OUTPUT.log – bitácora histórica de la fase 1.
-- legacy/ – dashboards, scripts CSV y dataset demo archivados para referencia.
+- `docs/PIPELINE_ESTRATEGIAS.md` - blueprint del pipeline unificado y sus datasets Parquet.
+- `docs/VALIDACION_FINAL.txt` - checklist de verificacion de KPIs y consistencia de datos.
+- `docs/FASE1_OUTPUT.log` - bitacora historica de la fase 1.
+- `legacy/` - dashboards, scripts CSV y dataset demo archivados para referencia.
 
 
 ## Contacto y licencia
