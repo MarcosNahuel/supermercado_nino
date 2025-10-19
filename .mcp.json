@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "filesystem": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "D:\\OneDrive\\GitHub\\supermercado_nino definitivo claude\\data",
+        "D:\\OneDrive\\GitHub\\supermercado_nino definitivo claude\\scripts",
+        "D:\\OneDrive\\GitHub\\supermercado_nino definitivo claude\\docs"
+      ]
+    }
+  }
+}
