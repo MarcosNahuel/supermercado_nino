@@ -15,7 +15,7 @@
 - El **mix de medios de pago** muestra predominio de tarjetas de crédito (49,6 %), seguido de efectivo (31,3 %) y billeteras virtuales (19,2 %), lo que habilita campañas bancarias y cross-sell digital.
 - El comportamiento temporal revela dos picos anuales (diciembre 2024 y julio 2025) y máximos intradía los **sábados a las 12 h**, clave para staffing, reposición y activaciones.
 - El **Market Basket Analysis** identifica bundles de alto lift (ej. **Fernet + Coca Cola, lift 33,44x**), habilitando combos dirigidos que pueden elevar ventas cruzadas hasta +22 %.
-- La segmentación K-Means detecta cuatro perfiles: masivo (93,9 %), reposición guiada, indulgente nocturno y **premium alto margen (6,1 %)**, lo que respalda tácticas diferenciadas.
+- El análisis agrupa los tickets en cuatro “tribus de compra”; destaca la tribu premium (6,1 % de los tickets, >$45K) como base para fidelización exclusiva y upselling guiado.
 - Se priorizan nueve líneas estratégicas agrupadas en quick wins (0-30 días), aceleradores (30-90 días) y pilares estructurales (>90 días) con KPIs y responsables claros.
 
 ---
@@ -91,14 +91,14 @@
 
 ### Segmentación y perfiles de ticket
 
-1. **Cluster 0 – Masivo reposición diaria (93,9 %)**  
-   Tickets de $18K promedio, 7-8 ítems, enfocados en básicos; sensibles a precio.
-2. **Cluster 1 – Reposición guiada (median ticket)**  
-   12 ítems promedio, presencia de frescos + limpieza; responde a bundles y promociones 2x1.
-3. **Cluster 2 – Indulgente nocturno**  
-   Compra de snacks, bebidas alcohólicas y congelados, picos viernes noche; susceptible a combos de conveniencia.
-4. **Cluster 3 – Premium alto margen (6,1 %)**  
-   Ticket >$45K, alta incidencia de charcutería, vinos, delicatessen. Candidato a fidelización exclusiva y precios dinámicos.
+Agrupamos millones de tickets en cuatro “tribus de compra” según qué llevan, cuánto gastan y en qué momentos aparecen. Así podemos hablarle distinto a cada grupo y enfocar inversión donde rinde más.
+
+- **Tribu diaria** (93,9 % de los tickets): compras chicas de reposición, muy sensibles al precio. Indica qué promociones defensivas mantener cada semana y qué básicos necesitan siempre un facing impecable.
+- **Tribu reposición guiada**: carritos medianos con mezcla de frescos y limpieza. Avala la estrategia de combos 2x1 y planogramas cruzados para subir unidades por ticket sin sacrificar margen.
+- **Tribu indulgente nocturna**: tickets de noche con snacks, bebidas y congelados. Justifica islas de conveniencia y activaciones especiales para el after office y fines de semana.
+- **Tribu premium** (6,1 % de los tickets, ticket >$45.000): boletas cargadas de charcutería, vinos y delicatessen. Es la base del programa de fidelización “Gold”, de eventos de cata y de precios diferenciados; además marca qué productos no pueden faltar ni un minuto.
+
+Esta lectura sustenta tres movimientos del plan: scripts de upselling en caja dirigidos, beneficios escalonados por tribu y lanzamiento de combos sabiendo quién los adoptará primero. También simplifica los reportes al directorio: cada tribu explica cuánto aporta y qué necesita para seguir creciendo.
 
 ---
 
@@ -253,4 +253,3 @@ Incorporar alertas automáticas cuando se excedan umbrales (ej. merma >3 %, ma
 ---
 
 **Estado general:** Proyecto analítico completo al 100 %, listo para impresión y presentación ante directorio. Ejecutar quick wins en <30 días maximiza el impacto en la temporada alta de fin de año.
-
