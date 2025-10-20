@@ -119,67 +119,119 @@ DATA_DIR = Path("data/app_dataset")
 def load_all_data():
     data = {}
     try:
-        data['alcance'] = pd.read_parquet(DATA_DIR / 'alcance_dataset.parquet')
-        data['kpis_base'] = pd.read_parquet(DATA_DIR / 'kpis_base.parquet')
-        data['kpi_diario'] = pd.read_parquet(DATA_DIR / 'kpi_diario.parquet')
-        data['kpi_periodo'] = pd.read_parquet(DATA_DIR / 'kpi_periodo.parquet')
-        data['kpi_semana'] = pd.read_parquet(DATA_DIR / 'kpi_semana.parquet')
-        data['kpi_dia'] = pd.read_parquet(DATA_DIR / 'kpi_dia.parquet')
-        data['kpi_categoria'] = pd.read_parquet(DATA_DIR / 'kpi_categoria.parquet')
-        data['kpi_hora'] = pd.read_parquet(DATA_DIR / 'kpi_hora.parquet')
-        data['pareto_cat'] = pd.read_parquet(DATA_DIR / 'pareto_cat_global.parquet')
-        data['pareto_prod'] = pd.read_parquet(DATA_DIR / 'pareto_prod_global.parquet')
-        data['reglas'] = pd.read_parquet(DATA_DIR / 'reglas.parquet')
-        data['combos'] = pd.read_parquet(DATA_DIR / 'combos_recomendados.parquet')
-        data['adjacency'] = pd.read_parquet(DATA_DIR / 'adjacency_pairs.parquet')
-        data['clusters_tickets'] = pd.read_parquet(DATA_DIR / 'clusters_tickets.parquet')
-        data['clusters_depto'] = pd.read_parquet(DATA_DIR / 'clusters_departamento.parquet')
-        data['kpi_pago'] = pd.read_parquet(DATA_DIR / 'kpi_medio_pago.parquet')
-        data['rentabilidad_ticket'] = pd.read_parquet(DATA_DIR / 'rentabilidad_ticket.parquet')
+        # Cargar archivos básicos con manejo de errores específico
+        required_files = {
+            'alcance': 'alcance_dataset.parquet',
+            'kpis_base': 'kpis_base.parquet',
+            'kpi_diario': 'kpi_diario.parquet',
+            'kpi_periodo': 'kpi_periodo.parquet',
+            'kpi_semana': 'kpi_semana.parquet',
+            'kpi_dia': 'kpi_dia.parquet',
+            'kpi_categoria': 'kpi_categoria.parquet',
+            'kpi_hora': 'kpi_hora.parquet',
+            'pareto_cat': 'pareto_cat_global.parquet',
+            'pareto_prod': 'pareto_prod_global.parquet',
+            'reglas': 'reglas.parquet',
+            'combos': 'combos_recomendados.parquet',
+            'adjacency': 'adjacency_pairs.parquet',
+            'clusters_tickets': 'clusters_tickets.parquet',
+            'clusters_depto': 'clusters_departamento.parquet',
+            'kpi_pago': 'kpi_medio_pago.parquet',
+            'rentabilidad_ticket': 'rentabilidad_ticket.parquet'
+        }
+
+        for key, filename in required_files.items():
+            try:
+                data[key] = pd.read_parquet(DATA_DIR / filename)
+                print(f"✓ Loaded {filename}")
+            except Exception as e:
+                print(f"✗ Error loading {filename}: {e}")
+                data[key] = pd.DataFrame()  # Crear DataFrame vacío para evitar errores posteriores
+
+        # Cargar datos horarios del CSV
         horario_path = Path('data/raw/comprobantes_ventas_horario.csv')
         if horario_path.exists():
-            horario_df = pd.read_csv(
-                horario_path,
-                sep=';',
-                dtype=str,
-                engine='python'
-            )
-            horario_df['Fecha'] = pd.to_datetime(
-                horario_df['Fecha'].str.replace(',000', '', regex=False),
-                format='%Y-%m-%d %H:%M:%S',
-                errors='coerce'
-            )
-            horario_df['Hora'] = pd.to_datetime(
-                horario_df['Hora'].str.replace(',000', '', regex=False),
-                format='%Y-%m-%d %H:%M:%S',
-                errors='coerce'
-            )
-            horario_df = horario_df.dropna(subset=['Fecha', 'Hora'])
-            horario_df['hora'] = horario_df['Hora'].dt.hour.astype(int)
-            dias_order = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
-            dias_map = {
-                'Monday': 'Lunes', 'Tuesday': 'Martes', 'Wednesday': 'Miércoles',
-                'Thursday': 'Jueves', 'Friday': 'Viernes', 'Saturday': 'Sábado', 'Sunday': 'Domingo'
-            }
-            horario_df['dia_eng'] = horario_df['Fecha'].dt.day_name()
-            horario_df = horario_df[horario_df['dia_eng'].isin(dias_order)]
-            horario_df['dia'] = horario_df['dia_eng'].map(dias_map)
-            horario_df['dia_idx'] = horario_df['dia_eng'].apply(dias_order.index)
-            horario_semana = (
-                horario_df.groupby(['dia_idx', 'dia', 'hora'], as_index=False)
-                .agg(comprobantes=('Comprobante', 'count'))
-                .sort_values(['dia_idx', 'hora'])
-            )
-            horario_pivot = (
-                horario_semana.pivot(index='dia', columns='hora', values='comprobantes')
-                .reindex(['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'])
-                .fillna(0)
-            )
-            data['horario_semana'] = horario_semana
-            data['horario_semana_matrix'] = horario_pivot
+            try:
+                print("Loading horario CSV...")
+                horario_df = pd.read_csv(
+                    horario_path,
+                    sep=';',
+                    dtype=str,
+                    engine='python'
+                )
+                print(f"✓ Loaded CSV with {len(horario_df)} rows")
+
+                # Verificar columnas requeridas
+                required_columns = ['Fecha', 'Hora', 'Comprobante']
+                missing_columns = [col for col in required_columns if col not in horario_df.columns]
+                if missing_columns:
+                    print(f"✗ Missing columns in CSV: {missing_columns}")
+                    data['horario_semana'] = pd.DataFrame()
+                    data['horario_semana_matrix'] = pd.DataFrame()
+                else:
+                    # Procesar fechas
+                    horario_df['Fecha'] = pd.to_datetime(
+                        horario_df['Fecha'].str.replace(',000', '', regex=False),
+                        format='%Y-%m-%d %H:%M:%S',
+                        errors='coerce'
+                    )
+                    horario_df['Hora'] = pd.to_datetime(
+                        horario_df['Hora'].str.replace(',000', '', regex=False),
+                        format='%Y-%m-%d %H:%M:%S',
+                        errors='coerce'
+                    )
+
+                    # Verificar si hay fechas válidas
+                    valid_dates = horario_df['Fecha'].notna() & horario_df['Hora'].notna()
+                    if valid_dates.sum() == 0:
+                        print("✗ No valid dates found in CSV")
+                        data['horario_semana'] = pd.DataFrame()
+                        data['horario_semana_matrix'] = pd.DataFrame()
+                    else:
+                        horario_df = horario_df.dropna(subset=['Fecha', 'Hora'])
+                        horario_df['hora'] = horario_df['Hora'].dt.hour.astype(int)
+
+                        dias_order = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+                        dias_map = {
+                            'Monday': 'Lunes', 'Tuesday': 'Martes', 'Wednesday': 'Miércoles',
+                            'Thursday': 'Jueves', 'Friday': 'Viernes', 'Saturday': 'Sábado', 'Sunday': 'Domingo'
+                        }
+
+                        horario_df['dia_eng'] = horario_df['Fecha'].dt.day_name()
+                        horario_df = horario_df[horario_df['dia_eng'].isin(dias_order)]
+                        horario_df['dia'] = horario_df['dia_eng'].map(dias_map)
+                        horario_df['dia_idx'] = horario_df['dia_eng'].apply(dias_order.index)
+
+                        horario_semana = (
+                            horario_df.groupby(['dia_idx', 'dia', 'hora'], as_index=False)
+                            .agg(comprobantes=('Comprobante', 'count'))
+                            .sort_values(['dia_idx', 'hora'])
+                        )
+
+                        horario_pivot = (
+                            horario_semana.pivot(index='dia', columns='hora', values='comprobantes')
+                            .reindex(['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'])
+                            .fillna(0)
+                        )
+
+                        data['horario_semana'] = horario_semana
+                        data['horario_semana_matrix'] = horario_pivot
+                        print(f"✓ Processed horario data: {horario_semana.shape}")
+
+            except Exception as e:
+                print(f"✗ Error processing horario CSV: {e}")
+                data['horario_semana'] = pd.DataFrame()
+                data['horario_semana_matrix'] = pd.DataFrame()
+        else:
+            print("✗ Horario CSV file not found")
+            data['horario_semana'] = pd.DataFrame()
+            data['horario_semana_matrix'] = pd.DataFrame()
+
     except Exception as e:
-        st.error(f"Error cargando datos: {e}")
+        st.error(f"Error general cargando datos: {e}")
+        print(f"✗ General error: {e}")
         return None
+
     return data
 
 data = load_all_data()
@@ -312,20 +364,29 @@ with tabs[0]:
         # -------------------------
         kpi_semana = data.get('kpi_semana')
         if kpi_semana is not None and not kpi_semana.empty:
-            kpi_semana_plot = kpi_semana.copy()
-            kpi_semana_plot['semana_inicio'] = kpi_semana_plot['semana_iso'].apply(
-                lambda s: pd.to_datetime(s + '-1', format='%G-W%V-%u')
-            )
-            kpi_semana_plot = kpi_semana_plot.sort_values('semana_inicio')
-            if ultimo_mes_incompleto is not None:
-                kpi_semana_plot = kpi_semana_plot[
-                    kpi_semana_plot['semana_inicio'].dt.to_period('M') != ultimo_mes_incompleto
-                ]
-            if kpi_semana_plot.empty:
+            try:
+                # Verificar si existe la columna semana_iso
+                if 'semana_iso' not in kpi_semana.columns:
+                    print("✗ semana_iso column missing from kpi_semana")
+                    kpi_semana_plot = pd.DataFrame(columns=['semana_inicio', 'tickets', 'semana_label', 'mes_periodo'])
+                else:
+                    kpi_semana_plot = kpi_semana.copy()
+                    kpi_semana_plot['semana_inicio'] = kpi_semana_plot['semana_iso'].apply(
+                        lambda s: pd.to_datetime(s + '-1', format='%G-W%V-%u')
+                    )
+                    kpi_semana_plot = kpi_semana_plot.sort_values('semana_inicio')
+                    if ultimo_mes_incompleto is not None:
+                        kpi_semana_plot = kpi_semana_plot[
+                            kpi_semana_plot['semana_inicio'].dt.to_period('M') != ultimo_mes_incompleto
+                        ]
+                    if kpi_semana_plot.empty:
+                        kpi_semana_plot = pd.DataFrame(columns=['semana_inicio', 'tickets', 'semana_label', 'mes_periodo'])
+                    else:
+                        kpi_semana_plot['semana_label'] = kpi_semana_plot['semana_inicio'].dt.strftime('%Y-%m-%d')
+                        kpi_semana_plot['mes_periodo'] = kpi_semana_plot['semana_inicio'].dt.to_period('M')
+            except Exception as e:
+                print(f"✗ Error processing kpi_semana: {e}")
                 kpi_semana_plot = pd.DataFrame(columns=['semana_inicio', 'tickets', 'semana_label', 'mes_periodo'])
-            else:
-                kpi_semana_plot['semana_label'] = kpi_semana_plot['semana_inicio'].dt.strftime('%Y-%m-%d')
-                kpi_semana_plot['mes_periodo'] = kpi_semana_plot['semana_inicio'].dt.to_period('M')
         else:
             kpi_semana_plot = pd.DataFrame(columns=['semana_inicio', 'tickets', 'semana_label', 'mes_periodo'])
 
@@ -335,24 +396,36 @@ with tabs[0]:
         kpi_dia = data.get('kpi_dia')
         tickets_dia = None
         if kpi_dia is not None and not kpi_dia.empty:
-            mapa_dias = {
-                'Monday': 'Lunes', 'Tuesday': 'Martes', 'Wednesday': 'Miércoles',
-                'Thursday': 'Jueves', 'Friday': 'Viernes', 'Saturday': 'Sábado', 'Sunday': 'Domingo'
-            }
-            kpi_dia = kpi_dia.copy()
-            kpi_dia['dia'] = kpi_dia['dia_semana'].map(mapa_dias)
-            kpi_dia = kpi_dia.dropna(subset=['dia'])
-            tickets_dia = (
-                kpi_dia.groupby('dia', as_index=False)
-                .agg(
-                    tickets_totales=('tickets', 'sum'),
-                    ventas_totales=('ventas', 'sum')
-                )
-            )
-            tickets_dia['ticket_promedio'] = tickets_dia['ventas_totales'] / tickets_dia['tickets_totales']
-            orden = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
-            tickets_dia['dia'] = pd.Categorical(tickets_dia['dia'], categories=orden, ordered=True)
-            tickets_dia = tickets_dia.sort_values('dia')
+            try:
+                mapa_dias = {
+                    'Monday': 'Lunes', 'Tuesday': 'Martes', 'Wednesday': 'Miércoles',
+                    'Thursday': 'Jueves', 'Friday': 'Viernes', 'Saturday': 'Sábado', 'Sunday': 'Domingo'
+                }
+
+                # Verificar si existe la columna dia_semana
+                if 'dia_semana' not in kpi_dia.columns:
+                    print("✗ dia_semana column missing from kpi_dia")
+                    tickets_dia = None
+                else:
+                    kpi_dia = kpi_dia.copy()
+                    kpi_dia['dia'] = kpi_dia['dia_semana'].map(mapa_dias)
+                    kpi_dia = kpi_dia.dropna(subset=['dia'])
+                    tickets_dia = (
+                        kpi_dia.groupby('dia', as_index=False)
+                        .agg(
+                            tickets_totales=('tickets', 'sum'),
+                            ventas_totales=('ventas', 'sum')
+                        )
+                    )
+                    tickets_dia['ticket_promedio'] = tickets_dia['ventas_totales'] / tickets_dia['tickets_totales']
+                    orden = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
+                    tickets_dia['dia'] = pd.Categorical(tickets_dia['dia'], categories=orden, ordered=True)
+                    tickets_dia = tickets_dia.sort_values('dia')
+            except Exception as e:
+                print(f"✗ Error processing kpi_dia: {e}")
+                tickets_dia = None
+        else:
+            tickets_dia = None
 
         # -------------------------
         # Quincenal (tickets por quincena)
@@ -542,53 +615,57 @@ with tabs[0]:
             horario_matrix is not None and hasattr(horario_matrix, 'empty') and not horario_matrix.empty
             and horario_semana is not None and not horario_semana.empty
         ):
-            fig_horario = go.Figure(
-                data=go.Heatmap(
-                    z=horario_matrix.values,
-                    x=[f"{int(h):02d}h" for h in horario_matrix.columns],
-                    y=horario_matrix.index.tolist(),
-                    colorscale='Blues',
-                    colorbar=dict(title='Comprobantes')
+            try:
+                fig_horario = go.Figure(
+                    data=go.Heatmap(
+                        z=horario_matrix.values,
+                        x=[f"{int(h):02d}h" for h in horario_matrix.columns],
+                        y=horario_matrix.index.tolist(),
+                        colorscale='Blues',
+                        colorbar=dict(title='Comprobantes')
+                    )
                 )
-            )
-            fig_horario.update_layout(
-                height=420,
-                xaxis_title="Hora del día",
-                yaxis_title="Día de la semana",
-                margin=dict(l=0, r=0, t=30, b=0)
-            )
-            st.plotly_chart(fig_horario, use_container_width=True)
+                fig_horario.update_layout(
+                    height=420,
+                    xaxis_title="Hora del día",
+                    yaxis_title="Día de la semana",
+                    margin=dict(l=0, r=0, t=30, b=0)
+                )
+                st.plotly_chart(fig_horario, use_container_width=True)
 
-            top_horas = horario_semana.loc[
-                horario_semana.groupby('dia_idx')['comprobantes'].idxmax()
-            ].sort_values('dia_idx')
-            global_top = horario_semana.sort_values('comprobantes', ascending=False).head(3)
+                top_horas = horario_semana.loc[
+                    horario_semana.groupby('dia_idx')['comprobantes'].idxmax()
+                ].sort_values('dia_idx')
+                global_top = horario_semana.sort_values('comprobantes', ascending=False).head(3)
 
-            resumen_lines = [
-                f"<li><b>{row['dia']}</b>: pico a las <b>{int(row['hora']):02d}:00</b> con {formatear_numero_argentino(row['comprobantes'])} comprobantes.</li>"
-                for _, row in top_horas.iterrows()
-            ]
-            global_lines = [
-                f"<li>{row['dia']} - {int(row['hora']):02d}:00 ({formatear_numero_argentino(row['comprobantes'])} comprobantes)</li>"
-                for _, row in global_top.iterrows()
-            ]
-            st.markdown(
-                f"""
-                <div style='background: #e1f5fe; border-left: 6px solid #039be5;
-                           padding: 18px; margin: 16px 0; border-radius: 10px;'>
-                    <h4 style='color: #0277bd; margin: 0;'>Claves de la semana por hora</h4>
-                    <p style='margin: 8px 0 0 0;'>Picos por día:</p>
-                    <ul style='margin: 6px 0 0 16px;'>
-                        {''.join(resumen_lines)}
-                    </ul>
-                    <p style='margin: 14px 0 0 0;'>Top 3 horarios generales:</p>
-                    <ul style='margin: 6px 0 0 16px;'>
-                        {''.join(global_lines)}
-                    </ul>
-                </div>
-                """,
-                unsafe_allow_html=True
-            )
+                resumen_lines = [
+                    f"<li><b>{row['dia']}</b>: pico a las <b>{int(row['hora']):02d}:00</b> con {formatear_numero_argentino(row['comprobantes'])} comprobantes.</li>"
+                    for _, row in top_horas.iterrows()
+                ]
+                global_lines = [
+                    f"<li>{row['dia']} - {int(row['hora']):02d}:00 ({formatear_numero_argentino(row['comprobantes'])} comprobantes)</li>"
+                    for _, row in global_top.iterrows()
+                ]
+                st.markdown(
+                    f"""
+                    <div style='background: #e1f5fe; border-left: 6px solid #039be5;
+                               padding: 18px; margin: 16px 0; border-radius: 10px;'>
+                        <h4 style='color: #0277bd; margin: 0;'>Claves de la semana por hora</h4>
+                        <p style='margin: 8px 0 0 0;'>Picos por día:</p>
+                        <ul style='margin: 6px 0 0 16px;'>
+                            {''.join(resumen_lines)}
+                        </ul>
+                        <p style='margin: 14px 0 0 0;'>Top 3 horarios generales:</p>
+                        <ul style='margin: 6px 0 0 16px;'>
+                            {''.join(global_lines)}
+                        </ul>
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
+            except Exception as e:
+                print(f"✗ Error creating horario chart: {e}")
+                st.info("Error generando gráfico horario. Verificar datos de comprobantes_ventas_horario.csv.")
         else:
             st.info("No se pudo construir la vista horaria; verificar la fuente `comprobantes_ventas_horario.csv`.")
 # =============================================================================
