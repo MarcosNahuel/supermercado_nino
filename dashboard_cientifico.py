@@ -13,7 +13,9 @@ import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from pathlib import Path
+from calendar import monthrange
 import numpy as np
+import unicodedata
 
 st.set_page_config(
     page_title="NINO - Dashboard Analítico",
@@ -134,6 +136,47 @@ def load_all_data():
         data['clusters_depto'] = pd.read_parquet(DATA_DIR / 'clusters_departamento.parquet')
         data['kpi_pago'] = pd.read_parquet(DATA_DIR / 'kpi_medio_pago.parquet')
         data['rentabilidad_ticket'] = pd.read_parquet(DATA_DIR / 'rentabilidad_ticket.parquet')
+        horario_path = Path('data/raw/comprobantes_ventas_horario.csv')
+        if horario_path.exists():
+            horario_df = pd.read_csv(
+                horario_path,
+                sep=';',
+                dtype=str,
+                engine='python'
+            )
+            horario_df['Fecha'] = pd.to_datetime(
+                horario_df['Fecha'].str.replace(',000', '', regex=False),
+                format='%Y-%m-%d %H:%M:%S',
+                errors='coerce'
+            )
+            horario_df['Hora'] = pd.to_datetime(
+                horario_df['Hora'].str.replace(',000', '', regex=False),
+                format='%Y-%m-%d %H:%M:%S',
+                errors='coerce'
+            )
+            horario_df = horario_df.dropna(subset=['Fecha', 'Hora'])
+            horario_df['hora'] = horario_df['Hora'].dt.hour.astype(int)
+            dias_order = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+            dias_map = {
+                'Monday': 'Lunes', 'Tuesday': 'Martes', 'Wednesday': 'Miércoles',
+                'Thursday': 'Jueves', 'Friday': 'Viernes', 'Saturday': 'Sábado', 'Sunday': 'Domingo'
+            }
+            horario_df['dia_eng'] = horario_df['Fecha'].dt.day_name()
+            horario_df = horario_df[horario_df['dia_eng'].isin(dias_order)]
+            horario_df['dia'] = horario_df['dia_eng'].map(dias_map)
+            horario_df['dia_idx'] = horario_df['dia_eng'].apply(dias_order.index)
+            horario_semana = (
+                horario_df.groupby(['dia_idx', 'dia', 'hora'], as_index=False)
+                .agg(comprobantes=('Comprobante', 'count'))
+                .sort_values(['dia_idx', 'hora'])
+            )
+            horario_pivot = (
+                horario_semana.pivot(index='dia', columns='hora', values='comprobantes')
+                .reindex(['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'])
+                .fillna(0)
+            )
+            data['horario_semana'] = horario_semana
+            data['horario_semana_matrix'] = horario_pivot
     except Exception as e:
         st.error(f"Error cargando datos: {e}")
         return None
@@ -233,6 +276,19 @@ with tabs[0]:
         detalle_tickets = detalle_tickets.copy()
         detalle_tickets['fecha'] = pd.to_datetime(detalle_tickets['fecha'])
         detalle_tickets['ticket_id'] = detalle_tickets['ticket_id'].astype(str)
+        max_fecha = detalle_tickets['fecha'].max()
+        ultimo_mes_incompleto = None
+        if pd.notna(max_fecha):
+            dias_mes = monthrange(max_fecha.year, max_fecha.month)[1]
+            if max_fecha.day < dias_mes:
+                ultimo_mes_incompleto = max_fecha.to_period('M')
+        if ultimo_mes_incompleto is not None:
+            detalle_tickets = detalle_tickets[
+                detalle_tickets['fecha'].dt.to_period('M') != ultimo_mes_incompleto
+            ]
+        if detalle_tickets.empty:
+            st.warning("Al filtrar el mes parcial mas reciente no quedaron datos suficientes para esta vista.")
+            st.stop()
 
         # -------------------------
         # Mensual (tickets por mes)
@@ -242,6 +298,11 @@ with tabs[0]:
             kpi_periodo_plot = kpi_periodo.copy()
             kpi_periodo_plot['periodo_dt'] = pd.to_datetime(kpi_periodo_plot['periodo'].astype(str) + '-01')
             kpi_periodo_plot = kpi_periodo_plot.sort_values('periodo_dt')
+            if ultimo_mes_incompleto is not None:
+                # Drop trailing partial month (ej. octubre 2025 incompleto)
+                kpi_periodo_plot = kpi_periodo_plot[
+                    kpi_periodo_plot['periodo_dt'].dt.to_period('M') != ultimo_mes_incompleto
+                ]
             kpi_periodo_plot['periodo_label'] = kpi_periodo_plot['periodo_dt'].dt.strftime('%Y-%m')
         else:
             kpi_periodo_plot = pd.DataFrame(columns=['periodo_label', 'tickets'])
@@ -256,9 +317,17 @@ with tabs[0]:
                 lambda s: pd.to_datetime(s + '-1', format='%G-W%V-%u')
             )
             kpi_semana_plot = kpi_semana_plot.sort_values('semana_inicio')
-            kpi_semana_plot['semana_label'] = kpi_semana_plot['semana_inicio'].dt.strftime('%Y-%m-%d')
+            if ultimo_mes_incompleto is not None:
+                kpi_semana_plot = kpi_semana_plot[
+                    kpi_semana_plot['semana_inicio'].dt.to_period('M') != ultimo_mes_incompleto
+                ]
+            if kpi_semana_plot.empty:
+                kpi_semana_plot = pd.DataFrame(columns=['semana_inicio', 'tickets', 'semana_label', 'mes_periodo'])
+            else:
+                kpi_semana_plot['semana_label'] = kpi_semana_plot['semana_inicio'].dt.strftime('%Y-%m-%d')
+                kpi_semana_plot['mes_periodo'] = kpi_semana_plot['semana_inicio'].dt.to_period('M')
         else:
-            kpi_semana_plot = pd.DataFrame(columns=['semana_label', 'tickets'])
+            kpi_semana_plot = pd.DataFrame(columns=['semana_inicio', 'tickets', 'semana_label', 'mes_periodo'])
 
         # -------------------------
         # Diario (tickets cada 30 minutos)
@@ -270,15 +339,17 @@ with tabs[0]:
                 'Monday': 'Lunes', 'Tuesday': 'Martes', 'Wednesday': 'Miércoles',
                 'Thursday': 'Jueves', 'Friday': 'Viernes', 'Saturday': 'Sábado', 'Sunday': 'Domingo'
             }
+            kpi_dia = kpi_dia.copy()
+            kpi_dia['dia'] = kpi_dia['dia_semana'].map(mapa_dias)
+            kpi_dia = kpi_dia.dropna(subset=['dia'])
             tickets_dia = (
-                kpi_dia[['dia_semana', 'tickets']]
-                .copy()
-                .assign(dia=lambda df: df['dia_semana'].map(mapa_dias))
-                .dropna(subset=['dia'])
-                .groupby('dia', as_index=False)['tickets']
-                .mean()
-                .rename(columns={'tickets': 'tickets_promedio'})
+                kpi_dia.groupby('dia', as_index=False)
+                .agg(
+                    tickets_totales=('tickets', 'sum'),
+                    ventas_totales=('ventas', 'sum')
+                )
             )
+            tickets_dia['ticket_promedio'] = tickets_dia['ventas_totales'] / tickets_dia['tickets_totales']
             orden = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
             tickets_dia['dia'] = pd.Categorical(tickets_dia['dia'], categories=orden, ordered=True)
             tickets_dia = tickets_dia.sort_values('dia')
@@ -328,15 +399,61 @@ with tabs[0]:
             if not kpi_semana_plot.empty:
                 fig_semanal = px.bar(
                     kpi_semana_plot,
-                    x='semana_label',
+                    x='semana_inicio',
                     y='tickets',
-                    labels={'semana_label': 'Semana (inicio)', 'tickets': 'Tickets unicos'},
+                    labels={'semana_inicio': 'Semana (inicio)', 'tickets': 'Tickets unicos'},
                     color_discrete_sequence=['#3949ab']
                 )
-                fig_semanal.update_layout(
-                    height=420,
-                    xaxis_tickangle=-35
-                )
+                if 'semana_label' in kpi_semana_plot:
+                    customdata = np.column_stack([kpi_semana_plot['semana_label']])
+                    fig_semanal.update_traces(
+                        customdata=customdata,
+                        hovertemplate="Semana: %{customdata[0]}<br>Tickets: %{y:,}<extra></extra>"
+                    )
+                axis_kwargs = {
+                    'tickangle': -35,
+                    'tickformat': '%b %Y',
+                    'dtick': 'M1'
+                }
+                if 'mes_periodo' in kpi_semana_plot:
+                    meses_series = (
+                        kpi_semana_plot['mes_periodo']
+                        .dropna()
+                        .drop_duplicates()
+                        .sort_values()
+                    )
+                    meses = list(meses_series)
+                    if meses:
+                        x_min = meses[0].to_timestamp()
+                        ultimo_periodo = meses[-1]
+                        ultimo_dia_mes = ultimo_periodo.to_timestamp('M')
+                        x_max = ultimo_dia_mes + pd.Timedelta(hours=23, minutes=59, seconds=59)
+                        for idx, periodo in enumerate(meses):
+                            inicio_mes = periodo.to_timestamp()
+                            if idx + 1 < len(meses):
+                                fin_mes = meses[idx + 1].to_timestamp()
+                            else:
+                                fin_mes = x_max
+                            fillcolor = '#e8eaf6' if idx % 2 == 0 else '#f5f5f5'
+                            fig_semanal.add_vrect(
+                                x0=inicio_mes,
+                                x1=fin_mes,
+                                fillcolor=fillcolor,
+                                opacity=0.18,
+                                layer='below',
+                                line_width=0
+                            )
+                            if idx + 1 < len(meses):
+                                boundary = meses[idx + 1].to_timestamp()
+                                fig_semanal.add_vline(
+                                    x=boundary,
+                                    line_width=1,
+                                    line_dash='dot',
+                                    line_color='#9e9e9e'
+                                )
+                        axis_kwargs['range'] = [x_min, x_max]
+                fig_semanal.update_layout(height=420)
+                fig_semanal.update_xaxes(**axis_kwargs)
                 st.plotly_chart(fig_semanal, use_container_width=True)
             else:
                 st.info("No hay datos suficientes para el análisis semanal.")
@@ -348,11 +465,15 @@ with tabs[0]:
                 fig_media_dia = px.bar(
                     tickets_dia,
                     x='dia',
-                    y='tickets_promedio',
-                    labels={'dia': 'Día de la semana', 'tickets_promedio': 'Tickets promedio'},
+                    y='ticket_promedio',
+                    labels={'dia': 'Día de la semana', 'ticket_promedio': 'Ticket promedio ($)'},
                     color_discrete_sequence=['#ff9800']
                 )
-                fig_media_dia.update_layout(height=420)
+                fig_media_dia.update_layout(
+                    height=420,
+                    yaxis_tickprefix='$',
+                    yaxis_tickformat=',.0f'
+                )
                 st.plotly_chart(fig_media_dia, use_container_width=True)
             else:
                 st.info("No fue posible calcular el promedio diario con los datos disponibles.")
@@ -396,7 +517,9 @@ with tabs[0]:
         ):
             dow_summary['label'] = dow_summary['dia_semana_idx'].map(dias_map)
             dia_fuerte = dow_summary.loc[dow_summary['tickets'].idxmax(), 'label']
-            dia_top = tickets_dia.loc[tickets_dia['tickets_promedio'].idxmax(), 'dia']
+            dia_top_row = tickets_dia.loc[tickets_dia['ticket_promedio'].idxmax()]
+            dia_top = dia_top_row['dia']
+            ticket_promedio_top = formatear_moneda_argentina(dia_top_row['ticket_promedio'], 0)
             quincena_top = tickets_quincena.loc[tickets_quincena['tickets'].idxmax(), 'quincena_label']
             st.markdown(
                 f"""
@@ -404,13 +527,70 @@ with tabs[0]:
                     <h4 style='color: #4527a0; margin: 0;'>Ritmo clave para las campanas</h4>
                     <p style='margin: 10px 0 0 0;'>
                         &bull; <b>{dia_fuerte}</b> concentra el mayor flujo semanal de tickets.<br>
-                        &bull; El día con mayor ticket promedio es <b>{dia_top}</b>.<br>
+                        &bull; El día con mayor ticket promedio es <b>{dia_top}</b> ({ticket_promedio_top}).<br>
                         &bull; La <b>{quincena_top}</b> marca el tramo mas intenso del calendario, util para planificar abastecimiento y promociones.
                     </p>
                 </div>
                 """,
                 unsafe_allow_html=True
             )
+
+        horario_matrix = data.get('horario_semana_matrix')
+        horario_semana = data.get('horario_semana')
+        st.markdown("### Horario semanal - Comprobantes por hora")
+        if (
+            horario_matrix is not None and hasattr(horario_matrix, 'empty') and not horario_matrix.empty
+            and horario_semana is not None and not horario_semana.empty
+        ):
+            fig_horario = go.Figure(
+                data=go.Heatmap(
+                    z=horario_matrix.values,
+                    x=[f"{int(h):02d}h" for h in horario_matrix.columns],
+                    y=horario_matrix.index.tolist(),
+                    colorscale='Blues',
+                    colorbar=dict(title='Comprobantes')
+                )
+            )
+            fig_horario.update_layout(
+                height=420,
+                xaxis_title="Hora del día",
+                yaxis_title="Día de la semana",
+                margin=dict(l=0, r=0, t=30, b=0)
+            )
+            st.plotly_chart(fig_horario, use_container_width=True)
+
+            top_horas = horario_semana.loc[
+                horario_semana.groupby('dia_idx')['comprobantes'].idxmax()
+            ].sort_values('dia_idx')
+            global_top = horario_semana.sort_values('comprobantes', ascending=False).head(3)
+
+            resumen_lines = [
+                f"<li><b>{row['dia']}</b>: pico a las <b>{int(row['hora']):02d}:00</b> con {formatear_numero_argentino(row['comprobantes'])} comprobantes.</li>"
+                for _, row in top_horas.iterrows()
+            ]
+            global_lines = [
+                f"<li>{row['dia']} - {int(row['hora']):02d}:00 ({formatear_numero_argentino(row['comprobantes'])} comprobantes)</li>"
+                for _, row in global_top.iterrows()
+            ]
+            st.markdown(
+                f"""
+                <div style='background: #e1f5fe; border-left: 6px solid #039be5;
+                           padding: 18px; margin: 16px 0; border-radius: 10px;'>
+                    <h4 style='color: #0277bd; margin: 0;'>Claves de la semana por hora</h4>
+                    <p style='margin: 8px 0 0 0;'>Picos por día:</p>
+                    <ul style='margin: 6px 0 0 16px;'>
+                        {''.join(resumen_lines)}
+                    </ul>
+                    <p style='margin: 14px 0 0 0;'>Top 3 horarios generales:</p>
+                    <ul style='margin: 6px 0 0 16px;'>
+                        {''.join(global_lines)}
+                    </ul>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+        else:
+            st.info("No se pudo construir la vista horaria; verificar la fuente `comprobantes_ventas_horario.csv`.")
 # =============================================================================
 # TAB 2: PARETO & MIX
 # =============================================================================
@@ -703,6 +883,11 @@ with tabs[3]:
     rentabilidad['rentabilidad_pct'] = rentabilidad['rentabilidad_pct_ticket'] * 100
     # Filtrar valores válidos
     rentabilidad = rentabilidad[rentabilidad['rentabilidad_pct'].notna() & (rentabilidad['rentabilidad_pct'] > 0)]
+    q1 = rentabilidad['rentabilidad_pct'].quantile(0.25)
+    mediana = rentabilidad['rentabilidad_pct'].quantile(0.5)
+    q3 = rentabilidad['rentabilidad_pct'].quantile(0.75)
+    min_pct = float(rentabilidad['rentabilidad_pct'].min()) if not rentabilidad.empty else 0.0
+    max_pct = float(rentabilidad['rentabilidad_pct'].max()) if not rentabilidad.empty else 0.0
 
     fig_hist = px.histogram(
         rentabilidad,
@@ -718,6 +903,49 @@ with tabs[3]:
         xaxis_title="Rentabilidad (%)",
         yaxis_title="Cantidad de Tickets"
     )
+    if not rentabilidad.empty:
+        quartile_ranges = [
+            ("Q1", min_pct, q1, "#e8f5e9"),
+            ("Q2", q1, mediana, "#fff8e1"),
+            ("Q3", mediana, q3, "#e3f2fd"),
+            ("Q4", q3, max_pct, "#fce4ec"),
+        ]
+        epsilon = max(1e-6, (max_pct - min_pct) * 0.001)
+        for label, start, end, color in quartile_ranges:
+            if end - start < epsilon:
+                continue
+            fig_hist.add_vrect(
+                x0=float(start),
+                x1=float(end),
+                fillcolor=color,
+                opacity=0.18,
+                layer='below',
+                line_width=0
+            )
+            midpoint = float(start + (end - start) / 2)
+            fig_hist.add_annotation(
+                x=midpoint,
+                y=1.02,
+                xref='x',
+                yref='paper',
+                text=label,
+                showarrow=False,
+                font=dict(color='#424242', size=12)
+            )
+        for boundary, color in [
+            (float(q1), '#ffb300'),
+            (float(mediana), '#fb8c00'),
+            (float(q3), '#1976d2')
+        ]:
+            if np.isnan(boundary):
+                continue
+            fig_hist.add_vline(
+                x=boundary,
+                line_width=1.5,
+                line_dash='dash',
+                line_color=color,
+                opacity=0.85
+            )
     st.plotly_chart(fig_hist, use_container_width=True)
 
     # Calcular cuartiles
@@ -789,9 +1017,10 @@ with tabs[3]:
     <div style='background: #e8f5e9; border-left: 6px solid #4caf50; padding: 20px; margin: 20px 0; border-radius: 10px;'>
         <h4 style='color: #2e7d32; margin: 0;'>💡 Estrategias por Segmento</h4>
         <p style='margin: 10px 0 0 0;'>
-            <b>Compra Grande (Ticket >$20K):</b> Upselling de productos premium en caja<br>
-            <b>Compra Mediana ($5K-$20K):</b> Promociones umbral para subir a siguiente nivel<br>
-            <b>Compra de Conveniencia (<$5K):</b> Combos y descuentos en segunda unidad<br><br>
+            <b>Compra Grande (Ticket >$30K):</b> Upselling de productos premium en caja y beneficios exclusivos.<br>
+            <b>Compra Mediana ($15K-$30K):</b> Promociones umbral que incentiven sumar un ítem adicional.<br>
+            <b>Compra Chica ($5K-$15K):</b> Combos de reposición y segunda unidad con descuento.<br>
+            <b>Conveniencia (<$5K):</b> Productos impulso en cajas y exhibiciones tácticas.<br><br>
             <b>Estrategia #5:</b> Capacitar cajeros en <b>upselling</b> según segmento detectado
             puede aumentar UPT +0.2 ítems (+2-3% en ticket).
         </p>
@@ -807,41 +1036,73 @@ with tabs[4]:
     # Gráfico de torta
     st.markdown("### Participación de Ventas por Medio de Pago")
 
-    pago_summary = data['kpi_pago'].groupby('tipo_medio_pago').agg({
-        'tickets': 'sum',
-        'ventas': 'sum',
-        'margen': 'sum'
-    }).reset_index()
-    pago_summary['participacion'] = (pago_summary['ventas'] / pago_summary['ventas'].sum() * 100).round(1)
+    kpi_pago = data.get('kpi_pago')
+    if kpi_pago is None or kpi_pago.empty:
+        st.info("No hay datos de medios de pago disponibles.")
+    else:
+        pago_raw = kpi_pago.copy()
 
-    fig_pie = px.pie(
-        pago_summary,
-        values='ventas',
-        names='tipo_medio_pago',
-        title="Distribución de Ventas por Medio de Pago",
-        hole=0.4,
-        color_discrete_sequence=px.colors.sequential.Blues_r
-    )
-    fig_pie.update_traces(
-        textposition='inside',
-        textinfo='percent+label',
-        hovertemplate='<b>%{label}</b><br>Ventas: $%{value:,.0f}<br>Participación: %{percent}'
-    )
-    fig_pie.update_layout(height=500)
-    st.plotly_chart(fig_pie, use_container_width=True)
+        def normalizar_medio(valor: str) -> str:
+            texto = str(valor).strip()
+            texto = unicodedata.normalize('NFKD', texto)
+            texto = ''.join(ch for ch in texto if not unicodedata.combining(ch))
+            return texto.upper()
 
-    # Métricas clave
-    col1, col2, col3 = st.columns(3)
-    efectivo_pct = pago_summary[pago_summary['tipo_medio_pago'] == 'EFECTIVO']['participacion'].values[0] if len(pago_summary[pago_summary['tipo_medio_pago'] == 'EFECTIVO']) > 0 else 0
-    tarjeta_pct = 100 - efectivo_pct
+        pago_raw['medio_clave'] = pago_raw['tipo_medio_pago'].apply(normalizar_medio)
+        medio_map = {
+            'EFECTIVO': 'Efectivo',
+            'SIN_DATO': 'Efectivo',
+            'TARJETA DE CREDITO': 'Tarjeta de crédito',
+            'TARJETA DE DEBITO': 'Tarjeta de débito',
+            'BILLETERA VIRTUAL': 'Billetera virtual',
+            'BILLETERA VITUAL': 'Billetera virtual',
+        }
+        pago_raw['medio_normalizado'] = pago_raw['medio_clave'].map(medio_map)
+        pago_raw.loc[pago_raw['medio_normalizado'].isna(), 'medio_normalizado'] = pago_raw['tipo_medio_pago'].str.title()
 
-    with col1:
-        st.metric("% Efectivo", f"{formatear_numero_argentino(efectivo_pct, 1)}%")
-    with col2:
-        st.metric("% Tarjeta", f"{formatear_numero_argentino(tarjeta_pct, 1)}%")
-    with col3:
-        ticket_efectivo = pago_summary[pago_summary['tipo_medio_pago'] == 'EFECTIVO']['ventas'].sum() / pago_summary[pago_summary['tipo_medio_pago'] == 'EFECTIVO']['tickets'].sum() if len(pago_summary[pago_summary['tipo_medio_pago'] == 'EFECTIVO']) > 0 else 0
-        st.metric("Ticket Efectivo", formatear_moneda_argentina(ticket_efectivo))
+        pago_summary = (
+            pago_raw.groupby('medio_normalizado', as_index=False)
+            .agg(
+                tickets=('tickets', 'sum'),
+                ventas=('ventas', 'sum'),
+                margen=('margen', 'sum')
+            )
+        )
+        pago_summary['participacion'] = (pago_summary['ventas'] / pago_summary['ventas'].sum() * 100).round(1)
+        pago_summary['ticket_promedio'] = pago_summary['ventas'] / pago_summary['tickets']
+
+        fig_pie = px.pie(
+            pago_summary,
+            values='ventas',
+            names='medio_normalizado',
+            title="Distribución de Ventas por Medio de Pago",
+            hole=0.4,
+            color_discrete_sequence=px.colors.sequential.Blues_r
+        )
+        fig_pie.update_traces(
+            textposition='inside',
+            textinfo='percent+label',
+            hovertemplate='<b>%{label}</b><br>Ventas: $%{value:,.0f}<br>Participación: %{percent}'
+        )
+        fig_pie.update_layout(height=500)
+        st.plotly_chart(fig_pie, use_container_width=True)
+
+        col1, col2, col3 = st.columns(3)
+
+        def obtener_participacion(nombre: str) -> float:
+            fila = pago_summary[pago_summary['medio_normalizado'] == nombre]
+            return float(fila['participacion'].iloc[0]) if not fila.empty else 0.0
+
+        efectivo_pct = obtener_participacion('Efectivo')
+        credito_pct = obtener_participacion('Tarjeta de crédito')
+        billetera_pct = obtener_participacion('Billetera virtual')
+
+        with col1:
+            st.metric("% Efectivo", f"{formatear_numero_argentino(efectivo_pct, 1)}%")
+        with col2:
+            st.metric("% Tarjeta de crédito", f"{formatear_numero_argentino(credito_pct, 1)}%")
+        with col3:
+            st.metric("% Billetera virtual", f"{formatear_numero_argentino(billetera_pct, 1)}%")
 
     st.markdown("""
     <div style='background: #fff3e0; border-left: 6px solid #ff9800; padding: 20px; margin: 20px 0; border-radius: 10px;'>
@@ -987,6 +1248,11 @@ with tabs[5]:
     </div>
     """
 
+    estrategias_html = estrategias_html.replace(
+        "(Q1=20%, Q3=35%)",
+        f"(Q1={q1:.1f}%, Q3={q3:.1f}%)"
+    )
+
     st.markdown(estrategias_html, unsafe_allow_html=True)
 
     # Resumen de impacto acumulado
@@ -1019,7 +1285,7 @@ with tabs[5]:
 # TAB 7: INFORME EJECUTIVO
 # =============================================================================
 with tabs[6]:
-    st.markdown("## �Y\"� Informe Ejecutivo")
+    st.markdown("## Y Informe Ejecutivo")
 
     alcance = data['alcance'].iloc[0]
     kpis_resumen = data['kpis_base'].iloc[0]
