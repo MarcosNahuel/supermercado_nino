@@ -37,6 +37,18 @@ El consumo mendocino sigue en baja, por lo que la batalla ocurre dentro de la ti
 
 ---
 
+## Negocio principal: de qué vive NINO
+
+- **Almacén** es el corazón del negocio: **$1.283,6 millones** anuales (25,6 % de las ventas) y **$359,4 millones** de margen estimado. Cada peso que falte en esta góndola golpea directamente el flujo de caja.  
+- **Limpieza** y **Bebidas** se llevan el segundo y tercer lugar, sumando otros **$1.086,6 millones** (casi 22 % de las ventas) con márgenes del 28 % y 25 % respectivamente. En conjunto, estos tres departamentos explican **casi 47 % de la facturación**.  
+- **Perfumería** y **Lácteos** aportan cada uno cerca de **$480 millones y $419 millones**, con márgenes del 30 %. Son categorías que sostienen el ticket medio y que, bien presentadas, empujan compras por impulso.  
+- **Fiambrería** y **Bazar** son las joyas de margen: venden menos de 3 % cada una, pero dejan **45 % de rentabilidad**. Son las aliadas naturales para subir el margen del ticket premium.  
+- Los primeros 15 departamentos concentran **88 % de las ventas**; monitorearlos semanalmente permite detectar desvíos antes de que impacten la caja.
+
+**Lectura ejecutiva:** NINO vive de los básicos de almacén y limpieza, pero gana dinero de verdad cuando consigue que el cliente sume productos de alto margen (fiambrería, bazar, panificados de elaboración propia) dentro del mismo ticket.
+
+---
+
 ## Metodología y alcance (lenguaje de negocio)
 
 Se trabajó únicamente con la información que NINO registra en **CARIBE DESKTOP**. El proceso consistió en bajar los archivos de ventas, limpiarlos y transformarlos en reportes fáciles de leer. No se usaron fuentes externas.
