@@ -1,0 +1,386 @@
+[
+  {
+    "strategy": "Estrategia #1: Combos Focalizados (Fernet+Coca)",
+    "current_adoption_rate": 0.00711412334850708,
+    "target_adoption_rate": 0.15,
+    "avg_uplift_monto_per_ticket": 25333.982226647153,
+    "avg_uplift_margen_per_ticket": 6299.193683278479,
+    "incremental_tickets_monthly": 3643.7208333333333,
+    "incremental_revenue_monthly": 92309958.83053061,
+    "incremental_margin_monthly": 22952503.25696353,
+    "investment": 150000.0,
+    "roi_percentage": 183620.02605570824,
+    "payback_months": 0.006535234885741349,
+    "confidence_score": 0.00711412334850708,
+    "uplift_distribution": [
+      {
+        "cluster": 0,
+        "dia": "Tuesday",
+        "uplift_monto": 17356.04849537037,
+        "uplift_margen": 4252.148383101851,
+        "n_combo": 144,
+        "n_control": 432
+      },
+      {
+        "cluster": 0,
+        "dia": "Thursday",
+        "uplift_monto": 19948.383180661574,
+        "uplift_margen": 4862.305962849873,
+        "n_combo": 131,
+        "n_control": 393
+      },
+      {
+        "cluster": 0,
+        "dia": "Friday",
+        "uplift_monto": 19507.31346405228,
+        "uplift_margen": 4952.218772810458,
+        "n_combo": 255,
+        "n_control": 765
+      },
+      {
+        "cluster": 0,
+        "dia": "Saturday",
+        "uplift_monto": 18181.904660114662,
+        "uplift_margen": 4399.739304668304,
+        "n_combo": 407,
+        "n_control": 1221
+      },
+      {
+        "cluster": 0,
+        "dia": "Sunday",
+        "uplift_monto": 15057.45664855072,
+        "uplift_margen": 3561.281213586957,
+        "n_combo": 184,
+        "n_control": 552
+      },
+      {
+        "cluster": 0,
+        "dia": "Wednesday",
+        "uplift_monto": 20474.347607526877,
+        "uplift_margen": 5083.340267741934,
+        "n_combo": 124,
+        "n_control": 372
+      },
+      {
+        "cluster": 0,
+        "dia": "Monday",
+        "uplift_monto": 20703.048107344635,
+        "uplift_margen": 5329.0046466101685,
+        "n_combo": 118,
+        "n_control": 354
+      },
+      {
+        "cluster": 2,
+        "dia": "Tuesday",
+        "uplift_monto": 18096.095515873007,
+        "uplift_margen": 5522.720036507926,
+        "n_combo": 84,
+        "n_control": 252
+      },
+      {
+        "cluster": 2,
+        "dia": "Thursday",
+        "uplift_monto": 45514.66527777778,
+        "uplift_margen": 11416.847876388892,
+        "n_combo": 72,
+        "n_control": 216
+      },
+      {
+        "cluster": 2,
+        "dia": "Friday",
+        "uplift_monto": 46610.028314393916,
+        "uplift_margen": 10812.780653219692,
+        "n_combo": 176,
+        "n_control": 528
+      },
+      {
+        "cluster": 2,
+        "dia": "Saturday",
+        "uplift_monto": 37038.967509727634,
+        "uplift_margen": 9699.684509468218,
+        "n_combo": 257,
+        "n_control": 771
+      },
+      {
+        "cluster": 2,
+        "dia": "Sunday",
+        "uplift_monto": 35010.441600000006,
+        "uplift_margen": 9538.034516444444,
+        "n_combo": 75,
+        "n_control": 225
+      },
+      {
+        "cluster": 2,
+        "dia": "Wednesday",
+        "uplift_monto": 16556.377333333352,
+        "uplift_margen": 3146.352479999994,
+        "n_combo": 70,
+        "n_control": 210
+      },
+      {
+        "cluster": 2,
+        "dia": "Monday",
+        "uplift_monto": 24620.673458333345,
+        "uplift_margen": 5612.252942499999,
+        "n_combo": 80,
+        "n_control": 240
+      }
+    ]
+  },
+  {
+    "strategy": "Estrategia #2: Marca Propia en Categor\u00edas A",
+    "target_categories": [
+      "ALMACEN",
+      "CARNICERIA AL 10,5 %",
+      "LACTEOS",
+      "LIMPIEZA",
+      "FIAMBRERIA",
+      "PERFUMERIA",
+      "BEBIDAS",
+      "PANAD.ELAB.PROPIA",
+      "ART.DE 1RA NECESIDAD",
+      "BAZAR"
+    ],
+    "total_ventas_convertibles": 1661499816.8849998,
+    "avg_elasticity": -1.33,
+    "avg_volume_lift": 0.10640000000000001,
+    "incremental_margin_annual": 101301854.48095575,
+    "incremental_margin_monthly": 8441821.206746312,
+    "investment": 500000.0,
+    "roi_percentage": 20260.37089619115,
+    "payback_months": 0.059228925578336485,
+    "detailed_results": [
+      {
+        "categoria": "ALMACEN",
+        "ventas_anuales": 1510394899.45,
+        "ventas_convertibles": 377598724.8625,
+        "elasticity": -1.2,
+        "volume_lift": 0.096,
+        "ventas_ajustadas": 380740346.25335604,
+        "margen_incremental_anual": 22844420.77520136
+      },
+      {
+        "categoria": "CARNICERIA AL 10,5 %",
+        "ventas_anuales": 1577780706.54,
+        "ventas_convertibles": 394445176.635,
+        "elasticity": -1.3,
+        "volume_lift": 0.10400000000000001,
+        "ventas_ajustadas": 400630077.0046369,
+        "margen_incremental_anual": 24037804.620278213
+      },
+      {
+        "categoria": "LACTEOS",
+        "ventas_anuales": 707694286.07,
+        "ventas_convertibles": 176923571.5175,
+        "elasticity": -1.0,
+        "volume_lift": 0.08,
+        "ventas_ajustadas": 175791260.65978804,
+        "margen_incremental_anual": 10547475.639587281
+      },
+      {
+        "categoria": "LIMPIEZA",
+        "ventas_anuales": 665330166.0,
+        "ventas_convertibles": 166332541.5,
+        "elasticity": -1.5,
+        "volume_lift": 0.12,
+        "ventas_ajustadas": 171389050.76160002,
+        "margen_incremental_anual": 10283343.045696001
+      },
+      {
+        "categoria": "FIAMBRERIA",
+        "ventas_anuales": 356809537.23,
+        "ventas_convertibles": 89202384.3075,
+        "elasticity": -1.3,
+        "volume_lift": 0.10400000000000001,
+        "ventas_ajustadas": 90601077.69344161,
+        "margen_incremental_anual": 5436064.661606497
+      },
+      {
+        "categoria": "PERFUMERIA",
+        "ventas_anuales": 531208478.8,
+        "ventas_convertibles": 132802119.7,
+        "elasticity": -1.3,
+        "volume_lift": 0.10400000000000001,
+        "ventas_ajustadas": 134884456.93689603,
+        "margen_incremental_anual": 8093067.416213761
+      },
+      {
+        "categoria": "BEBIDAS",
+        "ventas_anuales": 548836021.6,
+        "ventas_convertibles": 137209005.4,
+        "elasticity": -1.8,
+        "volume_lift": 0.14400000000000002,
+        "ventas_ajustadas": 144409734.00339204,
+        "margen_incremental_anual": 8664584.040203523
+      },
+      {
+        "categoria": "PANAD.ELAB.PROPIA",
+        "ventas_anuales": 299325627.65,
+        "ventas_convertibles": 74831406.9125,
+        "elasticity": -1.3,
+        "volume_lift": 0.10400000000000001,
+        "ventas_ajustadas": 76004763.372888,
+        "margen_incremental_anual": 4560285.80237328
+      },
+      {
+        "categoria": "ART.DE 1RA NECESIDAD",
+        "ventas_anuales": 280173146.0,
+        "ventas_convertibles": 70043286.5,
+        "elasticity": -1.3,
+        "volume_lift": 0.10400000000000001,
+        "ventas_ajustadas": 71141565.23232001,
+        "margen_incremental_anual": 4268493.9139392
+      },
+      {
+        "categoria": "BAZAR",
+        "ventas_anuales": 168446398.2,
+        "ventas_convertibles": 42111599.55,
+        "elasticity": -1.3,
+        "volume_lift": 0.10400000000000001,
+        "ventas_ajustadas": 42771909.430944,
+        "margen_incremental_anual": 2566314.56585664
+      }
+    ]
+  },
+  {
+    "strategy": "Estrategia #3: Cross-Merchandising (Layout Impulsor)",
+    "num_opportunities": 10,
+    "top_pairs_implemented": 10,
+    "avg_confidence_lift": 1.5,
+    "incremental_margin_monthly": 1011252.4800000002,
+    "investment": 80000.0,
+    "roi_percentage": 15168.787200000002,
+    "payback_months": 0.07910981835119948,
+    "detailed_opportunities": [
+      {
+        "antecedent": "MORCILLA VALENCIANA",
+        "consequent": "COSTILLA ARQUEADA, CHORIZO PURO CERDO",
+        "current_confidence": 0.1693290734824281,
+        "target_confidence": 0.25399361022364214,
+        "lift": 16.157354339926346,
+        "incremental_purchases_monthly": 81.08999999999997,
+        "incremental_revenue_monthly": 227051.99999999994,
+        "incremental_margin_monthly": 72656.63999999998
+      },
+      {
+        "antecedent": "CHORIZO PURO CERDO",
+        "consequent": "MORCILLA VALENCIANA, COSTILLA ARQUEADA",
+        "current_confidence": 0.15451895043731778,
+        "target_confidence": 0.23177842565597667,
+        "lift": 12.919644685394463,
+        "incremental_purchases_monthly": 81.09000000000003,
+        "incremental_revenue_monthly": 227052.0000000001,
+        "incremental_margin_monthly": 72656.64000000003
+      },
+      {
+        "antecedent": "COSTILLA ARQUEADA",
+        "consequent": "MORCILLA VALENCIANA, CHORIZO PURO CERDO",
+        "current_confidence": 0.16358024691358025,
+        "target_confidence": 0.24537037037037038,
+        "lift": 9.76015793040455,
+        "incremental_purchases_monthly": 81.08999999999997,
+        "incremental_revenue_monthly": 227051.99999999994,
+        "incremental_margin_monthly": 72656.63999999998
+      },
+      {
+        "antecedent": "MILANESAS DE POLLO NINO",
+        "consequent": "MILANESAS DE CARNE NINO",
+        "current_confidence": 0.23678160919540228,
+        "target_confidence": 0.35517241379310344,
+        "lift": 7.272162444576238,
+        "incremental_purchases_monthly": 157.59000000000003,
+        "incremental_revenue_monthly": 441252.0000000001,
+        "incremental_margin_monthly": 141200.64000000004
+      },
+      {
+        "antecedent": "PALADINI MORTADELA BOCHA",
+        "consequent": "SALAME MILAN LARIO",
+        "current_confidence": 0.191958495460441,
+        "target_confidence": 0.2879377431906615,
+        "lift": 6.855660552158607,
+        "incremental_purchases_monthly": 75.48000000000002,
+        "incremental_revenue_monthly": 211344.00000000006,
+        "incremental_margin_monthly": 67630.08000000002
+      },
+      {
+        "antecedent": "SALAME MILAN LARIO",
+        "consequent": "PALADINI MORTADELA BOCHA",
+        "current_confidence": 0.2114285714285714,
+        "target_confidence": 0.3171428571428571,
+        "lift": 6.855660552158606,
+        "incremental_purchases_monthly": 75.47999999999999,
+        "incremental_revenue_monthly": 211343.99999999997,
+        "incremental_margin_monthly": 67630.07999999999
+      },
+      {
+        "antecedent": "CHORIZO PURO CERDO",
+        "consequent": "COSTILLA ARQUEADA",
+        "current_confidence": 0.25461613216715256,
+        "target_confidence": 0.3819241982507289,
+        "lift": 6.548768831459686,
+        "incremental_purchases_monthly": 133.62000000000006,
+        "incremental_revenue_monthly": 374136.0000000002,
+        "incremental_margin_monthly": 119723.52000000006
+      },
+      {
+        "antecedent": "COSTILLA ARQUEADA",
+        "consequent": "CHORIZO PURO CERDO",
+        "current_confidence": 0.26954732510288065,
+        "target_confidence": 0.404320987654321,
+        "lift": 6.548768831459685,
+        "incremental_purchases_monthly": 133.62000000000006,
+        "incremental_revenue_monthly": 374136.0000000002,
+        "incremental_margin_monthly": 119723.52000000006
+      },
+      {
+        "antecedent": "PALADINI JAMON COCIDO",
+        "consequent": "ILOLAY QUESO BARRA",
+        "current_confidence": 0.2873134328358209,
+        "target_confidence": 0.43097014925373134,
+        "lift": 5.737089313814315,
+        "incremental_purchases_monthly": 235.62,
+        "incremental_revenue_monthly": 659736.0,
+        "incremental_margin_monthly": 211115.52000000002
+      },
+      {
+        "antecedent": "JAMON NATURAL P/CELIACOS ETIQUETA NEGRA",
+        "consequent": "ILOLAY QUESO BARRA",
+        "current_confidence": 0.274102079395085,
+        "target_confidence": 0.41115311909262753,
+        "lift": 5.47328433296895,
+        "incremental_purchases_monthly": 73.94999999999999,
+        "incremental_revenue_monthly": 207059.99999999997,
+        "incremental_margin_monthly": 66259.2
+      }
+    ]
+  },
+  {
+    "strategy": "Estrategia #4: Upselling en Caja",
+    "target_segment": "Tickets < $15,000",
+    "monthly_target_tickets": 12549.333333333334,
+    "success_rate": 0.1,
+    "successful_upsells_monthly": 1254.9333333333334,
+    "avg_upsell_value": 800.0,
+    "incremental_revenue_monthly": 1003946.6666666667,
+    "incremental_margin_monthly": 381499.7333333334,
+    "investment": 120000.0,
+    "roi_percentage": 3814.997333333334,
+    "payback_months": 0.31454805735119773
+  },
+  {
+    "strategy": "Estrategia #5: Programa Fidelizaci\u00f3n",
+    "estimated_monthly_customers": 15300.55,
+    "enrolled_customers": 5355.192499999999,
+    "enrollment_rate": 0.35,
+    "frequency_lift": 0.15,
+    "ticket_lift": 0.1,
+    "incremental_visits_monthly": 963.9346499999996,
+    "incremental_revenue_monthly": 43135649.39769749,
+    "incremental_margin_gross_monthly": 11998662.712291492,
+    "discount_cost_monthly": 4365327.719046988,
+    "net_margin_monthly": 7633334.993244505,
+    "investment": 300000.0,
+    "roi_percentage": 30533.339972978018,
+    "payback_months": 0.03930130149737956
+  }
+]

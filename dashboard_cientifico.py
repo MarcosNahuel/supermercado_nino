@@ -16,6 +16,7 @@ from pathlib import Path
 from calendar import monthrange
 import numpy as np
 import unicodedata
+import json
 
 st.set_page_config(
     page_title="NINO - Dashboard Analítico",
@@ -347,6 +348,7 @@ tabs = st.tabs([
     "💳 Medios de Pago",
     "🚀 Estrategias Priorizadas",
     "🔮 Analítica Predictiva",
+    "🤖 Simulador ML ROI",
     "📋 Informe Ejecutivo"
 ])
 
@@ -1635,9 +1637,106 @@ with tabs[6]:
                 st.caption("No se encontró `prediccion_ventas_semanal_modelos.parquet` en `data/predictivos`.")
 
 # =============================================================================
-# TAB 8: INFORME EJECUTIVO
+# TAB 8: SIMULADOR ML ROI
 # =============================================================================
 with tabs[7]:
+    st.markdown("## 🤖 Calculadora ML de ROI de Estrategias")
+    st.info(
+        """
+        **Metodología Machine Learning para priorizar inversiones comerciales**
+
+        - Modelos entrenados sobre más de 300 mil tickets y 2,9 millones de líneas de detalle.
+        - Matching estadístico y simulaciones de adopción para cada estrategia prioritaria.
+        - Resultados expresados en métricas financieras (margen incremental, ROI y payback).
+        """
+    )
+
+    results_dir = Path("data/ml_results")
+    summary_path = results_dir / "strategy_roi_summary.parquet"
+    details_path = results_dir / "strategy_roi_details.json"
+
+    if summary_path.exists():
+        summary = pd.read_parquet(summary_path)
+        summary = summary.copy().sort_values("ROI %", ascending=False)
+
+        st.markdown("### 📊 Comparativa de ROI por estrategia")
+        st.dataframe(
+            summary.style.format(
+                {
+                    "Inversión": lambda v: formatear_moneda_argentina(v, 0),
+                    "Margen Incremental Mensual": lambda v: formatear_moneda_argentina(v, 0),
+                    "ROI %": "{:,.0f}%",
+                    "Payback (meses)": "{:.2f}",
+                    "Confianza": "{:.0f}%",
+                }
+            ),
+            use_container_width=True,
+            height=260,
+        )
+
+        col_chart_1, col_chart_2 = st.columns(2)
+        with col_chart_1:
+            fig_roi = px.bar(
+                summary.sort_values("ROI %", ascending=True),
+                x="ROI %",
+                y="Estrategia",
+                orientation="h",
+                title="ROI anual por estrategia",
+                color="ROI %",
+                color_continuous_scale="RdYlGn",
+            )
+            fig_roi.update_layout(showlegend=False, coloraxis_showscale=False)
+            st.plotly_chart(fig_roi, use_container_width=True)
+
+        with col_chart_2:
+            fig_payback = px.scatter(
+                summary,
+                x="Payback (meses)",
+                y="Margen Incremental Mensual",
+                size="Inversión",
+                color="Confianza",
+                title="Payback vs. Margen incremental mensual",
+                hover_name="Estrategia",
+                color_continuous_scale="Viridis",
+            )
+            st.plotly_chart(fig_payback, use_container_width=True)
+
+        top_strategy = summary.iloc[0]
+        st.success(
+            f"""
+            **🏆 Estrategia con mayor ROI:** {top_strategy['Estrategia']}  
+            - Inversión inicial: {formatear_moneda_argentina(top_strategy['Inversión'], 0)}  
+            - Margen incremental mensual: {formatear_moneda_argentina(top_strategy['Margen Incremental Mensual'], 0)}  
+            - ROI anual: {top_strategy['ROI %']:,.0f}%  
+            - Payback estimado: {top_strategy['Payback (meses)'] * 30:.0f} días  
+            - Confianza del modelo: {top_strategy['Confianza']:.0f}%
+            """
+        )
+
+        if details_path.exists():
+            st.markdown("### 🔍 Detalle de cada simulación")
+            with details_path.open("r", encoding="utf-8") as fh:
+                details = json.load(fh)
+            for detail in details:
+                strategy_title = detail.get("strategy", "Estrategia")
+                with st.expander(f"Ver detalle: {strategy_title}", expanded=False):
+                    st.json(detail)
+    else:
+        st.warning(
+            """
+            ⚠️ No se encontraron resultados de modelos ML.
+
+            Ejecutá el entrenamiento con:
+            ```
+            python scripts/train_ml_models.py
+            ```
+            """
+        )
+
+# =============================================================================
+# TAB 9: INFORME EJECUTIVO
+# =============================================================================
+with tabs[8]:
     st.markdown("## Y Informe Ejecutivo")
 
     alcance = data['alcance'].iloc[0]

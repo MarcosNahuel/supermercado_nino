@@ -12,6 +12,7 @@ Dashboard interactivo para analizar 3M+ transacciones de Supermercado NINO, con 
 - **Pareto 80/20** para identificar productos críticos y oportunidades de margen.
 - **Market Basket** con reglas Apriori y filtros dinámicos.
 - **Segmentación de tickets** basada en clustering K-Means.
+- **Simulador ML de ROI** para cuantificar combos, marca propia, cross-merchandising, upselling y fidelización con ML.
 - **Dataset ligero en Parquet** incluido en `data/app_dataset/` (sin depender de Supabase).
 - **UI moderna** con Plotly y animaciones personalizadas en Streamlit.
 
@@ -44,37 +45,51 @@ pip install -r requirements.txt
 # Regenerar el paquete Parquet (pipeline oficial)
 python pipeline_estrategias.py
 
+# Entrenar modelos ML y generar resultados de ROI
+python scripts/train_ml_models.py
+
 streamlit run dashboard_cientifico.py
 ```
 
-El dashboard lee los Parquet versionados en `data/app_dataset/`. Si necesitas recrearlos, ejecuta `pipeline_estrategias.py` con los CSV de `data/raw/`. Las salidas y datasets heredados se archivaron en `legacy/` para referencia.
+El dashboard lee los Parquet versionados en `data/app_dataset/` y los resultados ML en `data/ml_results/`. Si necesitas recrearlos, ejecuta `pipeline_estrategias.py` con los CSV de `data/raw/` y luego `scripts/train_ml_models.py`. Las salidas y datasets heredados se archivaron en `legacy/` para referencia.
 
 > Necesitas revivir la version con Supabase? Revisa `legacy/apps/` y las notas guardadas en `legacy/`.
+
+## Módulo ML ROI
+
+El nuevo módulo de **Simulador ML de ROI** entrena seis modelos de machine learning para cuantificar el impacto financiero de las principales palancas comerciales:
+
+- Combos focalizados (matching + uplift).
+- Lanzamiento de marca propia en categorías Pareto A.
+- Cross-merchandising guiado por reglas de asociación.
+- Upselling en línea de caja.
+- Programa de fidelización sin IDs de cliente (proxy por clúster).
+- Predictor base de ticket para estimar el contrafactual.
+
+Los resultados se guardan en `data/ml_results/` y se visualizan en la pestaña **“🤖 Simulador ML ROI”** del dashboard. Ejecutá `python scripts/train_ml_models.py` cada vez que refresques los Parquet para mantener las simulaciones al día.
 
 ## Estructura del proyecto
 
 ```
 supermercado_nino/
-|- dashboard_cientifico.py        # Dashboard oficial (storytelling + KPIs)
-|- pipeline_estrategias.py        # Pipeline raw -> Parquet usado por el dashboard
-|- INICIAR_DASHBOARD.bat          # Lanzador rapido del dashboard cientifico
+|- dashboard_cientifico.py        # Dashboard científico principal
+|- main_pipeline.py               # Orquestador modular ETL + KPIs
+|- pipeline_estrategias.py        # Pipeline histórico raw -> Parquet
+|- scripts/
+|  \- train_ml_models.py          # Entrena simuladores ML y exporta ROI
+|- src/
+|  |- data_prep/                  # Limpieza y normalización de tickets
+|  |- features/                   # KPIs, clustering, market basket, pronósticos
+|  |- ml_models/                  # Modelos ML (combos, marca propia, etc.)
+|  \- utils/                      # Utilidades de carga y helpers generales
 |- data/
 |  |- raw/                        # CSV originales (gitignored)
-|  |- app_dataset/                # Parquet que consume el dashboard
-|  |- processed/                  # Reservado (vacio tras mover FASE1 a legacy/)
-|  \- sample/                     # Reservado (vacio; dataset demo en legacy/)
-|- docs/
-|  |- PIPELINE_ESTRATEGIAS.md
-|  |- VALIDACION_FINAL.txt
-|  |- FASE1_OUTPUT.log
-|  \- otros reportes y validaciones auxiliares
-|- legacy/
-|  |- apps/                       # Dashboards anteriores (Supabase, etc.)
-|  |- pipelines/                  # FASE1_ANALISIS_COMPLETO.py (pipeline CSV)
-|  |- scripts/                    # build_app_dataset.py (legacy) y pycache
-|  |- data/                       # processed/FASE1_OUTPUT y sample/FASE1_OUTPUT_SAMPLE
-|  \- outputs/                    # CSV auxiliares historicos
-|- Estrategias_Analitica.md
+|  |- processed/                  # Parquet enriquecidos por el pipeline
+|  |- predictivos/                # Pronósticos semanales (streamlit tab)
+|  |- ml_results/                 # Resultados de modelos ML (ROI simulador)
+|  \- app_dataset/                # Dataset ligero que consume el dashboard
+|- docs/                          # Documentación ejecutiva y técnica
+|- legacy/                        # Versiones anteriores y artefactos archivados
 |- requirements.txt
 \- README.md
 ```
@@ -82,7 +97,7 @@ supermercado_nino/
 ## Tecnologías
 
 - **Streamlit + Plotly** para la capa de visualización.
-- **Pandas, NumPy, Scikit-learn y MLxtend** para procesamiento analítico.
+- **Pandas, NumPy, Scikit-learn, MLxtend y XGBoost** para procesamiento analítico y simulaciones ML.
 - **PyArrow** para empaquetar los datasets en Parquet (5,5 MB en vez de ~420 MB de CSV).
 - **Scripts opcionales con Supabase** para quien desee escalar la base de datos en la nube.
 
