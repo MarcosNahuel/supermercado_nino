@@ -1,8 +1,6 @@
 {
   "enableAllProjectMcpServers": true,
   "enabledMcpjsonServers": [
-    "chrome-devtools",
-    "context7",
     "filesystem"
   ]
 }

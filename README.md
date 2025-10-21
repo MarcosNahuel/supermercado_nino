@@ -88,12 +88,24 @@ supermercado_nino/
 
 ## Metodología analítica
 
-1. Limpieza y enriquecimiento de 3M+ comprobantes.
-2. Cálculo de KPIs mensuales y por categoría.
-3. Clasificación ABC para Pareto.
-4. Reglas de asociación (Apriori) para Market Basket.
-5. Clustering K-Means para segmentar tickets.
-6. Empaquetado a Parquet + visualización en Streamlit.
+1. **Limpieza y enriquecimiento** de 3M+ comprobantes con datos de rentabilidad y feriados.
+2. **Cálculo de KPIs** mensuales, por categoría, día de semana, tipo de día y medio de pago.
+3. **Clasificación ABC** (Pareto 80/20) para identificar productos y categorías críticas.
+4. **Reglas de asociación** (Apriori) para Market Basket y generación de combos recomendados.
+5. **Clustering K-Means** para segmentar tickets por comportamiento de compra.
+6. **Pronósticos simples e interpretables** usando Promedios Móviles + Tendencia (no ARIMA).
+7. **Empaquetado a Parquet** + visualización interactiva en Streamlit con storytelling.
+
+### ¿Por qué NO usamos ARIMA para pronósticos?
+
+Este proyecto utiliza **Promedios Móviles con Tendencia** en lugar de modelos ARIMA porque:
+
+- **Transparencia**: Es fácil explicar "promedio de últimas 8 semanas" vs. "ARIMA(1,1,2)"
+- **Auditabilidad**: Los stakeholders pueden verificar los cálculos manualmente
+- **Suficiencia**: Para series cortas (<2 años), ARIMA no ofrece ventajas significativas
+- **Interpretabilidad**: Los gerentes entienden tendencias lineales mejor que parámetros técnicos
+
+Ver documentación completa en `src/features/predictivos_ventas_simple.py`
 
 ## Roadmap
 
