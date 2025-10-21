@@ -347,8 +347,6 @@ tabs = st.tabs([
     "👥 Segmentación",
     "💳 Medios de Pago",
     "🚀 Estrategias Priorizadas",
-    "🔮 Analítica Predictiva",
-    "🤖 Simulador ML ROI",
     "📋 Informe Ejecutivo"
 ])
 
@@ -606,6 +604,55 @@ with tabs[0]:
                 st.plotly_chart(fig_quincena, use_container_width=True)
             else:
                 st.info("No hay datos suficientes para el análisis por quincena.")
+
+        kpi_tipo_mod = processed_data.get("kpi_tipo_dia_modular")
+        if kpi_tipo_mod is not None and not kpi_tipo_mod.empty:
+            st.markdown("### Comparativo por tipo de día")
+            kpi_tipo_plot = (
+                kpi_tipo_mod.copy()
+                .groupby("tipo_dia", as_index=False)
+                .agg(
+                    ticket_promedio=("ticket_promedio", "mean"),
+                    upt=("upt", "mean"),
+                    margen_pct=("margen_pct", "mean"),
+                )
+                .sort_values("tipo_dia")
+            )
+            kpi_tipo_plot["margen_pct"] = kpi_tipo_plot["margen_pct"] * 100
+
+            col_tipo1, col_tipo2, col_tipo3 = st.columns(3)
+            fig_ticket_tipo = px.bar(
+                kpi_tipo_plot,
+                x="tipo_dia",
+                y="ticket_promedio",
+                labels={"tipo_dia": "Tipo de día", "ticket_promedio": "Ticket promedio ($)"},
+                title="Ticket promedio por tipo de día",
+            )
+            fig_ticket_tipo.update_traces(marker_color="#283593", texttemplate="%{y:,.0f}", textposition="outside")
+            fig_ticket_tipo.update_layout(height=320, yaxis_tickprefix="$", yaxis_tickformat=",")
+            col_tipo1.plotly_chart(fig_ticket_tipo, use_container_width=True)
+
+            fig_upt_tipo = px.bar(
+                kpi_tipo_plot,
+                x="tipo_dia",
+                y="upt",
+                labels={"tipo_dia": "Tipo de día", "upt": "Unidades por ticket"},
+                title="Unidades por ticket",
+            )
+            fig_upt_tipo.update_traces(marker_color="#fb8c00", texttemplate="%{y:.2f}", textposition="outside")
+            fig_upt_tipo.update_layout(height=320)
+            col_tipo2.plotly_chart(fig_upt_tipo, use_container_width=True)
+
+            fig_margen_tipo = px.bar(
+                kpi_tipo_plot,
+                x="tipo_dia",
+                y="margen_pct",
+                labels={"tipo_dia": "Tipo de día", "margen_pct": "Margen (%)"},
+                title="Margen promedio",
+            )
+            fig_margen_tipo.update_traces(marker_color="#00897b", texttemplate="%{y:.1f}%", textposition="outside")
+            fig_margen_tipo.update_layout(height=320, yaxis_ticksuffix="%")
+            col_tipo3.plotly_chart(fig_margen_tipo, use_container_width=True)
 
         # Resumen para narrativa
         detalle_tickets['dia_semana_idx'] = detalle_tickets['fecha'].dt.weekday
@@ -1396,347 +1443,11 @@ with tabs[5]:
     </div>
     """, unsafe_allow_html=True)
 
+
 # =============================================================================
-# TAB 7: ANALÍTICA PREDICTIVA
+# TAB 7: INFORME EJECUTIVO
 # =============================================================================
 with tabs[6]:
-    st.markdown("## 🔮 Analítica predictiva y KPIs modulares")
-    st.caption("Datos generados a partir de `main_pipeline.py` en `data/processed` y `data/predictivos`.")
-
-    kpi_dia_mod = processed_data.get("kpi_dia_modular")
-
-    if kpi_dia_mod is None or kpi_dia_mod.empty:
-        st.warning("No se encontraron archivos en `data/processed`. Ejecutá `python main_pipeline.py` antes de revisar esta pestaña.")
-    else:
-        kpi_dia_mod = kpi_dia_mod.copy()
-        kpi_dia_mod["fecha"] = pd.to_datetime(kpi_dia_mod["fecha"])
-        kpi_dia_mod = kpi_dia_mod.sort_values("fecha")
-
-        ventana_7d = kpi_dia_mod["fecha"].max() - pd.Timedelta(days=6)
-        recientes = kpi_dia_mod[kpi_dia_mod["fecha"] >= ventana_7d]
-        ventas_7d = float(recientes["ventas_totales"].sum()) if not recientes.empty else 0.0
-        ticket_promedio_7d = float(recientes["ticket_promedio"].mean()) if not recientes.empty else 0.0
-
-        if ventas_7d > 0:
-            feriado_share = float(
-                recientes.loc[recientes["tipo_dia"] == "FERIADO", "ventas_totales"].sum() / ventas_7d
-            )
-        else:
-            feriado_share = 0.0
-
-        col_a, col_b, col_c = st.columns(3)
-        col_a.metric("Ventas últimos 7 días", formatear_moneda_argentina(ventas_7d, 0))
-        col_b.metric("Ticket promedio (7d)", formatear_moneda_argentina(ticket_promedio_7d, 0))
-        col_c.metric(
-            "Participación feriados (7d)",
-            f"{formatear_numero_argentino(feriado_share * 100, 1)}%"
-        )
-
-        st.markdown("### Evolución diaria diferenciada por tipo de día")
-        fig_temporal = px.line(
-            kpi_dia_mod,
-            x="fecha",
-            y="ventas_totales",
-            color="tipo_dia",
-            labels={
-                "fecha": "Fecha",
-                "ventas_totales": "Ventas ($)",
-                "tipo_dia": "Tipo de día",
-            },
-        )
-        fig_temporal.update_layout(
-            legend_title_text="Tipo de día",
-            hovermode="x unified",
-        )
-        st.plotly_chart(fig_temporal, use_container_width=True)
-
-        kpi_tipo_mod = processed_data.get("kpi_tipo_dia_modular")
-        if kpi_tipo_mod is not None and not kpi_tipo_mod.empty:
-            st.markdown("### KPIs promedio por tipo de día")
-            kpi_tipo_plot = kpi_tipo_mod.copy()
-            kpi_tipo_plot = kpi_tipo_plot.sort_values("tipo_dia")
-
-            col_tipo1, col_tipo2 = st.columns(2)
-            fig_ticket = px.bar(
-                kpi_tipo_plot,
-                x="tipo_dia",
-                y="ticket_promedio",
-                title="Ticket promedio",
-                labels={"tipo_dia": "Tipo de día", "ticket_promedio": "Ticket promedio ($)"},
-                text_auto=".0f",
-            )
-            fig_ticket.update_traces(marker_color="#1a237e")
-            col_tipo1.plotly_chart(fig_ticket, use_container_width=True)
-
-            fig_upt = px.bar(
-                kpi_tipo_plot,
-                x="tipo_dia",
-                y="upt",
-                title="Unidades por ticket (UPT)",
-                labels={"tipo_dia": "Tipo de día", "upt": "UPT"},
-                text_auto=".2f",
-            )
-            fig_upt.update_traces(marker_color="#ffa000")
-            col_tipo2.plotly_chart(fig_upt, use_container_width=True)
-        else:
-            st.info("No se encontró `kpi_tipo_dia.parquet` en `data/processed`.")
-
-        st.markdown("### Pronóstico semanal por categoría")
-        forecast_df = processed_data.get("forecast_semana")
-        if forecast_df is None or forecast_df.empty:
-            st.info("Generá pronósticos con `python main_pipeline.py` para visualizar esta sección.")
-        else:
-            forecast_df = forecast_df.copy()
-            forecast_df["semana_inicio"] = pd.to_datetime(forecast_df["semana_inicio"])
-            forecast_df = forecast_df.sort_values("semana_inicio")
-
-            categorias = sorted(forecast_df["categoria"].unique())
-            categoria_sel = st.selectbox(
-                "Seleccioná una categoría",
-                categorias,
-                key="categoria_forecast_tab_modular",
-            )
-
-            subset = forecast_df[forecast_df["categoria"] == categoria_sel]
-            observados = subset[subset["tipo"] == "observado"]
-            pronosticos = subset[subset["tipo"] == "forecast"]
-
-            fig_forecast = go.Figure()
-            if not observados.empty:
-                fig_forecast.add_trace(
-                    go.Scatter(
-                        x=observados["semana_inicio"],
-                        y=observados["ventas_semana"] / 1e6,
-                        mode="lines+markers",
-                        name="Observado",
-                        line=dict(color="#1a237e"),
-                    )
-                )
-            if not pronosticos.empty:
-                fig_forecast.add_trace(
-                    go.Scatter(
-                        x=pronosticos["semana_inicio"],
-                        y=pronosticos["ventas_semana"] / 1e6,
-                        mode="lines+markers",
-                        name="Pronóstico",
-                        line=dict(color="#ff6f00"),
-                    )
-                )
-                if {"ventas_semana_lower", "ventas_semana_upper"}.issubset(pronosticos.columns):
-                    fig_forecast.add_trace(
-                        go.Scatter(
-                            x=pd.concat(
-                                [pronosticos["semana_inicio"], pronosticos["semana_inicio"][::-1]]
-                            ),
-                            y=pd.concat(
-                                [
-                                    pronosticos["ventas_semana_upper"] / 1e6,
-                                    (pronosticos["ventas_semana_lower"] / 1e6)[::-1],
-                                ]
-                            ),
-                            fill="toself",
-                            fillcolor="rgba(63, 81, 181, 0.15)",
-                            line=dict(color="rgba(255,255,255,0)"),
-                            hoverinfo="skip",
-                            name="Intervalo 80%",
-                        )
-                    )
-                promedio_hist = float(observados.tail(4)["ventas_semana"].mean()) if not observados.empty else 0.0
-                promedio_hist = 0.0 if np.isnan(promedio_hist) else promedio_hist
-                promedio_forecast = float(pronosticos.head(4)["ventas_semana"].mean()) if not pronosticos.empty else 0.0
-                promedio_forecast = 0.0 if np.isnan(promedio_forecast) else promedio_forecast
-                delta = (promedio_forecast / promedio_hist - 1) if promedio_hist else 0.0
-            else:
-                promedio_hist = 0.0
-                promedio_forecast = 0.0
-                delta = 0.0
-
-            fig_forecast.update_layout(
-                yaxis_title="Ventas (millones $)",
-                xaxis_title="Semana",
-                hovermode="x unified",
-            )
-            st.plotly_chart(fig_forecast, use_container_width=True)
-
-            col_f1, col_f2 = st.columns(2)
-            col_f1.metric(
-                "Promedio últimas 4 semanas observadas",
-                formatear_moneda_argentina(promedio_hist, 0),
-            )
-            col_f2.metric(
-                "Variación esperada próximas 4 semanas",
-                f"{formatear_numero_argentino(delta * 100, 1)}%",
-            )
-
-            # Explicación del modelo de pronóstico
-            st.markdown("#### 📚 ¿Cómo se calculan estas predicciones?")
-            st.info("""
-            **Método Simple y Comprensible:**
-
-            Las predicciones se basan en un enfoque transparente que combina:
-
-            1. **Promedio Móvil**: Se calcula el promedio de las últimas 8 semanas de ventas
-            2. **Tendencia**: Se identifica si las ventas están creciendo o decreciendo
-            3. **Intervalos de Confianza**: Muestran el rango probable donde caerán las ventas reales (80% de probabilidad)
-
-            **¿Por qué no usamos modelos complejos (ARIMA)?**
-            - Los métodos simples son más fáciles de explicar y auditar
-            - Para series cortas (<2 años), no ofrecen ventajas significativas
-            - Es más útil decir "el promedio de las últimas 8 semanas" que explicar parámetros técnicos
-
-            **¿Cómo interpretar?**
-            - **Línea central**: Pronóstico más probable
-            - **Banda sombreada**: Rango de confianza (80% de que las ventas reales caigan aquí)
-            - **Tendencia**: Si la línea sube = crecimiento, si baja = decrecimiento
-            """)
-
-            modelos = processed_data.get("forecast_modelos")
-            if modelos is not None and not modelos.empty:
-                st.markdown("#### 📊 Detalles Técnicos de los Modelos")
-                modelos_display = modelos.copy()
-
-                # Renombrar columnas según el nuevo modelo simple
-                if 'metodo' in modelos_display.columns:
-                    # Nuevo modelo simple
-                    modelos_display = modelos_display.rename(
-                        columns={
-                            "metodo": "Método",
-                            "ventana_promedio": "Ventana (semanas)",
-                            "tendencia_semanal": "Tendencia (unid/sem)",
-                            "promedio_base": "Promedio Base",
-                            "desviacion_std": "Desviación Estándar",
-                            "observaciones": "Observaciones",
-                        }
-                    )
-                    format_dict = {
-                        "Ventana (semanas)": "{:.0f}",
-                        "Tendencia (unid/sem)": "{:+.2f}",
-                        "Promedio Base": "{:,.0f}",
-                        "Desviación Estándar": "{:.2f}",
-                        "Observaciones": "{:.0f}"
-                    }
-                else:
-                    # Modelo ARIMA antiguo (por compatibilidad)
-                    modelos_display = modelos_display.rename(
-                        columns={
-                            "order_p": "p",
-                            "order_d": "d",
-                            "order_q": "q",
-                            "aic": "AIC",
-                            "observaciones": "Observaciones",
-                        }
-                    )
-                    format_dict = {"AIC": "{:.2f}", "Observaciones": "{:.0f}"}
-
-                st.dataframe(
-                    modelos_display.style.format(format_dict),
-                    use_container_width=True,
-                    height=260,
-                )
-            else:
-                st.caption("No se encontró `prediccion_ventas_semanal_modelos.parquet` en `data/predictivos`.")
-
-# =============================================================================
-# TAB 8: SIMULADOR ML ROI
-# =============================================================================
-with tabs[7]:
-    st.markdown("## 🤖 Calculadora ML de ROI de Estrategias")
-    st.info(
-        """
-        **Metodología Machine Learning para priorizar inversiones comerciales**
-
-        - Modelos entrenados sobre más de 300 mil tickets y 2,9 millones de líneas de detalle.
-        - Matching estadístico y simulaciones de adopción para cada estrategia prioritaria.
-        - Resultados expresados en métricas financieras (margen incremental, ROI y payback).
-        """
-    )
-
-    results_dir = Path("data/ml_results")
-    summary_path = results_dir / "strategy_roi_summary.parquet"
-    details_path = results_dir / "strategy_roi_details.json"
-
-    if summary_path.exists():
-        summary = pd.read_parquet(summary_path)
-        summary = summary.copy().sort_values("ROI %", ascending=False)
-
-        st.markdown("### 📊 Comparativa de ROI por estrategia")
-        st.dataframe(
-            summary.style.format(
-                {
-                    "Inversión": lambda v: formatear_moneda_argentina(v, 0),
-                    "Margen Incremental Mensual": lambda v: formatear_moneda_argentina(v, 0),
-                    "ROI %": "{:,.0f}%",
-                    "Payback (meses)": "{:.2f}",
-                    "Confianza": "{:.0f}%",
-                }
-            ),
-            use_container_width=True,
-            height=260,
-        )
-
-        col_chart_1, col_chart_2 = st.columns(2)
-        with col_chart_1:
-            fig_roi = px.bar(
-                summary.sort_values("ROI %", ascending=True),
-                x="ROI %",
-                y="Estrategia",
-                orientation="h",
-                title="ROI anual por estrategia",
-                color="ROI %",
-                color_continuous_scale="RdYlGn",
-            )
-            fig_roi.update_layout(showlegend=False, coloraxis_showscale=False)
-            st.plotly_chart(fig_roi, use_container_width=True)
-
-        with col_chart_2:
-            fig_payback = px.scatter(
-                summary,
-                x="Payback (meses)",
-                y="Margen Incremental Mensual",
-                size="Inversión",
-                color="Confianza",
-                title="Payback vs. Margen incremental mensual",
-                hover_name="Estrategia",
-                color_continuous_scale="Viridis",
-            )
-            st.plotly_chart(fig_payback, use_container_width=True)
-
-        top_strategy = summary.iloc[0]
-        st.success(
-            f"""
-            **🏆 Estrategia con mayor ROI:** {top_strategy['Estrategia']}  
-            - Inversión inicial: {formatear_moneda_argentina(top_strategy['Inversión'], 0)}  
-            - Margen incremental mensual: {formatear_moneda_argentina(top_strategy['Margen Incremental Mensual'], 0)}  
-            - ROI anual: {top_strategy['ROI %']:,.0f}%  
-            - Payback estimado: {top_strategy['Payback (meses)'] * 30:.0f} días  
-            - Confianza del modelo: {top_strategy['Confianza']:.0f}%
-            """
-        )
-
-        if details_path.exists():
-            st.markdown("### 🔍 Detalle de cada simulación")
-            with details_path.open("r", encoding="utf-8") as fh:
-                details = json.load(fh)
-            for detail in details:
-                strategy_title = detail.get("strategy", "Estrategia")
-                with st.expander(f"Ver detalle: {strategy_title}", expanded=False):
-                    st.json(detail)
-    else:
-        st.warning(
-            """
-            ⚠️ No se encontraron resultados de modelos ML.
-
-            Ejecutá el entrenamiento con:
-            ```
-            python scripts/train_ml_models.py
-            ```
-            """
-        )
-
-# =============================================================================
-# TAB 9: INFORME EJECUTIVO
-# =============================================================================
-with tabs[8]:
     st.markdown("## Y Informe Ejecutivo")
 
     alcance = data['alcance'].iloc[0]

@@ -73,6 +73,55 @@ El análisis se hizo a nivel ticket: no se trabajan datos personales, sólo comp
 
 ---
 
+## 4.1. Modelos de Machine Learning: Priorización por ROI
+
+Aplicamos modelos de machine learning sobre más de 300.000 tickets para simular el impacto real de cada estrategia. Los resultados muestran que **el combo Fernet + Coca Cola es la oportunidad con mayor retorno**, seguido por el programa de fidelización y la expansión de marca propia.
+
+### Principales hallazgos del modelo:
+
+**Combo Fernet + Coca Cola (Estrategia #1)**
+- **ROI anual proyectado**: 183.620% (el más alto de todas las estrategias)
+- **Payback**: menos de una semana
+- **Margen incremental mensual**: $22,9 millones
+- **Inversión inicial**: $150.000
+- **Éxito diferencial**: funciona mejor los fines de semana, especialmente viernes, sábado y domingo
+
+**Programa de Fidelización (Estrategia #2)**
+- **ROI anual proyectado**: 30.533%
+- **Payback**: 1 día
+- **Margen incremental mensual**: $7,6 millones
+- **Inversión inicial**: $300.000
+- **Tasa de adopción esperada**: 35% de clientes activos
+
+**Marca Propia en Categorías A (Estrategia #3)**
+- **ROI anual proyectado**: 20.260%
+- **Payback**: 2 días
+- **Margen incremental mensual**: $8,4 millones
+- **Inversión inicial**: $500.000
+- **Categorías prioritarias**: almacén, carnicería, lácteos, limpieza y fiambres (55% del margen actual)
+
+**Cross-Merchandising (Estrategia #4)**
+- **ROI anual proyectado**: 15.169%
+- **Payback**: 2-3 días
+- **Margen incremental mensual**: $1 millón
+- **Inversión inicial**: $80.000
+- **Oportunidades destacadas**: morcilla + costilla, milanesas de pollo + carne, jamón cocido + queso
+
+**Upselling en Caja (Estrategia #5)**
+- **ROI anual proyectado**: 3.815%
+- **Payback**: 9 días
+- **Margen incremental mensual**: $381.000
+- **Inversión inicial**: $120.000
+- **Target**: tickets menores a $15.000 (88% del volumen)
+
+### Interpretación de los resultados:
+
+El modelo confirma que **las estrategias de combo y fidelización son las de mayor impacto inmediato**, con retornos que superan ampliamente cualquier inversión publicitaria tradicional. La marca propia muestra solidez a mediano plazo, mientras que el cross-merchandising y upselling son complementos tácticos de bajo riesgo.
+
+**Recomendación del modelo**: comenzar con el combo Fernet + Coca como piloto de 4 semanas, seguido inmediatamente por el programa de fidelización. Estos dos movimientos solos podrían generar más de $30 millones mensuales en margen incremental.
+
+---
+
 ## 5. Próximos pasos sugeridos
 
 1. **Planificar pilotos de 4 semanas** para exhibiciones cruzadas y el programa de fidelización. Medir adopción real y ajustar los modelos con esos datos.  
