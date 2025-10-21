@@ -108,6 +108,7 @@ class CrossSellOptimizer:
         df_results = pd.DataFrame(rows)
 
         total_incremental_margin = float(df_results["incremental_margin_monthly"].sum())
+        total_incremental_transactions = float(df_results["incremental_purchases_monthly"].sum())
         investment = 80_000.0
         roi_percentage = (
             (total_incremental_margin * 12) / investment * 100 if investment > 0 else float("inf")
@@ -124,6 +125,7 @@ class CrossSellOptimizer:
                 .replace([np.inf, -np.inf], np.nan)
                 .mean()
             ),
+            "incremental_transactions_monthly": total_incremental_transactions,
             "incremental_margin_monthly": total_incremental_margin,
             "investment": investment,
             "roi_percentage": roi_percentage,

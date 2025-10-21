@@ -38,22 +38,22 @@ def run_training(base_dir: Path) -> None:
     detalle = _load_dataset(detalle_path, "detalle de líneas")
     reglas = _load_dataset(reglas_path, "reglas de asociación")
     pareto = _load_dataset(pareto_path, "pareto de categorías")
-    print(f"   ✓ Tickets: {len(tickets):,} registros")
-    print(f"   ✓ Detalle líneas: {len(detalle):,} registros")
-    print(f"   ✓ Reglas de asociación: {len(reglas):,} reglas")
-    print(f"   ✓ Pareto categorías: {len(pareto):,} filas\n")
+    print(f"   OK Tickets: {len(tickets):,} registros")
+    print(f"   OK Detalle líneas: {len(detalle):,} registros")
+    print(f"   OK Reglas de asociación: {len(reglas):,} reglas")
+    print(f"   OK Pareto categorías: {len(pareto):,} filas\n")
 
     validator = StrategyValidator()
 
     print("2. Ejecutando modelos ML...")
     summary_df, details = validator.run_all_strategies(tickets, detalle, reglas, pareto)
     baseline_metrics = summary_df.attrs.get("baseline_metrics", {})
-    print("   ✓ Modelos ejecutados exitosamente\n")
+    print("   OK Modelos ejecutados exitosamente\n")
 
     output_dir = base_dir / "data" / "ml_results"
     print(f"3. Exportando resultados a {output_dir} ...")
     validator.export_results(summary_df, details, output_dir=output_dir)
-    print("   ✓ Archivos generados:")
+    print("   OK Archivos generados:")
     print("     - strategy_roi_summary.parquet")
     print("     - strategy_roi_details.json\n")
 
