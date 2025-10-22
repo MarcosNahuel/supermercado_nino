@@ -1,9 +1,10 @@
 # Informe Ejecutivo de Insights y Estrategias
 # Supermercado NINO · Chacras de Coria (Mendoza)
 
-**Periodo analizado:** 01/10/2024 – 31/10/2025
+**Periodo analizado:** 01/10/2024 – 10/10/2025 (12,5 meses reales)
 **Fecha de elaboración:** 21 de octubre de 2025
 **Origen de datos:** Sistema **CARIBE DESKTOP** · Equipo Pyme Inside
+**Dataset:** 2.944.659 líneas de venta · 306.011 tickets · 10.372 SKUs únicos
 
 ---
 
