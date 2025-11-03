@@ -304,7 +304,7 @@ with col1:
 with col2:
     st.metric("🧾 Tickets", formatear_numero_argentino(alcance['n_tickets']))
 with col3:
-    st.metric("📦 SKUs Únicos", formatear_numero_argentino(alcance['n_skus_unicos']))
+    st.metric("Codigos de producto unicos", formatear_numero_argentino(alcance['n_skus_unicos']))
 with col4:
     st.metric("💰 Ventas Totales", f"{formatear_moneda_argentina(alcance['ventas_total']/1e6, 1)}M")
 
@@ -477,118 +477,203 @@ with tabs[0]:
         )
         detalle_tickets['quincena_order'] = detalle_tickets['mes_periodo'].dt.to_timestamp()
         detalle_tickets['quincena_idx'] = detalle_tickets['quincena'].map({'Quincena 1': 1, 'Quincena 2': 2})
+        detalle_tickets['quincena_inicio'] = (
+            detalle_tickets['quincena_order'] +
+            pd.to_timedelta(np.where(detalle_tickets['quincena_idx'] == 1, 0, 15), unit='D')
+        )
 
         tickets_quincena = (
-            detalle_tickets.groupby(['quincena_order', 'quincena_idx', 'quincena_label'], as_index=False)
+            detalle_tickets.groupby(['quincena_order', 'quincena_idx', 'quincena_label', 'quincena_inicio'], as_index=False)
             .agg(tickets=('ticket_id', 'nunique'))
             .sort_values(['quincena_order', 'quincena_idx'])
         )
 
-        col_mensual, col_semanal = st.columns(2)
-        with col_mensual:
-            st.markdown("### Mensual - Tickets por mes")
+        def construir_figura_tendencia(df, x_col, y_col, titulo, unidad_texto):
+            df = df.dropna(subset=[x_col, y_col])
+            if df.empty:
+                return None, None
+
+            df = df.sort_values(x_col)
+            fig = go.Figure()
+            fig.add_trace(
+                go.Scatter(
+                    x=df[x_col],
+                    y=df[y_col],
+                    mode='lines+markers',
+                    name='Tickets',
+                    line=dict(color='#1a237e', width=3),
+                    marker=dict(size=8, color='#3949ab')
+                )
+            )
+
+            pendiente = None
+            if len(df) >= 2:
+                x_numeric = np.arange(len(df))
+                y_values = df[y_col].to_numpy(dtype=float)
+                pendiente, intercepto = np.polyfit(x_numeric, y_values, 1)
+                tendencia = intercepto + pendiente * x_numeric
+                fig.add_trace(
+                    go.Scatter(
+                        x=df[x_col],
+                        y=tendencia,
+                        mode='lines',
+                        name='Tendencia',
+                        line=dict(color='#ff7043', width=2, dash='dash')
+                    )
+                )
+
+                pendiente_redondeada = round(float(pendiente), 1)
+                signo = '+' if pendiente_redondeada >= 0 else '-'
+                pendiente_texto = formatear_numero_argentino(abs(pendiente_redondeada), 1)
+                fig.add_annotation(
+                    x=df[x_col].iloc[-1],
+                    y=tendencia[-1],
+                    text=f"Pendiente: {signo}{pendiente_texto} tickets/{unidad_texto}",
+                    showarrow=True,
+                    arrowhead=2,
+                    ax=0,
+                    ay=-40,
+                    bgcolor='rgba(255,255,255,0.85)'
+                )
+            fig.update_layout(
+                title=titulo,
+                height=420,
+                margin=dict(t=70, r=20, l=60, b=40),
+                xaxis_title=None,
+                yaxis_title='Tickets',
+                hovermode='x unified'
+            )
+            return fig, pendiente
+
+        st.markdown('### Evolucion de tickets emitidos')
+        vista_temporal = st.radio(
+            'Selecciona la granularidad',
+            options=('Mensual', 'Quincenal', 'Semanal'),
+            horizontal=True
+        )
+
+        fig_temporal = None
+        pendiente_temporal = None
+
+        if vista_temporal == 'Mensual':
             if not kpi_periodo_plot.empty:
-                fig_mensual = px.bar(
-                    kpi_periodo_plot,
-                    x='periodo_label',
-                    y='tickets',
-                    labels={'periodo_label': 'Mes', 'tickets': 'Tickets unicos'},
-                    color_discrete_sequence=['#1a237e']
+                df_mensual = kpi_periodo_plot[['periodo_dt', 'tickets']].rename(columns={'periodo_dt': 'periodo'})
+                fig_temporal, pendiente_temporal = construir_figura_tendencia(
+                    df_mensual,
+                    'periodo',
+                    'tickets',
+                    'Mensual - Tickets emitidos',
+                    'mes'
                 )
-                fig_mensual.update_layout(
-                    height=420,
-                    xaxis_tickangle=-35
-                )
-                st.plotly_chart(fig_mensual, use_container_width=True)
+                if fig_temporal is not None:
+                    fig_temporal.update_xaxes(type='date', tickformat='%b %Y')
             else:
-                st.info("No hay datos suficientes para el análisis mensual.")
-
-        with col_semanal:
-            st.markdown("### Semanal - Tickets por semana")
+                st.info('No hay datos suficientes para el analisis mensual.')
+        elif vista_temporal == 'Semanal':
             if not kpi_semana_plot.empty:
-                fig_semanal = px.bar(
-                    kpi_semana_plot,
-                    x='semana_inicio',
-                    y='tickets',
-                    labels={'semana_inicio': 'Semana (inicio)', 'tickets': 'Tickets unicos'},
-                    color_discrete_sequence=['#3949ab']
+                df_semanal = kpi_semana_plot[['semana_inicio', 'tickets']].rename(columns={'semana_inicio': 'periodo'})
+                fig_temporal, pendiente_temporal = construir_figura_tendencia(
+                    df_semanal,
+                    'periodo',
+                    'tickets',
+                    'Semanal - Tickets emitidos',
+                    'semana'
                 )
-                if 'semana_label' in kpi_semana_plot:
-                    customdata = np.column_stack([kpi_semana_plot['semana_label']])
-                    fig_semanal.update_traces(
-                        customdata=customdata,
-                        hovertemplate="Semana: %{customdata[0]}<br>Tickets: %{y:,}<extra></extra>"
-                    )
-                axis_kwargs = {
-                    'tickangle': -35,
-                    'tickformat': '%b %Y',
-                    'dtick': 'M1'
-                }
-                if 'mes_periodo' in kpi_semana_plot:
-                    meses_series = (
-                        kpi_semana_plot['mes_periodo']
-                        .dropna()
-                        .drop_duplicates()
-                        .sort_values()
-                    )
-                    meses = list(meses_series)
-                    if meses:
-                        x_min = meses[0].to_timestamp()
-                        ultimo_periodo = meses[-1]
-                        ultimo_dia_mes = ultimo_periodo.to_timestamp('M')
-                        x_max = ultimo_dia_mes + pd.Timedelta(hours=23, minutes=59, seconds=59)
-                        for idx, periodo in enumerate(meses):
-                            inicio_mes = periodo.to_timestamp()
-                            if idx + 1 < len(meses):
-                                fin_mes = meses[idx + 1].to_timestamp()
-                            else:
-                                fin_mes = x_max
-                            fillcolor = '#e8eaf6' if idx % 2 == 0 else '#f5f5f5'
-                            fig_semanal.add_vrect(
-                                x0=inicio_mes,
-                                x1=fin_mes,
-                                fillcolor=fillcolor,
-                                opacity=0.18,
-                                layer='below',
-                                line_width=0
-                            )
-                            if idx + 1 < len(meses):
-                                boundary = meses[idx + 1].to_timestamp()
-                                fig_semanal.add_vline(
-                                    x=boundary,
-                                    line_width=1,
-                                    line_dash='dot',
-                                    line_color='#9e9e9e'
-                                )
-                        axis_kwargs['range'] = [x_min, x_max]
-                fig_semanal.update_layout(height=420)
-                fig_semanal.update_xaxes(**axis_kwargs)
-                st.plotly_chart(fig_semanal, use_container_width=True)
+                if fig_temporal is not None:
+                    fig_temporal.update_xaxes(type='date', tickformat='%d-%b')
             else:
-                st.info("No hay datos suficientes para el análisis semanal.")
-
-        col_diario, col_anual = st.columns(2)
-        with col_diario:
-            st.markdown("### Diario - Ticket promedio por día de semana")
-            if tickets_dia is not None and not tickets_dia.empty:
-                fig_media_dia = px.bar(
-                    tickets_dia,
-                    x='dia',
-                    y='ticket_promedio',
-                    labels={'dia': 'Día de la semana', 'ticket_promedio': 'Ticket promedio ($)'},
-                    color_discrete_sequence=['#ff9800']
+                st.info('No hay datos suficientes para el analisis semanal.')
+        else:  # Quincenal
+            if not tickets_quincena.empty:
+                df_quincenal = tickets_quincena[['quincena_inicio', 'tickets']].rename(columns={'quincena_inicio': 'periodo'})
+                fig_temporal, pendiente_temporal = construir_figura_tendencia(
+                    df_quincenal,
+                    'periodo',
+                    'tickets',
+                    'Quincenal - Tickets emitidos',
+                    'quincena'
                 )
-                fig_media_dia.update_layout(
-                    height=420,
-                    yaxis_tickprefix='$',
-                    yaxis_tickformat=',.0f'
-                )
-                st.plotly_chart(fig_media_dia, use_container_width=True)
+                if fig_temporal is not None:
+                    fig_temporal.update_xaxes(type='date', tickformat='%d-%b')
             else:
-                st.info("No fue posible calcular el promedio diario con los datos disponibles.")
+                st.info('No hay datos suficientes para el analisis quincenal.')
 
-        with col_anual:
-            st.markdown("### Anual - Tickets por quincena")
+        if fig_temporal is not None:
+            st.plotly_chart(fig_temporal, use_container_width=True)
+            if pendiente_temporal is not None:
+                pendiente_redondeada = round(float(pendiente_temporal), 1)
+                signo = '+' if pendiente_redondeada >= 0 else '-'
+                pendiente_texto = formatear_numero_argentino(abs(pendiente_redondeada), 1)
+                unidad_ref = {'Mensual': 'mes', 'Semanal': 'semana', 'Quincenal': 'quincena'}[vista_temporal]
+                st.caption(f'Pendiente (slope): {signo}{pendiente_texto} tickets por {unidad_ref}.')
+
+        st.markdown('### UPT semanal (unidades por ticket)')
+        detalle_tickets['semana_inicio_upt'] = detalle_tickets['fecha'] - pd.to_timedelta(
+            detalle_tickets['fecha'].dt.weekday, unit='D'
+        )
+        upt_semanal = (
+            detalle_tickets.groupby('semana_inicio_upt', as_index=False)
+            .agg(
+                tickets=('ticket_id', 'nunique'),
+                unidades=('items_ticket', 'sum')
+            )
+            .sort_values('semana_inicio_upt')
+        )
+        upt_semanal['upt'] = np.where(
+            upt_semanal['tickets'] > 0,
+            upt_semanal['unidades'] / upt_semanal['tickets'],
+            np.nan
+        )
+
+        if not upt_semanal.empty and upt_semanal['upt'].notna().any():
+            fig_upt = go.Figure()
+            fig_upt.add_trace(
+                go.Scatter(
+                    x=upt_semanal['semana_inicio_upt'],
+                    y=upt_semanal['upt'],
+                    mode='lines+markers',
+                    name='UPT',
+                    line=dict(color='#00897b', width=3),
+                    marker=dict(size=7, color='#26a69a')
+                )
+            )
+            fig_upt.update_layout(
+                title='UPT semanal',
+                height=360,
+                margin=dict(t=60, r=20, l=60, b=40),
+                yaxis_title='Unidades por ticket',
+                hovermode='x unified'
+            )
+            fig_upt.update_xaxes(type='date', tickformat='%d-%b')
+            st.plotly_chart(fig_upt, use_container_width=True)
+
+            upt_promedio = upt_semanal['upt'].dropna().mean()
+            st.caption(
+                f'UPT promedio del periodo: {formatear_numero_argentino(round(float(upt_promedio), 2), 2)} unidades.'
+            )
+        else:
+            st.info('No hay datos suficientes para calcular UPT semanal.')
+
+        st.markdown('### Ticket promedio por dia de la semana')
+        if tickets_dia is not None and not tickets_dia.empty:
+            fig_media_dia = px.bar(
+                tickets_dia,
+                x='dia',
+                y='ticket_promedio',
+                labels={'dia': 'Dia de la semana', 'ticket_promedio': 'Ticket promedio ($)'},
+                color_discrete_sequence=['#ff9800']
+            )
+            fig_media_dia.update_layout(
+                height=360,
+                yaxis_tickprefix='$',
+                yaxis_tickformat=',.0f',
+                margin=dict(t=60, r=20, l=60, b=40)
+            )
+            st.plotly_chart(fig_media_dia, use_container_width=True)
+        else:
+            st.info('No fue posible calcular el promedio diario con los datos disponibles.')
+
+        with st.expander('Ver detalle complementario por quincena'):
             if not tickets_quincena.empty:
                 fig_quincena = px.bar(
                     tickets_quincena,
@@ -598,13 +683,13 @@ with tabs[0]:
                     color_discrete_sequence=['#3949ab']
                 )
                 fig_quincena.update_layout(
-                    height=420,
-                    xaxis_tickangle=-35
+                    height=360,
+                    xaxis_tickangle=-35,
+                    margin=dict(t=60, r=20, l=60, b=40)
                 )
                 st.plotly_chart(fig_quincena, use_container_width=True)
             else:
-                st.info("No hay datos suficientes para el análisis por quincena.")
-
+                st.info('No hay datos suficientes para el analisis por quincena.')
         kpi_tipo_mod = processed_data.get("kpi_tipo_dia_modular")
         if kpi_tipo_mod is not None and not kpi_tipo_mod.empty:
             st.markdown("### Comparativo por tipo de día")
@@ -757,324 +842,337 @@ with tabs[0]:
 # TAB 2: PARETO & MIX
 # =============================================================================
 with tabs[1]:
-    st.markdown("## 🎯 Análisis de Pareto - Optimizar Mix de Productos")
+    st.markdown("## Analisis de Pareto - optimizar mix de productos")
 
-    st.markdown("### Curva de Pareto por Categorías")
+    pareto_prod = data.get('pareto_prod')
+    kpi_cat = data.get('kpi_categoria')
 
-    pareto_cat = data['pareto_cat'].head(20)
+    if pareto_prod is None or pareto_prod.empty:
+        st.info("No hay datos de productos para construir el Pareto.")
+    else:
+        categoria_map = {
+            "Carnes": "CARNICERIA AL 10,5 %",
+            "Almacen": "ALMACEN",
+            "Lacteos": "LACTEOS",
+            "Limpieza": "LIMPIEZA"
+        }
+        st.markdown("### Paretos 80/20 por categoria clave")
+        categoria_label = st.radio(
+            "Selecciona la categoria a analizar",
+            list(categoria_map.keys()),
+            horizontal=True
+        )
+        categoria_clave = categoria_map[categoria_label]
 
-    fig_pareto = go.Figure()
-    fig_pareto.add_trace(go.Bar(
-        x=pareto_cat['categoria'],
-        y=pareto_cat['ventas'],
-        name='Ventas',
-        marker_color='#1a237e',
-        yaxis='y'
-    ))
-    fig_pareto.add_trace(go.Scatter(
-        x=pareto_cat['categoria'],
-        y=pareto_cat['pct_acumulado_ventas'],
-        name='% Acumulado',
-        line=dict(color='#ff6b6b', width=4),
-        yaxis='y2'
-    ))
-    # Línea 80/20 - usando add_shape para especificar yaxis
-    fig_pareto.add_shape(
-        type="line",
-        x0=0,
-        x1=1,
-        y0=80,
-        y1=80,
-        xref="paper",
-        yref="y2",
-        line=dict(color="green", width=2, dash="dash")
-    )
-    fig_pareto.add_annotation(
-        x=0.95,
-        y=80,
-        xref="paper",
-        yref="y2",
-        text="80% (Regla Pareto)",
-        showarrow=False,
-        font=dict(color="green")
-    )
-    fig_pareto.update_layout(
-        title="Top 20 Categorías - Curva de Pareto 80/20",
-        xaxis_title="Categoría",
-        yaxis=dict(title="Ventas ($)"),
-        yaxis2=dict(title="% Acumulado", overlaying='y', side='right', range=[0, 100]),
-        height=500,
-        hovermode='x unified'
-    )
-    st.plotly_chart(fig_pareto, use_container_width=True)
+        data_filtrada = (
+            pareto_prod.copy()
+            .assign(
+                categoria=lambda df: df['categoria'].astype(str).str.upper().str.strip(),
+                descripcion=lambda df: df['descripcion'].astype(str).str.strip()
+            )
+        )
+        categoria_filtrada = data_filtrada[data_filtrada['categoria'] == categoria_clave.upper()]
 
-    # Calcular cuántas categorías hacen el 80%
-    cats_80 = pareto_cat[pareto_cat['pct_acumulado_ventas'] <= 80]
-    n_cats_80 = len(cats_80)
-    total_cats = len(data['pareto_cat'])
+        if categoria_filtrada.empty:
+            st.warning("No hay datos suficientes para la categoria seleccionada.")
+        else:
+            categoria_filtrada = categoria_filtrada.sort_values('ventas', ascending=False).reset_index(drop=True)
+            total_categoria = categoria_filtrada['ventas'].sum()
+            categoria_filtrada['ventas_acumuladas_categoria'] = categoria_filtrada['ventas'].cumsum()
+            categoria_filtrada['pct_acumulado_categoria'] = np.where(
+                total_categoria > 0,
+                categoria_filtrada['ventas_acumuladas_categoria'] / total_categoria * 100,
+                0
+            )
+            categoria_filtrada['core_80'] = categoria_filtrada['pct_acumulado_categoria'] <= 80
 
-    st.markdown(f"""
-    <div style='background: #e8f5e9; border-left: 6px solid #4caf50; padding: 20px; margin: 20px 0; border-radius: 10px;'>
-        <h4 style='color: #2e7d32; margin: 0;'>💡 Insight: Concentración de Ventas</h4>
-        <p style='margin: 10px 0 0 0;'>
-            <b>{n_cats_80} categorías</b> (de {total_cats}) generan el <b>80% de las ventas</b>.
-            Estas son las <b>categorías tipo A</b> que requieren:<br>
-            • <b>Stock prioritario</b> (evitar quiebres)<br>
-            • <b>Ubicación premium en góndola</b><br>
-            • <b>Cross-merchandising</b> con productos complementarios<br><br>
-            <b>Estrategia #1:</b> Introducir <b>marca propia</b> en estas categorías tipo A
-            puede aumentar margen +2-5 pp (según benchmark de sector).
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
+            vista_pareto = categoria_filtrada.head(20)
+            fig_categoria = go.Figure()
+            fig_categoria.add_trace(
+                go.Bar(
+                    x=vista_pareto['descripcion'],
+                    y=vista_pareto['ventas'],
+                    marker_color=np.where(vista_pareto['core_80'], '#1a237e', '#9fa8da'),
+                    name='Ventas'
+                )
+            )
+            fig_categoria.add_trace(
+                go.Scatter(
+                    x=vista_pareto['descripcion'],
+                    y=vista_pareto['pct_acumulado_categoria'],
+                    mode='lines+markers',
+                    name='% acumulado',
+                    line=dict(color='#ff7043', width=3),
+                    yaxis='y2'
+                )
+            )
+            fig_categoria.add_shape(
+                type='line',
+                x0=-0.5,
+                x1=len(vista_pareto['descripcion']) - 0.5,
+                y0=80,
+                y1=80,
+                yref='y2',
+                line=dict(color='green', width=2, dash='dash')
+            )
+            fig_categoria.update_layout(
+                height=520,
+                margin=dict(t=70, r=40, l=40, b=120),
+                xaxis=dict(title='Codigo de producto', tickangle=-50),
+                yaxis=dict(title='Ventas ($)'),
+                yaxis2=dict(title='% acumulado', overlaying='y', side='right', range=[0, 105]),
+                hovermode='x unified',
+                legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1)
+            )
+            st.plotly_chart(fig_categoria, use_container_width=True)
 
-    # Margen por categoría
-    st.markdown("### Rentabilidad por Categoría (Top 15)")
+            core_df = categoria_filtrada[categoria_filtrada['core_80']].copy()
+            core_count = int(core_df.shape[0])
+            total_skus_categoria = int(categoria_filtrada.shape[0])
+            cobertura_core = float(core_df['pct_acumulado_categoria'].max()) if not core_df.empty else 0.0
+            cobertura_texto = formatear_numero_argentino(round(cobertura_core, 1), 1)
+            ventas_categoria_formateadas = formatear_moneda_argentina(total_categoria, 0)
 
-    kpi_cat = data['kpi_categoria'].head(15)
+            st.markdown(
+                f'''
+                <div style='background: #e8f5e9; border-left: 6px solid #4caf50; padding: 18px; margin: 16px 0; border-radius: 10px;'>
+                    <h4 style='color: #2e7d32; margin: 0;'>Nucleo 80/20 de {categoria_label}</h4>
+                    <p style='margin: 8px 0 0 0;'>
+                        <b>{core_count} codigos</b> (de {total_skus_categoria}) explican el <b>{cobertura_texto}%</b> de las ventas de {categoria_label.lower()}.
+                        Ese nucleo factura {ventas_categoria_formateadas} dentro de la categoria, por lo que requiere
+                        reposicion prioritaria, control de precio y presencia en exhibiciones.
+                    </p>
+                </div>
+                ''',
+                unsafe_allow_html=True
+            )
 
-    fig_margen = go.Figure()
-    fig_margen.add_trace(go.Bar(
-        x=kpi_cat['categoria'],
-        y=kpi_cat['ventas'],
-        name='Ventas',
-        marker_color='#1a237e',
-        yaxis='y'
-    ))
-    fig_margen.add_trace(go.Scatter(
-        x=kpi_cat['categoria'],
-        y=kpi_cat['margen_pct'],
-        name='Margen %',
-        line=dict(color='#4caf50', width=4),
-        mode='lines+markers',
-        yaxis='y2'
-    ))
-    fig_margen.update_layout(
-        title="Ventas vs Margen % por Categoría",
-        xaxis_title="Categoría",
-        yaxis=dict(title="Ventas ($)"),
-        yaxis2=dict(title="Margen %", overlaying='y', side='right'),
-        height=500,
-        hovermode='x unified'
-    )
-    st.plotly_chart(fig_margen, use_container_width=True)
+            tabla_core = categoria_filtrada[
+                (categoria_filtrada['core_80']) | (categoria_filtrada.index < 15)
+            ].copy().head(15)
+            tabla_core['ventas'] = tabla_core['ventas'].apply(lambda x: formatear_moneda_argentina(x, 0))
+            tabla_core['margen'] = tabla_core['margen'].apply(lambda x: formatear_moneda_argentina(x, 0))
+            tabla_core['pct_acumulado_categoria'] = tabla_core['pct_acumulado_categoria'].round(1).astype(str) + '%'
+            tabla_core = tabla_core[['descripcion', 'ventas', 'margen', 'pct_acumulado_categoria']]
+            tabla_core.columns = ['Producto', 'Ventas', 'Margen', '% acumulado']
+            st.dataframe(tabla_core, use_container_width=True, hide_index=True)
 
-    # Identificar categorías de alto margen vs bajo margen
-    cat_alto_margen = kpi_cat.nlargest(3, 'margen_pct')['categoria'].tolist()
-    cat_bajo_margen = kpi_cat.nsmallest(3, 'margen_pct')['categoria'].tolist()
+    if kpi_cat is not None and not kpi_cat.empty:
+        st.markdown("### Ventas vs margen % por categoria (Top 15)")
+        kpi_top = kpi_cat.head(15).copy()
+        fig_margen = go.Figure()
+        fig_margen.add_trace(
+            go.Bar(
+                x=kpi_top['categoria'],
+                y=kpi_top['ventas'],
+                name='Ventas',
+                marker_color='#1a237e',
+                yaxis='y'
+            )
+        )
+        fig_margen.add_trace(
+            go.Scatter(
+                x=kpi_top['categoria'],
+                y=kpi_top['margen_pct'],
+                name='Margen %',
+                mode='lines+markers',
+                line=dict(color='#4caf50', width=3),
+                yaxis='y2'
+            )
+        )
+        fig_margen.update_layout(
+            height=520,
+            margin=dict(t=70, r=40, l=60, b=80),
+            xaxis=dict(title='Categoria', tickangle=-35),
+            yaxis=dict(title='Ventas ($)'),
+            yaxis2=dict(title='Margen %', overlaying='y', side='right'),
+            hovermode='x unified'
+        )
+        st.plotly_chart(fig_margen, use_container_width=True)
 
-    st.markdown(f"""
-    <div style='background: #fff3e0; border-left: 6px solid #ff9800; padding: 20px; margin: 20px 0; border-radius: 10px;'>
-        <h4 style='color: #e65100; margin: 0;'>🔍 Insight: Oportunidad de Mix</h4>
-        <p style='margin: 10px 0 0 0;'>
-            <b>Categorías de ALTO margen:</b> {', '.join(cat_alto_margen)}<br>
-            <b>Categorías de BAJO margen:</b> {', '.join(cat_bajo_margen)}<br><br>
-            <b>Estrategia #4:</b> <b>Layout impulsor</b> - Colocar productos de alto margen
-            en <b>zonas de alto tráfico</b> (fin de góndola, cajas) puede aumentar su
-            participación en el ticket. Átomo logró <b>subir ventas 30%</b> tras remodelar layout.
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
+        cat_alto_margen = kpi_top.nlargest(3, 'margen_pct')['categoria'].tolist()
+        cat_bajo_margen = kpi_top.nsmallest(3, 'margen_pct')['categoria'].tolist()
 
-    st.markdown("### Pareto de productos (Top 10 y participación acumulada)")
-
-    pareto_prod = data['pareto_prod'].copy()
-    top_prod_80 = pareto_prod[pareto_prod['pct_acumulado_ventas'] <= 80].head(10).copy()
-    if top_prod_80.empty:
-        top_prod_80 = pareto_prod.head(10).copy()
-
-    productos_ordenados = top_prod_80.sort_values('ventas')
-
-    fig_pareto_prod = go.Figure()
-    fig_pareto_prod.add_trace(go.Bar(
-        y=productos_ordenados['descripcion'],
-        x=productos_ordenados['ventas'],
-        orientation='h',
-        name='Ventas',
-        marker_color='#5b5bd6',
-        hovertemplate='<b>%{y}</b><br>Ventas: $%{x:,.0f}<extra></extra>'
-    ))
-    fig_pareto_prod.add_trace(go.Scatter(
-        y=productos_ordenados['descripcion'],
-        x=productos_ordenados['pct_acumulado_ventas'],
-        mode='lines+markers+text',
-        name='% acumulado',
-        line=dict(color='#ff6b6b', width=3),
-        marker=dict(size=8),
-        text=productos_ordenados['pct_acumulado_ventas'].round(1).astype(str) + '%',
-        textposition='top left',
-        xaxis='x2',
-        hovertemplate='<b>%{y}</b><br>% acumulado: %{x:.1f}%<extra></extra>'
-    ))
-    fig_pareto_prod.update_layout(
-        height=520,
-        margin=dict(t=60, r=20, l=140, b=40),
-        xaxis=dict(title='Ventas ($)', showgrid=False),
-        xaxis2=dict(
-            title='% acumulado',
-            overlaying='x',
-            side='top',
-            range=[0, max(20, productos_ordenados['pct_acumulado_ventas'].max() + 2)],
-            ticksuffix='%'
-        ),
-        yaxis=dict(title='Producto', showgrid=False),
-        legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1),
-        hovermode='y unified',
-        title="Top 10 productos y su aporte acumulado"
-    )
-    st.plotly_chart(fig_pareto_prod, use_container_width=True)
-
-    tabla_prod = top_prod_80[['descripcion', 'categoria', 'ventas', 'pct_acumulado_ventas', 'margen']].copy()
-    tabla_prod['ventas'] = tabla_prod['ventas'].apply(lambda x: formatear_moneda_argentina(x, 0))
-    tabla_prod['margen'] = tabla_prod['margen'].apply(lambda x: formatear_moneda_argentina(x, 0))
-    tabla_prod['pct_acumulado_ventas'] = tabla_prod['pct_acumulado_ventas'].round(1).astype(str) + '%'
-    tabla_prod.columns = ['Producto', 'Categoría', 'Ventas', '% acumulado', 'Margen']
-
-    st.dataframe(tabla_prod, use_container_width=True, hide_index=True)
-
-    cobertura = float(top_prod_80['pct_acumulado_ventas'].max())
-    categoria_dominante = top_prod_80['categoria'].value_counts().idxmax()
-
-    st.markdown(f"""
-    <div style='background: #ede7f6; border-left: 6px solid #5e35b1; padding: 20px; margin: 20px 0; border-radius: 10px;'>
-        <h4 style='color: #4527a0; margin: 0;'>🎯 Insight: Productos clave</h4>
-        <p style='margin: 10px 0 0 0;'>
-            Los <b>{len(top_prod_80)} productos</b> concentran el <b>{cobertura:.1f}%</b> de las ventas acumuladas. 
-            <b>{categoria_dominante}</b> reúne la mayor cantidad de ítems en este grupo, por lo que las
-            campañas de abastecimiento, señalética en góndola y programas de fidelización deberían priorizarlos.
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
-
+        st.markdown(
+            f'''
+            <div style='background: #fff3e0; border-left: 6px solid #ff9800; padding: 18px; margin: 16px 0; border-radius: 10px;'>
+                <h4 style='color: #e65100; margin: 0;'>Mix por rentabilidad</h4>
+                <p style='margin: 8px 0 0 0;'>
+                    Categorias con mayor margen: <b>{', '.join(cat_alto_margen)}</b><br>
+                    Categorias que traccionan volumen con menor margen: <b>{', '.join(cat_bajo_margen)}</b><br><br>
+                    Ajustar precios y promociones permite proteger el margen de las primeras y usar las segundas como gancho de trafico.
+                </p>
+            </div>
+            ''',
+            unsafe_allow_html=True
+        )
 # =============================================================================
 # TAB 3: MARKET BASKET (COMBOS)
 # =============================================================================
 with tabs[2]:
-    st.markdown("## 🛒 Market Basket Analysis - Combos Estratégicos")
+    st.markdown("## Market Basket Analysis - combos estrategicos")
 
-    st.markdown("### 🌟 COMBO ESTRELLA: FERNET + COCA COLA")
+    reglas = data.get('reglas')
+    combos = data.get('combos')
+    pareto_prod = data.get('pareto_prod')
 
-    # Buscar la regla específica
-    reglas = data['reglas']
-    regla_fernet_coca = reglas[
-        (reglas['antecedents'].str.contains('FERNET', na=False)) &
-        (reglas['consequents'].str.contains('COCA', na=False))
-    ]
+    if reglas is None or reglas.empty:
+        st.info("No hay reglas de asociacion disponibles.")
+    else:
+        producto_categoria_map = {}
+        if pareto_prod is not None and not pareto_prod.empty:
+            mapa_df = (
+                pareto_prod[['descripcion', 'categoria']]
+                .dropna()
+                .drop_duplicates(subset=['descripcion'])
+            )
+            mapa_df['descripcion'] = mapa_df['descripcion'].str.upper().str.strip()
+            mapa_df['categoria'] = mapa_df['categoria'].str.upper().str.strip()
+            producto_categoria_map = dict(zip(mapa_df['descripcion'], mapa_df['categoria']))
 
-    if len(regla_fernet_coca) > 0:
-        regla = regla_fernet_coca.iloc[0]
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric("Confianza", f"{regla['confidence']*100:.1f}%",
-                     help="78% de quienes compran Fernet también compran Coca")
-        with col2:
-            st.metric("Lift", f"{regla['lift']:.1f}x",
-                     help="Compran juntos 13x más de lo esperado por azar")
-        with col3:
-            st.metric("Soporte", f"{regla['support']*100:.2f}%",
-                     help="Aparecen juntos en 2.7% de todos los tickets")
+        categorias_carniceria = {
+            'CARNICERIA AL 10,5 %',
+            'CARNICERIA',
+            'ELABORADOS DE CARNICERIA',
+            'PRODUCTOS PARA CARNEO',
+            'POLLO'
+        }
 
-    st.markdown("""
-    <div style='background: linear-gradient(135deg, #1a237e 0%, #283593 100%);
-                border-left: 8px solid #ffd700; padding: 25px; margin: 20px 0;
-                border-radius: 15px; color: white;'>
-        <h4 style='color: #ffd700; margin: 0;'>💰 ESTRATEGIA #2: COMBO FERNET + COCA</h4>
-        <p style='margin: 15px 0 0 0; font-size: 1.1rem;'>
-            <b>Dato clave:</b> 78% de tickets con Fernet incluyen Coca (Lift 13.1x)<br>
-            <b>Acción inmediata:</b><br>
-            1. <b>Ubicar juntos en góndola</b> (adyacencia física)<br>
-            2. <b>Combo promocional:</b> "Fernet 750cc + Coca 2.5L = $X" (10-15% descuento)<br>
-            3. <b>Cartelería:</b> "El combo perfecto para tu finde"<br><br>
-            <b>Impacto esperado:</b> +10-15% en ticket promedio de fines de semana
-            (cuando se concentran estas compras). ROI estimado: <b>+$150K/mes</b>
-            en ventas incrementales.
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
+        def contiene_carniceria(cadena: str) -> bool:
+            if not cadena or not producto_categoria_map:
+                return False
+            items = [item.strip().upper() for item in cadena.split(',')]
+            for item in items:
+                categoria_item = producto_categoria_map.get(item)
+                if categoria_item and any(cat in categoria_item for cat in categorias_carniceria):
+                    return True
+            return False
 
-    # Top 20 reglas
-    st.markdown("### Top 20 Reglas de Asociación (por Lift)")
+        reglas_mba = reglas.copy()
+        reglas_mba['con_carniceria'] = reglas_mba.apply(
+            lambda row: contiene_carniceria(row['antecedents']) or contiene_carniceria(row['consequents']),
+            axis=1
+        )
 
-    reglas_top = reglas.nlargest(20, 'lift')
-    st.dataframe(
-        reglas_top[['antecedents', 'consequents', 'support', 'confidence', 'lift']],
-        hide_index=True,
-        use_container_width=True
-    )
+        if combos is not None and not combos.empty:
+            combos_mba = combos.copy()
+            combos_mba['con_carniceria'] = combos_mba.apply(
+                lambda row: contiene_carniceria(row['antecedent']) or contiene_carniceria(row['consequent']),
+                axis=1
+            )
+        else:
+            combos_mba = pd.DataFrame()
 
-    # Scatter plot
-    st.markdown("### Visualización: Confidence vs Support")
+        def render_vista(reglas_df: pd.DataFrame, combos_df: pd.DataFrame):
+            if reglas_df.empty:
+                st.info("No hay reglas de asociacion para esta seleccion.")
+                return
 
-    fig_scatter = px.scatter(
-        reglas,
-        x='support',
-        y='confidence',
-        size='lift',
-        color='lift',
-        hover_data=['antecedents', 'consequents'],
-        title="Reglas de Asociación (tamaño = Lift)",
-        labels={'support': 'Soporte', 'confidence': 'Confianza', 'lift': 'Lift'},
-        color_continuous_scale='Viridis'
-    )
-    st.plotly_chart(fig_scatter, use_container_width=True)
+            col_kpi1, col_kpi2, col_kpi3 = st.columns(3)
+            col_kpi1.metric("Reglas evaluadas", len(reglas_df))
+            col_kpi2.metric("Lift maximo", f"{reglas_df['lift'].max():.1f}x")
+            col_kpi3.metric("Soporte promedio", f"{(reglas_df['support'].mean() * 100):.2f}%")
 
-    st.markdown("""
-    <div style='background: #e8f5e9; border-left: 6px solid #4caf50; padding: 20px; margin: 20px 0; border-radius: 10px;'>
-        <h4 style='color: #2e7d32; margin: 0;'>💡 Cómo Implementar Combos</h4>
-        <p style='margin: 10px 0 0 0;'>
-            <b>Prioridad 1:</b> Reglas con <b>Lift >5</b> y <b>Confianza >50%</b>
-            → Combos con alta probabilidad de éxito<br>
-            <b>Prioridad 2:</b> Negociar con proveedores <b>financiamiento de descuentos</b><br>
-            <b>Prioridad 3:</b> Medir ROI: Ventas incrementales vs costo de descuento<br><br>
-            <b>Benchmark:</b> Combos bien diseñados aumentan ventas cruzadas <b>+22%</b>
-            (fuente: estudios retail internacionales citados en Estrategias_Analitica.md).
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
+            if combos_df is not None and not combos_df.empty:
+                st.markdown("### Top combos sugeridos (ordenados por lift)")
+                combos_view = combos_df[['antecedent', 'consequent', 'support', 'confidence', 'lift']].copy()
+                combos_view['support'] = (combos_view['support'] * 100).round(2)
+                combos_view['confidence'] = (combos_view['confidence'] * 100).round(2)
+                combos_view = combos_view.rename(
+                    columns={
+                        'antecedent': 'Antecedente',
+                        'consequent': 'Consecuente',
+                        'support': 'Soporte (%)',
+                        'confidence': 'Confianza (%)',
+                        'lift': 'Lift'
+                    }
+                )
+                st.dataframe(combos_view, use_container_width=True, hide_index=True)
+            else:
+                st.info("No hay combos recomendados para esta seleccion.")
 
+            st.markdown("### Top 20 reglas por lift")
+            reglas_top = reglas_df.nlargest(20, 'lift').copy()
+            tabla_reglas = reglas_top[['antecedents', 'consequents', 'support', 'confidence', 'lift']].rename(
+                columns={
+                    'antecedents': 'Antecedentes',
+                    'consequents': 'Consecuentes',
+                    'support': 'Soporte',
+                    'confidence': 'Confianza',
+                    'lift': 'Lift'
+                }
+            )
+            tabla_reglas['Soporte'] = (tabla_reglas['Soporte'] * 100).round(2)
+            tabla_reglas['Confianza'] = (tabla_reglas['Confianza'] * 100).round(2)
+            st.dataframe(tabla_reglas, use_container_width=True, hide_index=True)
+
+            st.markdown("### Visualizacion: confidence vs support")
+            fig_scatter = px.scatter(
+                reglas_df,
+                x='support',
+                y='confidence',
+                size='lift',
+                color='lift',
+                hover_data=['antecedents', 'consequents'],
+                labels={
+                    'support': 'Soporte',
+                    'confidence': 'Confianza',
+                    'lift': 'Lift'
+                },
+                title="Reglas de asociacion (tamanio = lift)",
+                color_continuous_scale='Viridis'
+            )
+            fig_scatter.update_layout(height=480, margin=dict(t=60, r=20, l=20, b=40))
+            st.plotly_chart(fig_scatter, use_container_width=True)
+
+        general_tab, sin_carniceria_tab = st.tabs(["Vista general", "Sin carniceria"])
+
+        with general_tab:
+            render_vista(reglas_mba, combos_mba)
+
+        with sin_carniceria_tab:
+            reglas_filtradas = reglas_mba[~reglas_mba['con_carniceria']]
+            combos_filtrados = combos_mba[~combos_mba['con_carniceria']] if not combos_mba.empty else combos_mba
+            render_vista(reglas_filtradas, combos_filtrados)
 # =============================================================================
-# TAB 4: SEGMENTACIÓN
+# TAB 4: SEGMENTACION
 # =============================================================================
 with tabs[3]:
-    st.markdown("## 👥 Segmentación de Tickets - Personalizar Estrategias")
-
-    # Análisis de rentabilidad por ticket
-    st.markdown("### Distribución de Rentabilidad por Ticket")
+    st.markdown("## Segmentacion de tickets - personalizar estrategias")
 
     rentabilidad = data['rentabilidad_ticket'].copy()
     rentabilidad['rentabilidad_pct'] = rentabilidad['rentabilidad_pct_ticket'] * 100
-    # Filtrar valores válidos
-    rentabilidad = rentabilidad[rentabilidad['rentabilidad_pct'].notna() & (rentabilidad['rentabilidad_pct'] > 0)]
-    q1 = rentabilidad['rentabilidad_pct'].quantile(0.25)
-    mediana = rentabilidad['rentabilidad_pct'].quantile(0.5)
-    q3 = rentabilidad['rentabilidad_pct'].quantile(0.75)
-    min_pct = float(rentabilidad['rentabilidad_pct'].min()) if not rentabilidad.empty else 0.0
-    max_pct = float(rentabilidad['rentabilidad_pct'].max()) if not rentabilidad.empty else 0.0
+    rentabilidad = rentabilidad[rentabilidad['rentabilidad_pct'].notna()]
+    rentabilidad = rentabilidad[rentabilidad['rentabilidad_pct'] > 0]
 
     fig_hist = px.histogram(
         rentabilidad,
         x='rentabilidad_pct',
         nbins=50,
-        title="Distribución de Rentabilidad por Ticket",
-        labels={'rentabilidad_pct': 'Rentabilidad (%)', 'count': 'Cantidad de Tickets'},
+        title="Distribucion de rentabilidad por ticket",
+        labels={'rentabilidad_pct': 'Rentabilidad (%)', 'count': 'Cantidad de tickets'},
         color_discrete_sequence=['#1a237e']
     )
     fig_hist.update_layout(
         height=400,
         showlegend=False,
         xaxis_title="Rentabilidad (%)",
-        yaxis_title="Cantidad de Tickets"
+        yaxis_title="Cantidad de tickets"
     )
     if not rentabilidad.empty:
+        q1_rent = float(rentabilidad['rentabilidad_pct'].quantile(0.25))
+        mediana_rent = float(rentabilidad['rentabilidad_pct'].quantile(0.5))
+        q3_rent = float(rentabilidad['rentabilidad_pct'].quantile(0.75))
+        min_rent = float(rentabilidad['rentabilidad_pct'].min())
+        max_rent = float(rentabilidad['rentabilidad_pct'].max())
         quartile_ranges = [
-            ("Q1", min_pct, q1, "#e8f5e9"),
-            ("Q2", q1, mediana, "#fff8e1"),
-            ("Q3", mediana, q3, "#e3f2fd"),
-            ("Q4", q3, max_pct, "#fce4ec"),
+            ("Q1", min_rent, q1_rent, "#e8f5e9"),
+            ("Q2", q1_rent, mediana_rent, "#fff8e1"),
+            ("Q3", mediana_rent, q3_rent, "#e3f2fd"),
+            ("Q4", q3_rent, max_rent, "#fce4ec"),
         ]
-        epsilon = max(1e-6, (max_pct - min_pct) * 0.001)
         for label, start, end, color in quartile_ranges:
-            if end - start < epsilon:
+            if end <= start:
                 continue
             fig_hist.add_vrect(
                 x0=float(start),
@@ -1095,12 +1193,10 @@ with tabs[3]:
                 font=dict(color='#424242', size=12)
             )
         for boundary, color in [
-            (float(q1), '#ffb300'),
-            (float(mediana), '#fb8c00'),
-            (float(q3), '#1976d2')
+            (float(q1_rent), '#ffb300'),
+            (float(mediana_rent), '#fb8c00'),
+            (float(q3_rent), '#1976d2')
         ]:
-            if np.isnan(boundary):
-                continue
             fig_hist.add_vline(
                 x=boundary,
                 line_width=1.5,
@@ -1110,175 +1206,368 @@ with tabs[3]:
             )
     st.plotly_chart(fig_hist, use_container_width=True)
 
-    # Calcular cuartiles
-    q1 = rentabilidad['rentabilidad_pct'].quantile(0.25)
-    mediana = rentabilidad['rentabilidad_pct'].quantile(0.5)
-    q3 = rentabilidad['rentabilidad_pct'].quantile(0.75)
+    if not rentabilidad.empty:
+        st.markdown(
+            f'''
+            <div style='background: #fff3e0; border-left: 6px solid #ff9800; padding: 18px; margin: 16px 0; border-radius: 10px;'>
+                <h4 style='color: #e65100; margin: 0;'>Variabilidad de rentabilidad</h4>
+                <p style='margin: 8px 0 0 0;'>
+                    Q1={round(q1_rent, 1)}% | Mediana={round(mediana_rent, 1)}% | Q3={round(q3_rent, 1)}%<br>
+                    Los tickets con margen bajo (Q1) requieren revisar promociones y precios; los segmentos con margen alto
+                    son candidatos para fidelizacion y ofertas personalizadas.
+                </p>
+            </div>
+            ''',
+            unsafe_allow_html=True
+        )
 
-    st.markdown(f"""
-    <div style='background: #fff3e0; border-left: 6px solid #ff9800; padding: 20px; margin: 20px 0; border-radius: 10px;'>
-        <h4 style='color: #e65100; margin: 0;'>🔍 Insight: Variabilidad de Rentabilidad</h4>
-        <p style='margin: 10px 0 0 0;'>
-            <b>Q1 (25%):</b> {q1:.1f}% | <b>Mediana:</b> {mediana:.1f}% | <b>Q3 (75%):</b> {q3:.1f}%<br><br>
-            Existe <b>alta variabilidad</b> en la rentabilidad por ticket.
-            Tickets en el <b>cuartil inferior (<{q1:.0f}%)</b> tienen bajo margen →
-            Revisar si incluyen muchos productos en promoción o categorías de bajo margen.<br><br>
-            <b>Estrategia #6:</b> Implementar <b>programa de fidelización</b> para identificar
-            clientes de alto valor (tickets con rentabilidad >{q3:.0f}%) y ofrecerles
-            <b>ofertas personalizadas</b> que mantengan su gasto sin erosionar margen.
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
-
-    # Segmentación simple por monto
-    st.markdown("### Segmentos de Tickets por Monto")
-
-    # Crear segmentos manualmente
     tickets_raw = data['rentabilidad_ticket'].copy()
-    tickets_raw['segmento'] = pd.cut(
-        tickets_raw['monto_total_ticket'],
-        bins=[0, 5000, 15000, 30000, float('inf')],
-        labels=['Conveniencia\n(<$5K)', 'Compra Chica\n($5K-$15K)', 'Compra Mediana\n($15K-$30K)', 'Compra Grande\n(>$30K)']
-    )
+    tickets_raw = tickets_raw.dropna(subset=['monto_total_ticket'])
 
-    segmentos = tickets_raw.groupby('segmento').agg({
-        'ticket_id': 'count',
-        'monto_total_ticket': 'mean',
-        'items_ticket': 'mean',
-        'margen_ticket': 'mean'
-    }).reset_index()
-    segmentos.columns = ['segmento', 'cantidad_tickets', 'ticket_promedio', 'items_promedio', 'margen_promedio']
-    segmentos['pct_tickets'] = (segmentos['cantidad_tickets'] / segmentos['cantidad_tickets'].sum() * 100).round(1)
+    if tickets_raw.empty:
+        st.info("No hay informacion de montos para segmentar tickets.")
+    else:
+        st.markdown("### Distribucion de ventas por ticket (bins de $2.500)")
+        bin_edges = list(np.arange(0, 37500 + 2500, 2500)) + [np.inf]
+        etiqueta_bins = []
+        for i in range(len(bin_edges) - 1):
+            lower = bin_edges[i]
+            upper = bin_edges[i + 1]
+            if np.isinf(upper):
+                etiqueta_bins.append("> $37.5k")
+            else:
+                etiqueta_bins.append(f"${lower/1000:.1f}k - ${upper/1000:.1f}k")
+        tipo_bins = pd.CategoricalDtype(categories=etiqueta_bins, ordered=True)
+        tickets_raw['rango_ticket'] = pd.cut(
+            tickets_raw['monto_total_ticket'],
+            bins=bin_edges,
+            labels=etiqueta_bins,
+            include_lowest=True,
+            right=False
+        ).astype(tipo_bins)
+        hist_monto = (
+            tickets_raw.groupby('rango_ticket', dropna=False)
+            .agg(
+                tickets=('ticket_id', 'count'),
+                ventas=('monto_total_ticket', 'sum'),
+                margen=('margen_ticket', 'sum')
+            )
+            .reset_index()
+        )
+        total_tickets = hist_monto['tickets'].sum()
+        if total_tickets > 0:
+            hist_monto['pct_tickets'] = (hist_monto['tickets'] / total_tickets * 100).round(1)
+            hist_monto['pct_acumulado'] = hist_monto['pct_tickets'].cumsum()
+        else:
+            hist_monto['pct_tickets'] = 0
+            hist_monto['pct_acumulado'] = 0
 
-    fig_seg = go.Figure()
-    fig_seg.add_trace(go.Bar(
-        x=segmentos['segmento'],
-        y=segmentos['cantidad_tickets'],
-        text=segmentos['pct_tickets'].apply(lambda x: f'{x}%'),
-        textposition='outside',
-        marker_color=['#1a237e', '#283593', '#3949ab', '#5c6bc0'],
-        name='Cantidad'
-    ))
-    fig_seg.update_layout(
-        title="Distribución de Tickets por Segmento de Monto",
-        xaxis_title="Segmento",
-        yaxis_title="Cantidad de Tickets",
-        height=450,
-        showlegend=False
-    )
-    st.plotly_chart(fig_seg, use_container_width=True)
+        fig_monto = go.Figure()
+        fig_monto.add_trace(
+            go.Bar(
+                x=hist_monto['rango_ticket'],
+                y=hist_monto['tickets'],
+                marker_color='#3949ab',
+                name='Tickets',
+                text=hist_monto['tickets'],
+                textposition='outside'
+            )
+        )
+        fig_monto.add_trace(
+            go.Scatter(
+                x=hist_monto['rango_ticket'],
+                y=hist_monto['pct_acumulado'],
+                mode='lines+markers',
+                name='% acumulado',
+                yaxis='y2',
+                line=dict(color='#ff7043', width=3)
+            )
+        )
+        fig_monto.add_shape(
+            type='line',
+            x0=-0.5,
+            x1=len(hist_monto['rango_ticket']) - 0.5,
+            y0=80,
+            y1=80,
+            yref='y2',
+            line=dict(color='green', width=2, dash='dash')
+        )
+        fig_monto.update_layout(
+            height=480,
+            margin=dict(t=70, r=40, l=40, b=140),
+            xaxis=dict(title='Venta por ticket', tickangle=-45),
+            yaxis=dict(title='Cantidad de tickets'),
+            yaxis2=dict(title='% acumulado', overlaying='y', side='right', range=[0, 105]),
+            hovermode='x unified',
+            legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1)
+        )
+        st.plotly_chart(fig_monto, use_container_width=True)
 
-    # Tabla detallada
-    st.dataframe(
-        segmentos[['segmento', 'cantidad_tickets', 'ticket_promedio', 'items_promedio', 'margen_promedio', 'pct_tickets']],
-        hide_index=True,
-        use_container_width=True
-    )
+        st.markdown("### Segmentos por cuartil del ticket")
+        q1_monto = float(tickets_raw['monto_total_ticket'].quantile(0.25))
+        q2_monto = float(tickets_raw['monto_total_ticket'].quantile(0.5))
+        q3_monto = float(tickets_raw['monto_total_ticket'].quantile(0.75))
+        segmentos_bins = [-np.inf, q1_monto, q2_monto, q3_monto, np.inf]
+        segmentos_labels = ['Bajo', 'Medio', 'Alto', 'Premium']
+        tickets_raw['segmento_cuartil'] = pd.cut(
+            tickets_raw['monto_total_ticket'],
+            bins=segmentos_bins,
+            labels=segmentos_labels,
+            include_lowest=True
+        )
+        segmento_order = pd.CategoricalDtype(categories=segmentos_labels, ordered=True)
+        tickets_raw['segmento_cuartil'] = tickets_raw['segmento_cuartil'].astype(segmento_order)
 
-    st.markdown("""
-    <div style='background: #e8f5e9; border-left: 6px solid #4caf50; padding: 20px; margin: 20px 0; border-radius: 10px;'>
-        <h4 style='color: #2e7d32; margin: 0;'>💡 Estrategias por Segmento</h4>
-        <p style='margin: 10px 0 0 0;'>
-            <b>Compra Grande (Ticket >$30K):</b> Upselling de productos premium en caja y beneficios exclusivos.<br>
-            <b>Compra Mediana ($15K-$30K):</b> Promociones umbral que incentiven sumar un ítem adicional.<br>
-            <b>Compra Chica ($5K-$15K):</b> Combos de reposición y segunda unidad con descuento.<br>
-            <b>Conveniencia (<$5K):</b> Productos impulso en cajas y exhibiciones tácticas.<br><br>
-            <b>Estrategia #5:</b> Capacitar cajeros en <b>upselling</b> según segmento detectado
-            puede aumentar UPT +0.2 ítems (+2-3% en ticket).
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
+        segmentos = (
+            tickets_raw.groupby('segmento_cuartil')
+            .agg(
+                cantidad_tickets=('ticket_id', 'count'),
+                ticket_promedio=('monto_total_ticket', 'mean'),
+                items_promedio=('items_ticket', 'mean'),
+                margen_promedio=('margen_ticket', 'mean'),
+                ventas=('monto_total_ticket', 'sum'),
+                margen_total=('margen_ticket', 'sum')
+            )
+            .reset_index()
+        )
+        total_segmentos = segmentos['cantidad_tickets'].sum()
+        segmentos['pct_tickets'] = np.where(
+            total_segmentos > 0,
+            (segmentos['cantidad_tickets'] / total_segmentos * 100).round(1),
+            0
+        )
 
+        fig_segmento = px.bar(
+            segmentos,
+            x='segmento_cuartil',
+            y='cantidad_tickets',
+            labels={'segmento_cuartil': 'Segmento', 'cantidad_tickets': 'Cantidad de tickets'},
+            color='segmento_cuartil',
+            color_discrete_sequence=['#1565c0', '#1e88e5', '#42a5f5', '#90caf9'],
+            title="Distribucion de tickets por segmento"
+        )
+        fig_segmento.update_layout(height=360, showlegend=False, yaxis_title='Cantidad de tickets')
+        st.plotly_chart(fig_segmento, use_container_width=True)
+
+        tabla_segmentos = segmentos.copy()
+        tabla_segmentos['ticket_promedio'] = tabla_segmentos['ticket_promedio'].apply(lambda x: formatear_moneda_argentina(x, 0))
+        tabla_segmentos['items_promedio'] = tabla_segmentos['items_promedio'].round(2)
+        tabla_segmentos['margen_promedio'] = tabla_segmentos['margen_promedio'].apply(lambda x: formatear_moneda_argentina(x, 0))
+        tabla_segmentos['ventas'] = tabla_segmentos['ventas'].apply(lambda x: formatear_moneda_argentina(x, 0))
+        tabla_segmentos['margen_total'] = tabla_segmentos['margen_total'].apply(lambda x: formatear_moneda_argentina(x, 0))
+        tabla_segmentos['pct_tickets'] = tabla_segmentos['pct_tickets'].astype(str) + '%'
+        tabla_segmentos.columns = [
+            'Segmento',
+            'Cantidad de tickets',
+            'Ticket promedio',
+            'Items promedio',
+            'Margen promedio',
+            'Ventas',
+            'Margen total',
+            '% de tickets'
+        ]
+        st.dataframe(tabla_segmentos, use_container_width=True, hide_index=True)
+
+        fig_margen_segmentos = px.histogram(
+            tickets_raw.dropna(subset=['segmento_cuartil']),
+            x='margen_ticket',
+            facet_col='segmento_cuartil',
+            facet_col_wrap=2,
+            nbins=40,
+            color='segmento_cuartil',
+            color_discrete_sequence=['#1565c0', '#1e88e5', '#42a5f5', '#90caf9'],
+            labels={'margen_ticket': 'Margen por ticket ($)', 'segmento_cuartil': 'Segmento'},
+            title="Distribucion de margen por segmento"
+        )
+        fig_margen_segmentos.update_layout(height=520, showlegend=False, margin=dict(t=70, r=20, l=20, b=60))
+        st.plotly_chart(fig_margen_segmentos, use_container_width=True)
+
+        q1_monto_txt = formatear_moneda_argentina(q1_monto, 0)
+        q2_monto_txt = formatear_moneda_argentina(q2_monto, 0)
+        q3_monto_txt = formatear_moneda_argentina(q3_monto, 0)
+        st.markdown(
+            f'''
+            <div style='background: #ede7f6; border-left: 6px solid #5e35b1; padding: 18px; margin: 16px 0; border-radius: 10px;'>
+                <h4 style='color: #4527a0; margin: 0;'>Lectura de segmentos por ticket</h4>
+                <p style='margin: 8px 0 0 0;'>
+                    <b>Bajo:</b> tickets hasta {q1_monto_txt}<br>
+                    <b>Medio:</b> entre {q1_monto_txt} y {q2_monto_txt}<br>
+                    <b>Alto:</b> entre {q2_monto_txt} y {q3_monto_txt}<br>
+                    <b>Premium:</b> superiores a {q3_monto_txt}<br><br>
+                    Usar los segmentos Alto y Premium para programas de fidelizacion y upselling; los segmentos Bajo y Medio son utiles para combos y ofertas de volumen.
+                </p>
+            </div>
+            ''',
+            unsafe_allow_html=True
+        )
+
+        st.info("No se encontraron datos de rotacion de inventario; dejar placeholder para cruce margen vs rotacion en la siguiente iteracion.")
 # =============================================================================
 # TAB 5: MEDIOS DE PAGO
 # =============================================================================
 with tabs[4]:
-    st.markdown("## 💳 Análisis de Medios de Pago")
-
-    # Gráfico de torta
-    st.markdown("### Participación de Ventas por Medio de Pago")
+    st.markdown("## Analisis de medios de pago")
 
     kpi_pago = data.get('kpi_pago')
+    tickets_modular = processed_data.get('tickets_modular')
+
     if kpi_pago is None or kpi_pago.empty:
         st.info("No hay datos de medios de pago disponibles.")
     else:
-        pago_raw = kpi_pago.copy()
-
         def normalizar_medio(valor: str) -> str:
             texto = str(valor).strip()
+            if not texto:
+                return 'Efectivo'
             texto = unicodedata.normalize('NFKD', texto)
             texto = ''.join(ch for ch in texto if not unicodedata.combining(ch))
-            return texto.upper()
+            texto = texto.upper()
+            mapping = {
+                'EFECTIVO': 'Efectivo',
+                'SIN DATO': 'Efectivo',
+                'SIN DATOS': 'Efectivo',
+                'SIN_IDENTIFICAR': 'Efectivo',
+                'SIN IDENTIFICAR': 'Efectivo',
+                'TARJETA DE DEBITO': 'Debito',
+                'TARJETA DEBITO': 'Debito',
+                'DEBITO': 'Debito',
+                'TARJETA DE CREDITO': 'Credito',
+                'TARJETA CREDITO': 'Credito',
+                'CREDITO': 'Credito',
+                'BILLETERA VIRTUAL': 'Billetera',
+                'BILLETERA VITUAL': 'Billetera',
+                'MERCADO PAGO': 'Billetera',
+                'MP': 'Billetera'
+            }
+            return mapping.get(texto, 'Efectivo')
 
-        pago_raw['medio_clave'] = pago_raw['tipo_medio_pago'].apply(normalizar_medio)
-        medio_map = {
-            'EFECTIVO': 'Efectivo',
-            'SIN_DATO': 'Efectivo',
-            'TARJETA DE CREDITO': 'Tarjeta de crédito',
-            'TARJETA DE DEBITO': 'Tarjeta de débito',
-            'BILLETERA VIRTUAL': 'Billetera virtual',
-            'BILLETERA VITUAL': 'Billetera virtual',
-        }
-        pago_raw['medio_normalizado'] = pago_raw['medio_clave'].map(medio_map)
-        pago_raw.loc[pago_raw['medio_normalizado'].isna(), 'medio_normalizado'] = pago_raw['tipo_medio_pago'].str.title()
-
+        categorias_pago = ['Efectivo', 'Debito', 'Credito', 'Billetera']
+        pago_raw = kpi_pago.copy()
+        pago_raw['medio'] = pago_raw['tipo_medio_pago'].apply(normalizar_medio)
         pago_summary = (
-            pago_raw.groupby('medio_normalizado', as_index=False)
+            pago_raw.groupby('medio', as_index=False)
             .agg(
                 tickets=('tickets', 'sum'),
                 ventas=('ventas', 'sum'),
                 margen=('margen', 'sum')
             )
         )
-        pago_summary['participacion'] = (pago_summary['ventas'] / pago_summary['ventas'].sum() * 100).round(1)
-        pago_summary['ticket_promedio'] = pago_summary['ventas'] / pago_summary['tickets']
+        pago_summary = pago_summary.set_index('medio').reindex(categorias_pago, fill_value=0).reset_index()
 
-        fig_pie = px.pie(
+        pago_summary['ticket_promedio'] = np.where(
+            pago_summary['tickets'] > 0,
+            pago_summary['ventas'] / pago_summary['tickets'],
+            0
+        )
+        total_ventas_pago = pago_summary['ventas'].sum()
+        pago_summary['participacion'] = np.where(
+            total_ventas_pago > 0,
+            (pago_summary['ventas'] / total_ventas_pago * 100).round(1),
+            0
+        )
+
+        fig_pago = px.bar(
             pago_summary,
-            values='ventas',
-            names='medio_normalizado',
-            title="Distribución de Ventas por Medio de Pago",
-            hole=0.4,
-            color_discrete_sequence=px.colors.sequential.Blues_r
+            x='medio',
+            y='ventas',
+            labels={'medio': 'Metodo de pago', 'ventas': 'Ventas ($)'},
+            color='medio',
+            color_discrete_sequence=['#0d47a1', '#1976d2', '#42a5f5', '#90caf9'],
+            title="Ventas acumuladas por metodo de pago",
+            text=pago_summary['participacion'].astype(str) + '%'
         )
-        fig_pie.update_traces(
-            textposition='inside',
-            textinfo='percent+label',
-            hovertemplate='<b>%{label}</b><br>Ventas: $%{value:,.0f}<br>Participación: %{percent}'
+        fig_pago.update_layout(height=420, showlegend=False, yaxis_tickprefix='$', yaxis_tickformat=',.0f')
+        st.plotly_chart(fig_pago, use_container_width=True)
+
+        cols = st.columns(len(categorias_pago))
+        for col, metodo in zip(cols, categorias_pago):
+            fila = pago_summary[pago_summary['medio'] == metodo]
+            participacion = float(fila['participacion'].iloc[0]) if not fila.empty else 0.0
+            ticket_promedio = float(fila['ticket_promedio'].iloc[0]) if not fila.empty else 0.0
+            col.metric(
+                f"% {metodo}",
+                f"{participacion:.1f}%",
+                help=f"Ticket promedio: {formatear_moneda_argentina(ticket_promedio, 0)}"
+            )
+
+        pago_summary['modalidad'] = pago_summary['medio'].apply(lambda m: 'Efectivo' if m == 'Efectivo' else 'Digitales')
+        resumen_modalidad = (
+            pago_summary.groupby('modalidad', as_index=False)
+            .agg(
+                ventas=('ventas', 'sum'),
+                tickets=('tickets', 'sum'),
+                margen=('margen', 'sum')
+            )
         )
-        fig_pie.update_layout(height=500)
-        st.plotly_chart(fig_pie, use_container_width=True)
+        resumen_modalidad['ticket_promedio'] = np.where(
+            resumen_modalidad['tickets'] > 0,
+            resumen_modalidad['ventas'] / resumen_modalidad['tickets'],
+            0
+        )
+        total_modalidad = resumen_modalidad['ventas'].sum()
+        resumen_modalidad['participacion'] = np.where(
+            total_modalidad > 0,
+            (resumen_modalidad['ventas'] / total_modalidad * 100).round(1),
+            0
+        )
 
-        col1, col2, col3 = st.columns(3)
+        tabla_modalidad = resumen_modalidad.copy()
+        tabla_modalidad['ventas'] = tabla_modalidad['ventas'].apply(lambda x: formatear_moneda_argentina(x, 0))
+        tabla_modalidad['margen'] = tabla_modalidad['margen'].apply(lambda x: formatear_moneda_argentina(x, 0))
+        tabla_modalidad['ticket_promedio'] = tabla_modalidad['ticket_promedio'].apply(lambda x: formatear_moneda_argentina(x, 0))
+        tabla_modalidad['participacion'] = tabla_modalidad['participacion'].astype(str) + '%'
+        tabla_modalidad.columns = ['Modalidad', 'Ventas', 'Tickets', 'Margen', 'Ticket promedio', '% de ventas']
+        st.markdown("### Comparativo Efectivo vs Digitales")
+        st.dataframe(tabla_modalidad, use_container_width=True, hide_index=True)
 
-        def obtener_participacion(nombre: str) -> float:
-            fila = pago_summary[pago_summary['medio_normalizado'] == nombre]
-            return float(fila['participacion'].iloc[0]) if not fila.empty else 0.0
+        efectivo_part = float(pago_summary.loc[pago_summary['medio'] == 'Efectivo', 'participacion'].fillna(0).iloc[0])
+        debito_part = float(pago_summary.loc[pago_summary['medio'] == 'Debito', 'participacion'].fillna(0).iloc[0])
+        credito_part = float(pago_summary.loc[pago_summary['medio'] == 'Credito', 'participacion'].fillna(0).iloc[0])
+        billetera_part = float(pago_summary.loc[pago_summary['medio'] == 'Billetera', 'participacion'].fillna(0).iloc[0])
+        digital_part = float(resumen_modalidad.loc[resumen_modalidad['modalidad'] == 'Digitales', 'participacion'].fillna(0).iloc[0])
 
-        efectivo_pct = obtener_participacion('Efectivo')
-        credito_pct = obtener_participacion('Tarjeta de crédito')
-        billetera_pct = obtener_participacion('Billetera virtual')
+        if tickets_modular is not None and not tickets_modular.empty:
+            pagos_ticket = tickets_modular.copy()
+            pagos_ticket['medio_normalizado'] = pagos_ticket['tipo_medio_pago'].apply(normalizar_medio)
 
-        with col1:
-            st.metric("% Efectivo", f"{formatear_numero_argentino(efectivo_pct, 1)}%")
-        with col2:
-            st.metric("% Tarjeta de crédito", f"{formatear_numero_argentino(credito_pct, 1)}%")
-        with col3:
-            st.metric("% Billetera virtual", f"{formatear_numero_argentino(billetera_pct, 1)}%")
+            fig_hist_monto = px.histogram(
+                pagos_ticket,
+                x='ventas_totales',
+                color='medio_normalizado',
+                nbins=50,
+                labels={'ventas_totales': 'Venta por ticket ($)', 'medio_normalizado': 'Metodo de pago'},
+                title="Distribucion de venta por ticket segun metodo"
+            )
+            fig_hist_monto.update_layout(height=420, barmode='overlay', hovermode='x unified')
+            st.plotly_chart(fig_hist_monto, use_container_width=True)
 
-    st.markdown("""
-    <div style='background: #fff3e0; border-left: 6px solid #ff9800; padding: 20px; margin: 20px 0; border-radius: 10px;'>
-        <h4 style='color: #e65100; margin: 0;'>🔍 Insight: Oportunidad en Medios de Pago</h4>
-        <p style='margin: 10px 0 0 0;'>
-            <b>Estrategia #2 (variante):</b> Negociar con bancos <b>descuentos co-financiados</b>
-            en días específicos (ej: "Martes de descuento con Banco X").<br><br>
-            En 2024-2025, <b>alianzas súper-banco-billetera</b> fueron clave para mantener volumen
-            sin sacrificar margen. Benchmark: descuentos bancarios pueden <b>aumentar ventas +15%</b>
-            en días promocionales sin impactar margen del negocio.
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
+            fig_hist_margen = px.histogram(
+                pagos_ticket,
+                x='margen_total',
+                color='medio_normalizado',
+                nbins=50,
+                labels={'margen_total': 'Margen por ticket ($)', 'medio_normalizado': 'Metodo de pago'},
+                title="Distribucion de margen por ticket segun metodo"
+            )
+            fig_hist_margen.update_layout(height=420, barmode='overlay', hovermode='x unified')
+            st.plotly_chart(fig_hist_margen, use_container_width=True)
+        else:
+            st.info("No hay tickets individuales para graficar distribuciones por metodo de pago.")
 
+        st.markdown(
+            f'''
+            <div style='background: #e1f5fe; border-left: 6px solid #039be5; padding: 18px; margin: 16px 0; border-radius: 10px;'>
+                <h4 style='color: #0277bd; margin: 0;'>Lecturas clave</h4>
+                <p style='margin: 8px 0 0 0;'>
+                    Efectivo representa {efectivo_part:.1f}% de las ventas. Los medios digitales abarcan {digital_part:.1f}% (Debito {debito_part:.1f}%, Credito {credito_part:.1f}%, Billetera {billetera_part:.1f}%),
+                    por lo que las promos bancarias y billeteras explican buena parte del mix.
+                </p>
+            </div>
+            ''',
+            unsafe_allow_html=True
+        )
+# =============================================================================
+# TAB 6: ESTRATEGIAS PRIORIZADAS
+# =============================================================================
 # =============================================================================
 # TAB 6: ESTRATEGIAS PRIORIZADAS
 # =============================================================================
@@ -1325,17 +1614,16 @@ with tabs[5]:
 
     <div class="estrategia impacto-alto">
         <span class="tag tag-alto">IMPACTO ALTO</span>
-        <h4>📦 Estrategia #1: Promos Inteligentes - Combos Focalizados</h4>
-        <p><b>Dato que respalda:</b> Combo Fernet + Coca tiene Lift 13.1x (78% de confianza)</p>
+        <h4>📦 Estrategia #1: Pack Despensa Mensual - Almacén & Limpieza</h4>
+        <p><b>Dato que respalda:</b> Aceite Grisasol, Azúcar Ledesma, Arroz y Campanita están en Top 30 productos más vendidos. Categoría Limpieza genera $665M/año (3ra categoría por ventas)</p>
         <p><b>Acción:</b></p>
         <ul>
-            <li>Crear combo físico en góndola: Fernet + Coca juntos con cartel</li>
-            <li>Precio combo: 10% descuento vs suma individual</li>
-            <li>Implementar en fin de semana (sábados = tickets grandes)</li>
+            <li>Crear "PACK DESPENSA MENSUAL": Aceite Grisasol 1.5L + Azúcar Ledesma 1kg + Arroz Tío Carlos 1kg + Campanita Papel Higiénico</li>
+            <li>Precio pack: 12% descuento vs compra individual</li>
+            <li>Display destacado entrada del local con cartel "TODO LO QUE NECESITAS DEL MES"</li>
+            <li>Promoción primera quincena de cada mes (cuando cobra la gente)</li>
         </ul>
-        <p><b>Meta:</b> Aumentar ticket promedio +10% en fines de semana</p>
-        <p><b>Inversión:</b> $0 (descuento absorbido por margen actual)</p>
-        <p><b>ROI esperado:</b> +${formatear_numero_argentino(150000)}/mes en ventas incrementales</p>
+        <p><b>Meta:</b> Generar compra "ancla" mensual recurrente, aumentar ticket promedio en productos básicos</p>
     </div>
 
     <div class="estrategia impacto-alto">
@@ -1363,8 +1651,7 @@ with tabs[5]:
             <li>Productos impulso (snacks, bebidas) en puntos de espera</li>
         </ul>
         <p><b>Meta:</b> UPT +0.5 ítems (de 10.07 a 10.57)</p>
-        <p><b>Inversión:</b> ${formatear_numero_argentino(50000)} (reposicionamiento, cartelería)</p>
-        <p><b>Ticket esperado:</b> +3-5%</p>
+        <p><b>Inversión:</b> $50.000 (reposicionamiento, cartelería)</p>
     </div>
 
     <div class="estrategia impacto-medio">
@@ -1378,7 +1665,6 @@ with tabs[5]:
             <li>Productos sugeridos: vinos, snacks premium, panadería</li>
         </ul>
         <p><b>Meta:</b> 10% de clientes agregan 1 ítem sugerido</p>
-        <p><b>Ticket esperado:</b> +2-3%</p>
     </div>
 
     <div class="estrategia impacto-medio">
@@ -1392,7 +1678,6 @@ with tabs[5]:
             <li>Ofertas personalizadas según historial de compra</li>
         </ul>
         <p><b>Meta:</b> 30% de clientes registrados en 6 meses</p>
-        <p><b>Retención esperada:</b> +20 pp (de 50% a 70%)</p>
         <p><b>Ticket clientes fieles:</b> +10% vs no registrados</p>
     </div>
 
@@ -1410,9 +1695,16 @@ with tabs[5]:
     </div>
     """
 
+    q1_val = 20.0
+    q3_val = 35.0
+    if "q1_rent" in locals() and isinstance(q1_rent, (int, float, np.floating)):
+        q1_val = float(q1_rent)
+    if "q3_rent" in locals() and isinstance(q3_rent, (int, float, np.floating)):
+        q3_val = float(q3_rent)
+
     estrategias_html = estrategias_html.replace(
         "(Q1=20%, Q3=35%)",
-        f"(Q1={q1:.1f}%, Q3={q3:.1f}%)"
+        f"(Q1={q1_val:.1f}%, Q3={q3_val:.1f}%)"
     )
 
     st.markdown(estrategias_html, unsafe_allow_html=True)
