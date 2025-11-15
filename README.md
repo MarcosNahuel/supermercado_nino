@@ -6,6 +6,8 @@
 
 Dashboard interactivo para analizar 3M+ transacciones de Supermercado NINO, con KPIs ejecutivos, Pareto, Market Basket y segmentación de tickets.
 
+> 📖 **Nueva estructura:** Ver [`ESTRUCTURA_REPOSITORIO.md`](ESTRUCTURA_REPOSITORIO.md) para navegación completa del repositorio.
+
 ## Características clave
 
 - **KPIs ejecutivos** con métricas globales y tendencias mensuales.
@@ -42,18 +44,33 @@ python -m venv .venv
 
 pip install -r requirements.txt
 
-# Regenerar el paquete Parquet (pipeline oficial)
-python pipeline_estrategias.py
-
-# Entrenar modelos ML y generar resultados de ROI
-python scripts/train_ml_models.py
-
+# Opción 1: Iniciar dashboard directamente
 streamlit run dashboard_cientifico.py
+
+# Opción 2: Usar script de inicio (Windows)
+iniciar_dashboard.bat
 ```
 
-El dashboard lee los Parquet versionados en `data/app_dataset/` y los resultados ML en `data/ml_results/`. Si necesitas recrearlos, ejecuta `pipeline_estrategias.py` con los CSV de `data/raw/` y luego `scripts/train_ml_models.py`. Las salidas y datasets heredados se archivaron en `legacy/` para referencia.
+### 🔄 Actualizar datos después de modificar el CSV central
 
-> Necesitas revivir la version con Supabase? Revisa `legacy/apps/` y las notas guardadas en `legacy/`.
+Cuando actualices `data/raw/SERIE_COMPROBANTES_COMPLETOS.csv` (ej: cambios en medios de pago), ejecuta:
+
+```bash
+# Opción 1: Script Python automático (recomendado)
+python actualizar_metricas.py
+
+# Opción 2: Script batch Windows (doble clic)
+actualizar_metricas.bat
+```
+
+Este script ejecutará automáticamente:
+1. Pipeline de procesamiento de datos
+2. Copia de archivos a app_dataset
+3. Entrenamiento de modelos ML
+
+Ver documentación completa en [`ACTUALIZACION_AUTOMATICA.md`](ACTUALIZACION_AUTOMATICA.md)
+
+> Las versiones anteriores y archivos legacy se archivaron en `RESTO/` para referencia.
 
 ## Módulo ML ROI
 
@@ -72,26 +89,38 @@ Los resultados se guardan en `data/ml_results/` y se visualizan en la pestaña *
 
 ```
 supermercado_nino/
-|- dashboard_cientifico.py        # Dashboard científico principal
-|- main_pipeline.py               # Orquestador modular ETL + KPIs
-|- pipeline_estrategias.py        # Pipeline histórico raw -> Parquet
-|- scripts/
-|  \- train_ml_models.py          # Entrena simuladores ML y exporta ROI
-|- src/
-|  |- data_prep/                  # Limpieza y normalización de tickets
-|  |- features/                   # KPIs, clustering, market basket, pronósticos
-|  |- ml_models/                  # Modelos ML (combos, marca propia, etc.)
-|  \- utils/                      # Utilidades de carga y helpers generales
-|- data/
-|  |- raw/                        # CSV originales (gitignored)
-|  |- processed/                  # Parquet enriquecidos por el pipeline
-|  |- predictivos/                # Pronósticos semanales (streamlit tab)
-|  |- ml_results/                 # Resultados de modelos ML (ROI simulador)
-|  \- app_dataset/                # Dataset ligero que consume el dashboard
-|- docs/                          # Documentación ejecutiva y técnica
-|- legacy/                        # Versiones anteriores y artefactos archivados
-|- requirements.txt
-\- README.md
+├── dashboard_cientifico.py           # 🎯 Dashboard científico principal
+├── actualizar_metricas.py            # 🔄 Script de actualización automática
+├── actualizar_metricas.bat           # 🪟 Script Windows (doble clic)
+├── iniciar_dashboard.bat             # 🚀 Iniciar dashboard (Windows)
+├── ACTUALIZACION_AUTOMATICA.md       # 📘 Documentación de actualización
+├── README.md                         # 📖 Documentación principal
+├── requirements.txt                  # 📦 Dependencias Python
+│
+├── src/                              # 💻 Código fuente modular
+│   ├── data_prep/                    #    - Limpieza y normalización
+│   ├── features/                     #    - KPIs, clustering, market basket
+│   ├── ml_models/                    #    - Modelos ML y simuladores ROI
+│   └── utils/                        #    - Utilidades y helpers
+│
+├── scripts/                          # 🛠️ Scripts de procesamiento
+│   ├── pipeline/                     #    - Pipeline ETL principal
+│   │   └── main_pipeline.py          #      (scripts/pipeline/main_pipeline.py)
+│   └── train_ml_models.py            #    - Entrenamiento de modelos ML
+│
+├── data/                             # 📊 Datos y resultados
+│   ├── raw/                          #    - CSV originales (gitignored)
+│   ├── processed/                    #    - Parquet procesados por pipeline
+│   ├── predictivos/                  #    - Pronósticos semanales
+│   ├── ml_results/                   #    - Resultados de simuladores ML
+│   └── app_dataset/                  #    - Dataset que consume el dashboard
+│
+└── RESTO/                            # 🗃️ Archivos archivados
+    ├── app/                          #    - Dashboard versión anterior
+    ├── final/                        #    - Versión pre-reorganización
+    ├── legacy/                       #    - Código y pipelines legacy
+    ├── docs/                         #    - Documentación histórica
+    └── archivos_misc/                #    - Scripts y archivos diversos
 ```
 
 ## Tecnologías
@@ -134,10 +163,12 @@ Ver documentación completa en `src/features/predictivos_ventas_simple.py`
 
 ## Documentación relacionada
 
-- `docs/PIPELINE_ESTRATEGIAS.md` - blueprint del pipeline unificado y sus datasets Parquet.
-- `docs/VALIDACION_FINAL.txt` - checklist de verificacion de KPIs y consistencia de datos.
-- `docs/FASE1_OUTPUT.log` - bitacora historica de la fase 1.
-- `legacy/` - dashboards, scripts CSV y dataset demo archivados para referencia.
+- [`ACTUALIZACION_AUTOMATICA.md`](ACTUALIZACION_AUTOMATICA.md) - Guía completa de actualización automática de métricas
+- [`RESTO/docs/`](RESTO/docs/) - Documentación histórica y técnica archivada
+  - `PIPELINE_ESTRATEGIAS.md` - Blueprint del pipeline unificado
+  - `VALIDACION_FINAL.txt` - Checklist de verificación de KPIs
+  - `FASE1_OUTPUT.log` - Bitácora histórica de la fase 1
+- [`RESTO/legacy/`](RESTO/legacy/) - Dashboards, scripts CSV y datasets archivados
 
 
 ## Contacto y licencia

@@ -1,0 +1,3 @@
+TOTAL VENTAS CORRECTO: $7,286,369,204.62
+Total registros sumados: 2,632,206
+Conversión de formato europeo (coma decimal) aplicada

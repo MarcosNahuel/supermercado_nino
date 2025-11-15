@@ -1,0 +1,112 @@
+================================================================================
+VERIFICACIÓN EXHAUSTIVA DE MÉTRICAS - SUPERMERCADO NINO
+================================================================================
+
+1. CARGANDO DATOS...
+✓ Datos cargados correctamente
+
+================================================================================
+2. MÉTRICAS GENERALES DEL NEGOCIO
+================================================================================
+Periodo: 01/10/2024 - 10/10/2025
+Duración: 374 días (~12.5 meses)
+
+Ventas totales:    $8.216.314.170,99
+Margen bruto:      $2.285.459.564,25 (27.82%)
+Tickets:           306,011
+SKUs únicos:       10,372
+
+Ticket promedio:   $26.849,73
+Items por ticket:  10.07
+
+================================================================================
+3. COMPARACIÓN CON INFORME EJECUTIVO
+================================================================================
+
+📊 VENTAS TOTALES:
+   Datos:    $8.216.314.170,99
+   Informe:  $8.216.314.170,99
+   Diferencia: $0,00 (+0.0000%)
+   ✓ COINCIDE
+
+📊 MARGEN BRUTO %:
+   Datos:    27.82%
+   Informe:  27.82%
+   Diferencia: -0.00 puntos porcentuales
+   ✓ COINCIDE
+
+📊 TICKETS:
+   Datos:    306,011
+   Informe:  306,011
+   Diferencia: 0
+   ✓ COINCIDE
+
+📊 TICKET PROMEDIO:
+   Datos:    $26.849,73
+   Informe:  $26.849,73
+   Diferencia: $0,00
+   ✓ COINCIDE
+
+📊 ITEMS POR TICKET:
+   Datos:    10.07
+   Informe:  10.07
+   Diferencia: -0.00
+   ✓ COINCIDE
+
+================================================================================
+4. TOP 10 CATEGORÍAS (PARETO)
+================================================================================
+
+Top 10 categorías representan 82.86% de ventas totales
+
+Categoría                                  Ventas    % Total   Margen %
+--------------------------------------------------------------------------------
+CARNICERIA AL 10,5 %            $1.577.780.706,54     19.20%     18.00%
+ALMACEN                         $1.510.394.899,45     18.38%     28.00%
+LACTEOS                           $707.694.286,07      8.61%     30.00%
+LIMPIEZA                          $665.330.166,00      8.10%     28.00%
+BEBIDAS                           $548.836.021,60      6.68%     25.00%
+PERFUMERIA                        $531.208.478,80      6.47%     30.00%
+FIAMBRERIA                        $356.809.537,23      4.34%     45.00%
+POLLO                             $330.709.008,98      4.03%     20.00%
+PANAD.ELAB.PROPIA                 $299.325.627,65      3.64%     30.00%
+ART.DE 1RA NECESIDAD              $280.173.146,00      3.41%     28.00%
+
+================================================================================
+5. MEDIOS DE PAGO
+================================================================================
+
+Medio de Pago                         Ventas    % Total    Tickets     Ticket Prom
+------------------------------------------------------------------------------------------
+TARJETA DE CRÉDITO         $4.071.319.791,66     49.55%    119,203      $36.438,53
+EFECTIVO                   $2.570.679.581,40     31.29%    127,211      $20.208,00
+BILLETERA VITUAL           $1.574.314.797,93     19.16%     59,597      $25.929,98
+
+⚠ NOTA: Informe menciona Crédito 49.6%, Efectivo 31.3%, Billeteras 19.2%
+   Los datos muestran distribución diferente. Verificar con datos raw.
+
+================================================================================
+6. SEGMENTACIÓN DE TICKETS (TRIBUS)
+================================================================================
+Traceback (most recent call last):
+  File "C:\Users\malbornoz\AppData\Local\Programs\Python\Python312\Lib\site-packages\pandas\core\indexes\base.py", line 3805, in get_loc
+    return self._engine.get_loc(casted_key)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "index.pyx", line 167, in pandas._libs.index.IndexEngine.get_loc
+  File "index.pyx", line 196, in pandas._libs.index.IndexEngine.get_loc
+  File "pandas\\_libs\\hashtable_class_helper.pxi", line 7081, in pandas._libs.hashtable.PyObjectHashTable.get_item
+  File "pandas\\_libs\\hashtable_class_helper.pxi", line 7089, in pandas._libs.hashtable.PyObjectHashTable.get_item
+KeyError: 'ventas_totales'
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "D:\OneDrive\GitHub\supermercado_nino definitivo claude\verificacion_completa.py", line 172, in <module>
+    tickets_df['ventas_totales'],
+    ~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+  File "C:\Users\malbornoz\AppData\Local\Programs\Python\Python312\Lib\site-packages\pandas\core\frame.py", line 4102, in __getitem__
+    indexer = self.columns.get_loc(key)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\malbornoz\AppData\Local\Programs\Python\Python312\Lib\site-packages\pandas\core\indexes\base.py", line 3812, in get_loc
+    raise KeyError(key) from err
+KeyError: 'ventas_totales'

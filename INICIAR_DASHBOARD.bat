@@ -1,44 +1,26 @@
 @echo off
-echo ========================================
-echo Dashboard Supermercado NINO
-echo Instalacion e Inicio Automatico
-echo ========================================
+REM ============================================================================
+REM Iniciar Dashboard Científico - Supermercado NINO
+REM ============================================================================
+
+echo.
+echo ============================================================================
+echo   DASHBOARD CIENTIFICO - SUPERMERCADO NINO
+echo ============================================================================
 echo.
 
-REM Navegar a la carpeta del proyecto
-cd /d "%~dp0"
-
-echo [1/3] Verificando instalacion de Python...
-python --version
-if %errorlevel% neq 0 (
-    echo ERROR: Python no esta instalado
-    echo Por favor instala Python 3.8+ desde python.org
-    pause
-    exit /b 1
+REM Activar entorno virtual si existe
+if exist ".venv\Scripts\activate.bat" (
+    echo [INFO] Activando entorno virtual...
+    call .venv\Scripts\activate.bat
+) else (
+    echo [ADVERTENCIA] No se encontro entorno virtual en .venv
+    echo [INFO] Usando Python del sistema...
 )
-echo OK - Python instalado
-echo.
 
-echo [2/3] Instalando dependencias...
-pip install -r requirements.txt
-if %errorlevel% neq 0 (
-    echo ERROR: No se pudieron instalar las dependencias
-    pause
-    exit /b 1
-)
-echo OK - Dependencias instaladas
+REM Iniciar Streamlit
+echo [INFO] Iniciando dashboard en http://localhost:8501
 echo.
-
-echo [3/3] Iniciando Dashboard Streamlit...
-echo.
-echo ========================================
-echo Dashboard disponible en:
-echo http://localhost:8501
-echo ========================================
-echo.
-echo Presiona Ctrl+C para detener el servidor
-echo.
-
 streamlit run dashboard_cientifico.py
 
 pause

@@ -144,6 +144,9 @@
     "total_ventas_convertibles": 1661499816.8849998,
     "avg_elasticity": -1.33,
     "avg_volume_lift": 0.10640000000000001,
+    "conversion_rate": 0.25,
+    "margin_gain_pp": 6.0,
+    "price_reduction_pct": 0.08,
     "incremental_margin_annual": 101301854.48095575,
     "incremental_margin_monthly": 8441821.206746312,
     "investment": 500000.0,
@@ -247,6 +250,7 @@
     "num_opportunities": 10,
     "top_pairs_implemented": 10,
     "avg_confidence_lift": 1.5,
+    "incremental_transactions_monthly": 1128.6300000000003,
     "incremental_margin_monthly": 1011252.4800000002,
     "investment": 80000.0,
     "roi_percentage": 15168.787200000002,
@@ -254,7 +258,7 @@
     "detailed_opportunities": [
       {
         "antecedent": "MORCILLA VALENCIANA",
-        "consequent": "COSTILLA ARQUEADA, CHORIZO PURO CERDO",
+        "consequent": "CHORIZO PURO CERDO, COSTILLA ARQUEADA",
         "current_confidence": 0.1693290734824281,
         "target_confidence": 0.25399361022364214,
         "lift": 16.157354339926346,
@@ -264,7 +268,7 @@
       },
       {
         "antecedent": "CHORIZO PURO CERDO",
-        "consequent": "MORCILLA VALENCIANA, COSTILLA ARQUEADA",
+        "consequent": "COSTILLA ARQUEADA, MORCILLA VALENCIANA",
         "current_confidence": 0.15451895043731778,
         "target_confidence": 0.23177842565597667,
         "lift": 12.919644685394463,
@@ -274,7 +278,7 @@
       },
       {
         "antecedent": "COSTILLA ARQUEADA",
-        "consequent": "MORCILLA VALENCIANA, CHORIZO PURO CERDO",
+        "consequent": "CHORIZO PURO CERDO, MORCILLA VALENCIANA",
         "current_confidence": 0.16358024691358025,
         "target_confidence": 0.24537037037037038,
         "lift": 9.76015793040455,

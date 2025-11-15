@@ -1,0 +1,21 @@
+================================================================================
+NÚMEROS CORRECTOS VALIDADOS - SUPERMERCADO NINO
+================================================================================
+
+TOTAL VENTAS:         $5,616,345,970.00
+TOTAL TICKETS:              268,801
+TICKET PROMEDIO:       $20,894.07
+TICKET MEDIANO:        $11,892.00
+ITEMS PROMEDIO/TICKET:       8.58
+
+PERÍODO: 01/10/2024 - 30/09/2025 (365 días)
+REGISTROS ANALIZADOS: 2,305,235 items
+
+================================================================================
+
+CORRECCIONES APLICADAS:
+- El conteo de tickets anterior (273,700) estaba inflado por duplicación en merge
+- Números validados usando método de agrupación directa por Comprobante
+- Ambos métodos de cálculo (suma directa vs agrupación) coinciden perfectamente
+
+VALIDADO: 10/10/2025

@@ -1,0 +1,4 @@
+TOTAL VENTAS: $7,286,369,204.62
+Total registros: 2,632,206
+Registros válidos: 2,632,206
+Método: pd.read_csv con decimal=','
