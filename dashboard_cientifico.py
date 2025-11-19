@@ -2477,22 +2477,23 @@ with tabs[6]:
             Tres lecturas clave: foco en surtidos rentables, promociones financiadas y experiencia en tienda como anzuelo diario.
         </p>
     </div>
+    
     <div style='background: #e3f2fd; border-left: 6px solid #1976d2; padding: 26px; border-radius: 12px;'>
         <h3 style='margin: 0 0 14px 0; color: #0d47a1;'>Transformando Datos en Estrategias: El Camino de NINO hacia el Crecimiento</h3>
         <p style='margin: 0 0 12px 0;'>
             Con el termometro propio en mano podemos adaptar lo que funciona afuera. Cada insight del dataset activa una palanca concreta.
         </p>
         <ul style='margin: 0; padding-left: 22px; line-height: 1.5;'>
-            <li><b>Plan de finde largo:</b> Los datos muestran que los {dia_pico_nombre} concentran el mayor gasto (ventas de {ventas_dia_pico}). Esto es ideal para implementar **combos financiados y ofertas personalizadas**, aprovechando nuestros **productos complementarios identificados** (según `combos_recomendados.parquet`) y las preferencias de surtido local de NINO.</li>
-            <li><b>Curar el mix core:</b> Nuestras categorías líderes, como {categorias_texto}, son la base de nuestro surtido express. Para defender el margen, la estrategia es clara: **impulsar segundas marcas estratégicas** en estas categorías (identificadas por el **análisis de Pareto**) e implementar **cross-merchandising efectivo** en el punto de venta, basándonos en los **patrones de compra de NINO**.</li>
-            <li><b>Fidelizar bolsillo digital:</b> El análisis de {medios_texto} confirma una alta adopción de medios de pago bancarizados. Esta es una oportunidad para **diseñar promociones ancla segmentadas** por tipo de medio de pago, estableciendo **acuerdos estratégicos con entidades financieras** que optimicen el beneficio para NINO y el cliente, en lugar de replicar promociones genéricas.</li>
-            <li><b>Pizarra de seguimiento:</b> Con una rentabilidad global del {rentabilidad_global_pct}% y un margen de {margen_ticket} por ticket, contamos con **umbrales claros de desempeño**. Cualquier nueva estrategia, desde la optimización de surtido hasta la segmentación de clientes, debe ser **medida rigurosamente** contra estos y otros indicadores clave del dashboard (como la rentabilidad por categoría o por segmento de cliente) para asegurar su impacto positivo.</li>
+            <li><b>Plan de finde largo:</b> Los datos muestran que los {dia_pico_nombre} concentran el mayor gasto (ventas de {ventas_dia_pico}). Esto es ideal para implementar **combos financiados y ofertas personalizadas**, aprovechando nuestros **productos complementarios identificados** (segun `combos_recomendados.parquet`) y las preferencias de surtido local de NINO.</li>
+            <li><b>Curar el mix core:</b> Nuestras categorias lideres, como {categorias_texto}, son la base de nuestro surtido express. Para defender el margen, la estrategia es clara: **impulsar segundas marcas estrategicas** en estas categorias (identificadas por el **analisis de Pareto**) e implementar **cross-merchandising efectivo** en el punto de venta, basandonos en los **patrones de compra de NINO**.</li>
+            <li><b>Fidelizar bolsillo digital:</b> El analisis de {medios_texto} confirma una alta adopcion de medios de pago bancarizados. Esta es una oportunidad para **disenar promociones ancla segmentadas** por tipo de medio de pago, estableciendo **acuerdos estrategicos con entidades financieras** que optimicen el beneficio para NINO y el cliente, en lugar de replicar promociones genericas.</li>
+            <li><b>Pizarra de seguimiento:</b> Con una rentabilidad global del {rentabilidad_global_pct}% y un margen de {margen_ticket} por ticket, contamos con **umbrales claros de desempeno**. Cualquier nueva estrategia, desde la optimizacion de surtido hasta la segmentacion de clientes, debe ser **medida rigurosamente** contra estos y otros indicadores clave del dashboard (como la rentabilidad por categoria o por segmento de cliente) para asegurar su impacto positivo.</li>
         </ul>
         <p style='margin: 14px 0 0 0;'>
-            Así, el insight deja de ser un PDF y se convierte en agenda semanal: decidir, ejecutar y medir contra los mismos indicadores que hoy relatamos.
+            Asi, el insight deja de ser un PDF y se convierte en agenda semanal: decidir, ejecutar y medir contra los mismos indicadores que hoy relatamos.
         </p>
     </div>
-    """
+    
 
     st.markdown(informe_html, unsafe_allow_html=True)
 
