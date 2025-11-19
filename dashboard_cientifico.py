@@ -1912,7 +1912,7 @@ with tabs[3]:
                     overlaying='y',
                     side='right',
                     range=[0, 105],
-                    ticksuffix="%"
+                    ticktemplate='%{value}%'
                 ),
                 legend=dict(
                     orientation='h',
