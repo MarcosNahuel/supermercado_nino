@@ -1848,16 +1848,20 @@ with tabs[3]:
         # Asegurar que no hay NaN en los resultados
         hist_monto = hist_monto.dropna()
 
-        total_tickets = hist_monto['tickets'].sum()
-        if total_tickets > 0:
-            hist_monto['pct_tickets'] = (hist_monto['tickets'] / total_tickets * 100).round(1)
-            hist_monto['pct_acumulado'] = hist_monto['pct_tickets'].cumsum()
+        # Validar que hay datos suficientes para graficar
+        if hist_monto.empty or len(hist_monto) == 0:
+            st.info("No hay suficientes datos para mostrar la distribución de ventas por ticket.")
         else:
-            hist_monto['pct_tickets'] = 0
-            hist_monto['pct_acumulado'] = 0
+            total_tickets = hist_monto['tickets'].sum()
+            if total_tickets > 0:
+                hist_monto['pct_tickets'] = (hist_monto['tickets'] / total_tickets * 100).round(1)
+                hist_monto['pct_acumulado'] = hist_monto['pct_tickets'].cumsum()
+            else:
+                hist_monto['pct_tickets'] = 0
+                hist_monto['pct_acumulado'] = 0
 
-        # Crear gráfico mejorado con subplots
-        fig_monto = make_subplots(specs=[[{"secondary_y": True}]])
+            # Crear gráfico mejorado con subplots
+            fig_monto = make_subplots(specs=[[{"secondary_y": True}]])
 
         fig_monto.add_trace(
             go.Bar(
