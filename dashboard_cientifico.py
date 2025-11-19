@@ -1069,6 +1069,8 @@ with tabs[0]:
             )
             fig_media_dia.update_layout(
                 height=360,
+                xaxis_title='Dia de la semana',
+                yaxis_title='Ticket promedio ($)',
                 yaxis_tickprefix='$',
                 yaxis_tickformat=',.0f',
                 margin=dict(t=60, r=20, l=60, b=40)
@@ -1087,7 +1089,9 @@ with tabs[0]:
                 )
                 fig_quincena.update_layout(
                     height=360,
+                    xaxis_title='Periodo',
                     xaxis_tickangle=-35,
+                    yaxis_title='Tickets unicos',
                     margin=dict(t=60, r=20, l=60, b=40)
                 )
                 fig_quincena = configurar_grafico_rendimiento(fig_quincena)
@@ -1359,7 +1363,7 @@ with tabs[1]:
             fig_categoria.update_layout(
                 height=520,
                 margin=dict(t=70, r=40, l=40, b=120),
-                xaxis=dict(title='Codigo de producto', tickangle=-50),
+                xaxis=dict(title='Descripción del producto', tickangle=-50),
                 yaxis=dict(title='Ventas ($)'),
                 yaxis2=dict(title='% acumulado', overlaying='y', side='right', range=[0, 105]),
                 hovermode='x unified',
@@ -1603,8 +1607,8 @@ with tabs[2]:
                 color_continuous_scale='Viridis'
             )
             fig_scatter.update_layout(height=480, margin=dict(t=60, r=20, l=20, b=40))
-            fig_scatter.update_xaxes(tickformat='.1%')
-            fig_scatter.update_yaxes(tickformat='.1%')
+            fig_scatter.update_xaxes(tickformat='.1%', title='Soporte (%)')
+            fig_scatter.update_yaxes(tickformat='.1%', title='Confianza (%)')
             render_plotly(fig_scatter)
 
             # Combos sugeridos después del gráfico
@@ -1825,7 +1829,8 @@ with tabs[3]:
                 marker_color='#3949ab',
                 name='Tickets',
                 text=hist_monto['tickets'],
-                textposition='outside'
+                textposition='outside',
+                texttemplate='%{text:,.0f}'
             )
         )
         fig_monto.add_trace(
@@ -1849,13 +1854,12 @@ with tabs[3]:
         )
         fig_monto.update_layout(
             height=550,
-            margin=dict(t=70, r=60, l=60, b=200),
+            margin=dict(t=70, r=60, l=60, b=150),
             xaxis=dict(
                 title='Rango de venta por ticket',
-                tickangle=-90,
+                tickangle=-45,
                 tickfont=dict(size=10),
-                ticktext=[str(cat) for cat in hist_monto['rango_ticket']],
-                tickvals=list(range(len(hist_monto['rango_ticket'])))
+                type='category'
             ),
             yaxis=dict(
                 title='Cantidad de tickets',
@@ -1919,7 +1923,7 @@ with tabs[3]:
             color_discrete_sequence=['#1565c0', '#1e88e5', '#42a5f5', '#90caf9'],
             title="Distribucion de tickets por segmento"
         )
-        fig_segmento.update_layout(height=360, showlegend=False, yaxis_title='Cantidad de tickets')
+        fig_segmento.update_layout(height=360, showlegend=False, xaxis_title='Segmento', yaxis_title='Cantidad de tickets')
         render_plotly(fig_segmento)
 
         tabla_segmentos = segmentos.copy()
@@ -1953,6 +1957,8 @@ with tabs[3]:
             title="Distribucion de margen por segmento"
         )
         fig_margen_segmentos.update_layout(height=520, showlegend=False, margin=dict(t=70, r=20, l=20, b=60))
+        fig_margen_segmentos.update_xaxes(title_text='Margen por ticket ($)')
+        fig_margen_segmentos.update_yaxes(title_text='Cantidad')
         render_plotly(fig_margen_segmentos)
 
         q1_monto_txt = formatear_moneda_argentina(q1_monto, 0)
@@ -2048,7 +2054,8 @@ with tabs[4]:
             title="Ventas acumuladas por metodo de pago",
             text=pago_summary['participacion'].astype(str) + '%'
         )
-        fig_pago.update_layout(height=420, showlegend=False, yaxis_tickprefix='$', yaxis_tickformat=',.0f')
+        fig_pago.update_layout(height=420, showlegend=False, xaxis_title='Metodo de pago', yaxis_title='Ventas ($)', yaxis_tickprefix='$', yaxis_tickformat=',.0f')
+        fig_pago.update_traces(textposition='auto')
         render_plotly(fig_pago)
 
         cols = st.columns(len(categorias_pago))
@@ -2110,7 +2117,7 @@ with tabs[4]:
                 labels={'ventas_totales': 'Venta por ticket ($)', 'medio_normalizado': 'Metodo de pago'},
                 title="Distribucion de venta por ticket segun metodo"
             )
-            fig_hist_monto.update_layout(height=420, barmode='overlay', hovermode='x unified')
+            fig_hist_monto.update_layout(height=420, barmode='overlay', hovermode='x unified', xaxis_title='Venta por ticket ($)', yaxis_title='Cantidad')
             render_plotly(fig_hist_monto)
 
             fig_hist_margen = px.histogram(
@@ -2121,7 +2128,7 @@ with tabs[4]:
                 labels={'margen_total': 'Margen por ticket ($)', 'medio_normalizado': 'Metodo de pago'},
                 title="Distribucion de margen por ticket segun metodo"
             )
-            fig_hist_margen.update_layout(height=420, barmode='overlay', hovermode='x unified')
+            fig_hist_margen.update_layout(height=420, barmode='overlay', hovermode='x unified', xaxis_title='Margen por ticket ($)', yaxis_title='Cantidad')
             render_plotly(fig_hist_margen)
         else:
             st.info("No hay tickets individuales para graficar distribuciones por metodo de pago.")
