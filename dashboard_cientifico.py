@@ -1860,10 +1860,8 @@ with tabs[3]:
                 hist_monto['pct_tickets'] = 0
                 hist_monto['pct_acumulado'] = 0
 
-            # Crear gráfico mejorado con subplots - compatible con todas las versiones de Plotly
-            from plotly.subplots import make_subplots
-
-            fig_monto = make_subplots(specs=[[{"secondary_y": True}]])
+            # Crear gráfico con doble eje Y - versión compatible
+            fig_monto = go.Figure()
 
             # Agregar barras (eje Y primario)
             fig_monto.add_trace(
@@ -1875,8 +1873,7 @@ with tabs[3]:
                     text=[f"{int(v):,}" for v in hist_monto['tickets']],
                     textposition='outside',
                     textfont=dict(size=10),
-                    hovertemplate='<b>%{x}</b><br>Tickets: %{y:,}<extra></extra>',
-                    yaxis='y'
+                    hovertemplate='<b>%{x}</b><br>Tickets: %{y:,}<extra></extra>'
                 )
             )
 
@@ -1894,7 +1891,7 @@ with tabs[3]:
                 )
             )
 
-            # Configurar layout completo
+            # Configurar layout con doble eje Y
             fig_monto.update_layout(
                 height=500,
                 margin=dict(t=50, r=80, l=70, b=120),
@@ -1905,13 +1902,11 @@ with tabs[3]:
                     tickfont=dict(size=11)
                 ),
                 yaxis=dict(
-                    title="Cantidad de tickets",
-                    titlefont=dict(color='#1a237e'),
+                    title=dict(text="Cantidad de tickets", font=dict(color='#1a237e')),
                     tickfont=dict(color='#1a237e')
                 ),
                 yaxis2=dict(
-                    title="% Acumulado",
-                    titlefont=dict(color='#ff7043'),
+                    title=dict(text="% Acumulado", font=dict(color='#ff7043')),
                     tickfont=dict(color='#ff7043'),
                     overlaying='y',
                     side='right',
