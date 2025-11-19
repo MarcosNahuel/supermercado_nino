@@ -17,6 +17,19 @@ from calendar import monthrange
 import numpy as np
 import unicodedata
 import json
+import locale
+
+# Configurar locale a español
+try:
+    locale.setlocale(locale.LC_TIME, 'es_ES.UTF-8')
+except:
+    try:
+        locale.setlocale(locale.LC_TIME, 'es_ES')
+    except:
+        try:
+            locale.setlocale(locale.LC_TIME, 'Spanish_Spain.1252')
+        except:
+            pass  # Si no se puede configurar, continuamos sin locale
 
 st.set_page_config(
     page_title="NINO - Dashboard Analítico",
@@ -54,6 +67,27 @@ def formatear_numero_argentino(numero, decimales=0):
 def formatear_moneda_argentina(numero, decimales=0, simbolo="$"):
     """Formatea moneda al estilo argentino"""
     return f"{simbolo}{formatear_numero_argentino(numero, decimales)}"
+
+def traducir_mes_espanol(fecha_str):
+    """Traduce los nombres de meses y días del inglés al español"""
+    meses_en = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+    meses_es = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
+
+    meses_completos_en = ['January', 'February', 'March', 'April', 'May', 'June',
+                          'July', 'August', 'September', 'October', 'November', 'December']
+    meses_completos_es = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+                          'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
+
+    resultado = fecha_str
+    # Traducir meses abreviados
+    for en, es in zip(meses_en, meses_es):
+        resultado = resultado.replace(en, es)
+
+    # Traducir meses completos
+    for en, es in zip(meses_completos_en, meses_completos_es):
+        resultado = resultado.replace(en, es)
+
+    return resultado
 st.markdown("""
 <style>
     /* Estilos para las pestañas más grandes */
@@ -117,6 +151,35 @@ st.markdown("""
 DATA_DIR = Path("data/app_dataset")
 PROCESSED_DIR = Path("data/processed")
 PREDICTIVE_DIR = Path("data/predictivos")
+
+def normalizar_categorias(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Normaliza los nombres de las categorías en un DataFrame.
+    - Guarda la categoría original en 'categoria_original'
+    - Reemplaza 'categoria' con la versión normalizada
+    """
+    if 'categoria' not in df.columns:
+        return df
+
+    df = df.copy()
+    # Guardar categoría original
+    df['categoria_original'] = df['categoria'].astype(str)
+
+    # Normalizar categorías
+    df['categoria'] = df['categoria'].astype(str).str.upper().str.strip()
+
+    # Mapeo de normalizaciones
+    categoria_map = {
+        'CARNICERIA AL 10,5 %': 'CARNICERIA',
+        'CARNICERIA AL 10.5 %': 'CARNICERIA',
+        'CARNICERIA AL 10,5%': 'CARNICERIA',
+        'CARNICERIA AL 10.5%': 'CARNICERIA',
+        'CARNES': 'CARNICERIA'
+    }
+
+    df['categoria'] = df['categoria'].replace(categoria_map)
+
+    return df
 
 @st.cache_data
 def load_all_data():
@@ -235,6 +298,13 @@ def load_all_data():
         print(f"[ERROR] General error: {e}")
         return None
 
+    # Normalizar categorías en todos los datasets que las tengan
+    datasets_con_categorias = ['kpi_categoria', 'pareto_cat', 'pareto_prod', 'clusters_depto']
+    for key in datasets_con_categorias:
+        if key in data and not data[key].empty:
+            data[key] = normalizar_categorias(data[key])
+            print(f"[OK] Normalized categories in {key}")
+
     return data
 
 
@@ -267,6 +337,14 @@ def load_processed_data():
     processed["forecast_modelos"] = _load(
         PREDICTIVE_DIR, "prediccion_ventas_semanal_modelos.parquet"
     )
+
+    # Normalizar categorías en datasets procesados
+    datasets_con_categorias = ['kpi_categoria_modular', 'ventas_semanales_categoria']
+    for key in datasets_con_categorias:
+        if key in processed and not processed[key].empty:
+            processed[key] = normalizar_categorias(processed[key])
+            print(f"[OK] Normalized categories in {key}")
+
     return processed
 
 data = load_all_data()
@@ -506,6 +584,18 @@ with tabs[0]:
                 )
             )
 
+            # Agregar línea de promedio
+            promedio = df[y_col].mean()
+            fig.add_trace(
+                go.Scatter(
+                    x=df[x_col],
+                    y=[promedio] * len(df),
+                    mode='lines',
+                    name='Promedio',
+                    line=dict(color='#9c27b0', width=2, dash='dot')
+                )
+            )
+
             pendiente = None
             if len(df) >= 2:
                 x_numeric = np.arange(len(df))
@@ -566,7 +656,14 @@ with tabs[0]:
                     'mes'
                 )
                 if fig_temporal is not None:
-                    fig_temporal.update_xaxes(type='date', tickformat='%b %Y')
+                    # Generar etiquetas en español para meses
+                    fechas = df_mensual['periodo']
+                    etiquetas_es = [traducir_mes_espanol(f.strftime('%b %Y')) for f in fechas]
+                    fig_temporal.update_xaxes(
+                        type='category',
+                        ticktext=etiquetas_es,
+                        tickvals=fechas
+                    )
             else:
                 st.info('No hay datos suficientes para el analisis mensual.')
         elif vista_temporal == 'Semanal':
@@ -580,7 +677,14 @@ with tabs[0]:
                     'semana'
                 )
                 if fig_temporal is not None:
-                    fig_temporal.update_xaxes(type='date', tickformat='%d-%b')
+                    # Generar etiquetas en español para semanas
+                    fechas = df_semanal['periodo']
+                    etiquetas_es = [traducir_mes_espanol(f.strftime('%d-%b')) for f in fechas]
+                    fig_temporal.update_xaxes(
+                        type='category',
+                        ticktext=etiquetas_es,
+                        tickvals=fechas
+                    )
             else:
                 st.info('No hay datos suficientes para el analisis semanal.')
         else:  # Quincenal
@@ -594,7 +698,14 @@ with tabs[0]:
                     'quincena'
                 )
                 if fig_temporal is not None:
-                    fig_temporal.update_xaxes(type='date', tickformat='%d-%b')
+                    # Generar etiquetas en español para quincenas
+                    fechas = df_quincenal['periodo']
+                    etiquetas_es = [traducir_mes_espanol(f.strftime('%d-%b')) for f in fechas]
+                    fig_temporal.update_xaxes(
+                        type='category',
+                        ticktext=etiquetas_es,
+                        tickvals=fechas
+                    )
             else:
                 st.info('No hay datos suficientes para el analisis quincenal.')
 
@@ -607,52 +718,279 @@ with tabs[0]:
                 unidad_ref = {'Mensual': 'mes', 'Semanal': 'semana', 'Quincenal': 'quincena'}[vista_temporal]
                 st.caption(f'Pendiente (slope): {signo}{pendiente_texto} tickets por {unidad_ref}.')
 
-        st.markdown('### UPT semanal (unidades por ticket)')
-        detalle_tickets['semana_inicio_upt'] = detalle_tickets['fecha'] - pd.to_timedelta(
+                # Insight menos técnico
+                if pendiente_redondeada < 0:
+                    st.info(f"📉 **Tendencia a la baja:** En promedio, se emiten {formatear_numero_argentino(abs(pendiente_redondeada), 1)} tickets menos cada {unidad_ref}. Esto indica una reducción en la frecuencia de compras.")
+                elif pendiente_redondeada > 0:
+                    st.success(f"📈 **Tendencia al alza:** En promedio, se emiten {formatear_numero_argentino(abs(pendiente_redondeada), 1)} tickets más cada {unidad_ref}. Esto refleja un aumento en la frecuencia de compras.")
+                else:
+                    st.info(f"➡️ **Tendencia estable:** El número de tickets se mantiene relativamente constante en el período analizado.")
+
+        st.markdown('### UPT (unidades por ticket)')
+
+        # Selector de granularidad para UPT
+        st.markdown('Selecciona la granularidad')
+        vista_upt = st.radio(
+            '',
+            ['Mensual', 'Quincenal', 'Semanal'],
+            horizontal=True,
+            index=2,  # Por defecto Semanal
+            key='vista_upt',
+            label_visibility='collapsed'
+        )
+
+        # Calcular UPT según granularidad
+        df_upt = None
+        periodo_col = None
+        titulo_upt = None
+
+        if vista_upt == 'Mensual':
+            detalle_tickets['mes_upt'] = detalle_tickets['fecha'].dt.to_period('M').dt.to_timestamp()
+            df_upt = (
+                detalle_tickets.groupby('mes_upt', as_index=False)
+                .agg(
+                    tickets=('ticket_id', 'nunique'),
+                    unidades=('items_ticket', 'sum')
+                )
+                .sort_values('mes_upt')
+            )
+            periodo_col = 'mes_upt'
+            titulo_upt = 'Mensual - UPT'
+        elif vista_upt == 'Quincenal':
+            detalle_tickets['quincena_upt'] = detalle_tickets['fecha'].apply(
+                lambda x: pd.Timestamp(year=x.year, month=x.month, day=1 if x.day <= 15 else 15)
+            )
+            df_upt = (
+                detalle_tickets.groupby('quincena_upt', as_index=False)
+                .agg(
+                    tickets=('ticket_id', 'nunique'),
+                    unidades=('items_ticket', 'sum')
+                )
+                .sort_values('quincena_upt')
+            )
+            periodo_col = 'quincena_upt'
+            titulo_upt = 'Quincenal - UPT'
+        else:  # Semanal
+            detalle_tickets['semana_inicio_upt'] = detalle_tickets['fecha'] - pd.to_timedelta(
+                detalle_tickets['fecha'].dt.weekday, unit='D'
+            )
+            df_upt = (
+                detalle_tickets.groupby('semana_inicio_upt', as_index=False)
+                .agg(
+                    tickets=('ticket_id', 'nunique'),
+                    unidades=('items_ticket', 'sum')
+                )
+                .sort_values('semana_inicio_upt')
+            )
+            periodo_col = 'semana_inicio_upt'
+            titulo_upt = 'Semanal - UPT'
+
+        if df_upt is not None and not df_upt.empty:
+            df_upt['upt'] = np.where(
+                df_upt['tickets'] > 0,
+                df_upt['unidades'] / df_upt['tickets'],
+                np.nan
+            )
+
+            if df_upt['upt'].notna().any():
+                fig_upt = go.Figure()
+
+                # Línea principal de UPT
+                fig_upt.add_trace(
+                    go.Scatter(
+                        x=df_upt[periodo_col],
+                        y=df_upt['upt'],
+                        mode='lines+markers',
+                        name='UPT',
+                        line=dict(color='#00897b', width=3),
+                        marker=dict(size=7, color='#26a69a')
+                    )
+                )
+
+                # Calcular y agregar línea de tendencia
+                df_upt_valido = df_upt[df_upt['upt'].notna()].copy()
+                if len(df_upt_valido) >= 2:
+                    df_upt_valido['periodo_num'] = range(len(df_upt_valido))
+                    z = np.polyfit(df_upt_valido['periodo_num'], df_upt_valido['upt'], 1)
+                    p = np.poly1d(z)
+                    df_upt_valido['tendencia'] = p(df_upt_valido['periodo_num'])
+                    pendiente_upt = z[0]
+
+                    fig_upt.add_trace(
+                        go.Scatter(
+                            x=df_upt_valido[periodo_col],
+                            y=df_upt_valido['tendencia'],
+                            mode='lines',
+                            name='Tendencia',
+                            line=dict(color='#ff7043', width=2, dash='dash')
+                        )
+                    )
+                else:
+                    pendiente_upt = None
+
+                # Agregar línea de promedio
+                upt_promedio = df_upt['upt'].dropna().mean()
+                fig_upt.add_trace(
+                    go.Scatter(
+                        x=df_upt[periodo_col],
+                        y=[upt_promedio] * len(df_upt),
+                        mode='lines',
+                        name='Promedio',
+                        line=dict(color='#9c27b0', width=2, dash='dot')
+                    )
+                )
+
+                fig_upt.update_layout(
+                    title=f'<b><b>{titulo_upt}</b></b>',
+                    height=360,
+                    margin=dict(t=60, r=20, l=60, b=40),
+                    yaxis_title='Unidades por ticket',
+                    hovermode='x unified'
+                )
+
+                # Generar etiquetas en español para UPT
+                fechas_upt = df_upt[periodo_col]
+                if vista_upt == 'Mensual':
+                    etiquetas_upt_es = [traducir_mes_espanol(f.strftime('%b %Y')) for f in fechas_upt]
+                else:
+                    etiquetas_upt_es = [traducir_mes_espanol(f.strftime('%d-%b')) for f in fechas_upt]
+
+                fig_upt.update_xaxes(
+                    type='category',
+                    ticktext=etiquetas_upt_es,
+                    tickvals=fechas_upt
+                )
+                st.plotly_chart(fig_upt, use_container_width=True)
+
+                st.caption(
+                    f'UPT promedio del periodo: {formatear_numero_argentino(round(float(upt_promedio), 2), 2)} unidades.'
+                )
+
+                # Insight menos técnico
+                if pendiente_upt is not None:
+                    pendiente_upt_redondeada = round(float(pendiente_upt), 3)
+                    unidad_ref_upt = {'Mensual': 'mes', 'Semanal': 'semana', 'Quincenal': 'quincena'}[vista_upt]
+
+                    if pendiente_upt_redondeada < -0.01:
+                        st.info(f"📉 **Tendencia a la baja:** El UPT está disminuyendo aproximadamente {formatear_numero_argentino(abs(pendiente_upt_redondeada), 3)} unidades por {unidad_ref_upt}. Los clientes están comprando menos artículos por visita.")
+                    elif pendiente_upt_redondeada > 0.01:
+                        st.success(f"📈 **Tendencia al alza:** El UPT está aumentando aproximadamente {formatear_numero_argentino(abs(pendiente_upt_redondeada), 3)} unidades por {unidad_ref_upt}. Los clientes están comprando más artículos por visita.")
+                    else:
+                        st.info(f"➡️ **Tendencia estable:** El UPT se mantiene relativamente constante alrededor de {formatear_numero_argentino(round(float(upt_promedio), 2), 2)} unidades por ticket.")
+            else:
+                st.info('No hay datos suficientes para calcular UPT.')
+        else:
+            st.info('No hay datos suficientes para calcular UPT.')
+
+        # -------------------------
+        # Cantidad promedio de tickets por semana
+        # -------------------------
+        st.markdown('### Cantidad promedio de tickets por semana')
+
+        # Calcular semana (de lunes a domingo)
+        detalle_tickets['semana_inicio_ticket'] = detalle_tickets['fecha'] - pd.to_timedelta(
             detalle_tickets['fecha'].dt.weekday, unit='D'
         )
-        upt_semanal = (
-            detalle_tickets.groupby('semana_inicio_upt', as_index=False)
+
+        # IMPORTANTE: rentabilidad_ticket tiene 1 fila por ticket, pero debemos deduplicar por si acaso
+        # Primero deduplicamos por ticket_id para evitar contar duplicados
+        tickets_unicos = detalle_tickets.drop_duplicates(subset=['ticket_id'])[['ticket_id', 'semana_inicio_ticket']]
+
+        cantidad_tickets_semanal = (
+            tickets_unicos.groupby('semana_inicio_ticket', as_index=False)
             .agg(
-                tickets=('ticket_id', 'nunique'),
-                unidades=('items_ticket', 'sum')
+                tickets=('ticket_id', 'count')
             )
-            .sort_values('semana_inicio_upt')
-        )
-        upt_semanal['upt'] = np.where(
-            upt_semanal['tickets'] > 0,
-            upt_semanal['unidades'] / upt_semanal['tickets'],
-            np.nan
+            .sort_values('semana_inicio_ticket')
         )
 
-        if not upt_semanal.empty and upt_semanal['upt'].notna().any():
-            fig_upt = go.Figure()
-            fig_upt.add_trace(
+        # Eliminar las últimas 2 semanas para evitar sesgo de semanas incompletas
+        if len(cantidad_tickets_semanal) > 2:
+            cantidad_tickets_semanal = cantidad_tickets_semanal.iloc[:-2]
+
+        if not cantidad_tickets_semanal.empty and len(cantidad_tickets_semanal) > 0:
+            fig_ticket_semanal = go.Figure()
+
+            # Línea principal de cantidad de tickets
+            fig_ticket_semanal.add_trace(
                 go.Scatter(
-                    x=upt_semanal['semana_inicio_upt'],
-                    y=upt_semanal['upt'],
+                    x=cantidad_tickets_semanal['semana_inicio_ticket'],
+                    y=cantidad_tickets_semanal['tickets'],
                     mode='lines+markers',
-                    name='UPT',
-                    line=dict(color='#00897b', width=3),
-                    marker=dict(size=7, color='#26a69a')
+                    name='Cantidad de tickets',
+                    line=dict(color='#ff9800', width=3),
+                    marker=dict(size=7, color='#fb8c00')
                 )
             )
-            fig_upt.update_layout(
-                title='UPT semanal',
+
+            # Línea de promedio
+            tickets_promedio_global = cantidad_tickets_semanal['tickets'].mean()
+            fig_ticket_semanal.add_trace(
+                go.Scatter(
+                    x=cantidad_tickets_semanal['semana_inicio_ticket'],
+                    y=[tickets_promedio_global] * len(cantidad_tickets_semanal),
+                    mode='lines',
+                    name='Promedio',
+                    line=dict(color='#9c27b0', width=2, dash='dot')
+                )
+            )
+
+            # Línea de tendencia
+            if len(cantidad_tickets_semanal) >= 2:
+                cantidad_tickets_semanal['semana_num'] = range(len(cantidad_tickets_semanal))
+                z_ticket = np.polyfit(cantidad_tickets_semanal['semana_num'], cantidad_tickets_semanal['tickets'], 1)
+                p_ticket = np.poly1d(z_ticket)
+                cantidad_tickets_semanal['tendencia'] = p_ticket(cantidad_tickets_semanal['semana_num'])
+                pendiente_ticket = z_ticket[0]
+
+                fig_ticket_semanal.add_trace(
+                    go.Scatter(
+                        x=cantidad_tickets_semanal['semana_inicio_ticket'],
+                        y=cantidad_tickets_semanal['tendencia'],
+                        mode='lines',
+                        name='Tendencia',
+                        line=dict(color='#ff7043', width=2, dash='dash')
+                    )
+                )
+            else:
+                pendiente_ticket = None
+
+            fig_ticket_semanal.update_layout(
+                title='<b><b>Cantidad promedio de tickets por semana</b></b>',
                 height=360,
                 margin=dict(t=60, r=20, l=60, b=40),
-                yaxis_title='Unidades por ticket',
+                yaxis_title='Cantidad de tickets',
+                yaxis_tickformat=',.0f',
                 hovermode='x unified'
             )
-            fig_upt.update_xaxes(type='date', tickformat='%d-%b')
-            st.plotly_chart(fig_upt, use_container_width=True)
 
-            upt_promedio = upt_semanal['upt'].dropna().mean()
-            st.caption(
-                f'UPT promedio del periodo: {formatear_numero_argentino(round(float(upt_promedio), 2), 2)} unidades.'
+            # Generar etiquetas en español
+            fechas_ticket = cantidad_tickets_semanal['semana_inicio_ticket']
+            etiquetas_ticket_es = [traducir_mes_espanol(f.strftime('%d-%b')) for f in fechas_ticket]
+            fig_ticket_semanal.update_xaxes(
+                type='category',
+                ticktext=etiquetas_ticket_es,
+                tickvals=fechas_ticket
             )
+
+            st.plotly_chart(fig_ticket_semanal, use_container_width=True)
+
+            st.caption(
+                f'Cantidad promedio de tickets por semana: {formatear_numero_argentino(round(float(tickets_promedio_global), 0), 0)} tickets'
+            )
+
+            # Insight menos técnico
+            if pendiente_ticket is not None:
+                pendiente_ticket_redondeada = round(float(pendiente_ticket), 0)
+
+                if pendiente_ticket_redondeada < -5:
+                    st.info(f"📉 **Tendencia a la baja:** La cantidad de tickets está disminuyendo aproximadamente {formatear_numero_argentino(abs(pendiente_ticket_redondeada), 0)} tickets por semana. Hay menos transacciones cada semana.")
+                elif pendiente_ticket_redondeada > 5:
+                    st.success(f"📈 **Tendencia al alza:** La cantidad de tickets está aumentando aproximadamente {formatear_numero_argentino(abs(pendiente_ticket_redondeada), 0)} tickets por semana. Hay más transacciones cada semana.")
+                else:
+                    st.info(f"➡️ **Tendencia estable:** La cantidad de tickets se mantiene relativamente constante alrededor de {formatear_numero_argentino(round(float(tickets_promedio_global), 0), 0)} tickets por semana.")
         else:
-            st.info('No hay datos suficientes para calcular UPT semanal.')
+            st.info('No hay datos suficientes para calcular la cantidad promedio de tickets por semana.')
 
         st.markdown('### Ticket promedio por dia de la semana')
         if tickets_dia is not None and not tickets_dia.empty:
@@ -670,8 +1008,6 @@ with tabs[0]:
                 margin=dict(t=60, r=20, l=60, b=40)
             )
             st.plotly_chart(fig_media_dia, use_container_width=True)
-        else:
-            st.info('No fue posible calcular el promedio diario con los datos disponibles.')
 
         with st.expander('Ver detalle complementario por quincena'):
             if not tickets_quincena.empty:
@@ -713,8 +1049,21 @@ with tabs[0]:
                 labels={"tipo_dia": "Tipo de día", "ticket_promedio": "Ticket promedio ($)"},
                 title="Ticket promedio por tipo de día",
             )
-            fig_ticket_tipo.update_traces(marker_color="#283593", texttemplate="%{y:,.0f}", textposition="outside")
-            fig_ticket_tipo.update_layout(height=320, yaxis_tickprefix="$", yaxis_tickformat=",")
+            fig_ticket_tipo.update_traces(
+                marker_color="#283593",
+                texttemplate="%{y:,.0f}",
+                textposition="outside",
+                textfont=dict(size=13, color="#262730", family="Source Sans", weight="bold")
+            )
+            # Ajustar el rango del eje Y para dar espacio a los números
+            max_y_ticket = kpi_tipo_plot["ticket_promedio"].max()
+            fig_ticket_tipo.update_layout(
+                height=360,
+                yaxis_tickprefix="$",
+                yaxis_tickformat=",",
+                yaxis_range=[0, max_y_ticket * 1.15],
+                margin=dict(t=60, b=60, l=60, r=20)
+            )
             col_tipo1.plotly_chart(fig_ticket_tipo, use_container_width=True)
 
             fig_upt_tipo = px.bar(
@@ -724,8 +1073,19 @@ with tabs[0]:
                 labels={"tipo_dia": "Tipo de día", "upt": "Unidades por ticket"},
                 title="Unidades por ticket",
             )
-            fig_upt_tipo.update_traces(marker_color="#fb8c00", texttemplate="%{y:.2f}", textposition="outside")
-            fig_upt_tipo.update_layout(height=320)
+            fig_upt_tipo.update_traces(
+                marker_color="#fb8c00",
+                texttemplate="%{y:.2f}",
+                textposition="outside",
+                textfont=dict(size=13, color="#262730", family="Source Sans", weight="bold")
+            )
+            # Ajustar el rango del eje Y para dar espacio a los números
+            max_y_upt = kpi_tipo_plot["upt"].max()
+            fig_upt_tipo.update_layout(
+                height=360,
+                yaxis_range=[0, max_y_upt * 1.15],
+                margin=dict(t=60, b=60, l=60, r=20)
+            )
             col_tipo2.plotly_chart(fig_upt_tipo, use_container_width=True)
 
             fig_margen_tipo = px.bar(
@@ -735,8 +1095,20 @@ with tabs[0]:
                 labels={"tipo_dia": "Tipo de día", "margen_pct": "Margen (%)"},
                 title="Margen promedio",
             )
-            fig_margen_tipo.update_traces(marker_color="#00897b", texttemplate="%{y:.1f}%", textposition="outside")
-            fig_margen_tipo.update_layout(height=320, yaxis_ticksuffix="%")
+            fig_margen_tipo.update_traces(
+                marker_color="#00897b",
+                texttemplate="%{y:.1f}%",
+                textposition="outside",
+                textfont=dict(size=13, color="#262730", family="Source Sans", weight="bold")
+            )
+            # Ajustar el rango del eje Y para dar espacio a los números
+            max_y_margen = kpi_tipo_plot["margen_pct"].max()
+            fig_margen_tipo.update_layout(
+                height=360,
+                yaxis_ticksuffix="%",
+                yaxis_range=[0, max_y_margen * 1.15],
+                margin=dict(t=60, b=60, l=60, r=20)
+            )
             col_tipo3.plotly_chart(fig_margen_tipo, use_container_width=True)
 
         # Resumen para narrativa
@@ -851,7 +1223,8 @@ with tabs[1]:
         st.info("No hay datos de productos para construir el Pareto.")
     else:
         categoria_map = {
-            "Carnes": "CARNICERIA AL 10,5 %",
+            "Todo el negocio": "TODOS",
+            "Carniceria": "CARNICERIA",
             "Almacen": "ALMACEN",
             "Lacteos": "LACTEOS",
             "Limpieza": "LIMPIEZA"
@@ -864,14 +1237,14 @@ with tabs[1]:
         )
         categoria_clave = categoria_map[categoria_label]
 
-        data_filtrada = (
-            pareto_prod.copy()
-            .assign(
-                categoria=lambda df: df['categoria'].astype(str).str.upper().str.strip(),
-                descripcion=lambda df: df['descripcion'].astype(str).str.strip()
-            )
-        )
-        categoria_filtrada = data_filtrada[data_filtrada['categoria'] == categoria_clave.upper()]
+        # Ya viene normalizado desde la carga, solo limpiamos descripción
+        data_filtrada = pareto_prod.copy()
+        data_filtrada['descripcion'] = data_filtrada['descripcion'].astype(str).str.strip()
+        # Si es "Todo el negocio", usar todos los datos; sino filtrar por categoría
+        if categoria_clave.upper() == "TODOS":
+            categoria_filtrada = data_filtrada
+        else:
+            categoria_filtrada = data_filtrada[data_filtrada['categoria'] == categoria_clave.upper()]
 
         if categoria_filtrada.empty:
             st.warning("No hay datos suficientes para la categoria seleccionada.")
@@ -1031,7 +1404,6 @@ with tabs[2]:
             producto_categoria_map = dict(zip(mapa_df['descripcion'], mapa_df['categoria']))
 
         categorias_carniceria = {
-            'CARNICERIA AL 10,5 %',
             'CARNICERIA',
             'ELABORADOS DE CARNICERIA',
             'PRODUCTOS PARA CARNEO',
@@ -1166,10 +1538,10 @@ with tabs[3]:
         min_rent = float(rentabilidad['rentabilidad_pct'].min())
         max_rent = float(rentabilidad['rentabilidad_pct'].max())
         quartile_ranges = [
-            ("Q1", min_rent, q1_rent, "#e8f5e9"),
-            ("Q2", q1_rent, mediana_rent, "#fff8e1"),
-            ("Q3", mediana_rent, q3_rent, "#e3f2fd"),
-            ("Q4", q3_rent, max_rent, "#fce4ec"),
+            ("Bajo", min_rent, q1_rent, "#ffebee"),
+            ("Medio-Bajo", q1_rent, mediana_rent, "#fff8e1"),
+            ("Medio-Alto", mediana_rent, q3_rent, "#e3f2fd"),
+            ("Alto", q3_rent, max_rent, "#e8f5e9"),
         ]
         for label, start, end, color in quartile_ranges:
             if end <= start:
@@ -1178,31 +1550,48 @@ with tabs[3]:
                 x0=float(start),
                 x1=float(end),
                 fillcolor=color,
-                opacity=0.18,
+                opacity=0.25,
                 layer='below',
-                line_width=0
+                line_width=2,
+                line_color=color
             )
             midpoint = float(start + (end - start) / 2)
             fig_hist.add_annotation(
                 x=midpoint,
-                y=1.02,
+                y=1.08,
                 xref='x',
                 yref='paper',
-                text=label,
+                text=f"<b>{label}</b>",
                 showarrow=False,
-                font=dict(color='#424242', size=12)
+                font=dict(color='#1a237e', size=13, family="Arial Black")
             )
-        for boundary, color in [
-            (float(q1_rent), '#ffb300'),
-            (float(mediana_rent), '#fb8c00'),
-            (float(q3_rent), '#1976d2')
+        # Agregar líneas verticales en los límites con mejor etiquetado
+        for boundary, label, color in [
+            (float(q1_rent), f"P25: {q1_rent:.1f}%", '#ff6f00'),
+            (float(mediana_rent), f"Mediana: {mediana_rent:.1f}%", '#1976d2'),
+            (float(q3_rent), f"P75: {q3_rent:.1f}%", '#388e3c')
         ]:
             fig_hist.add_vline(
                 x=boundary,
-                line_width=1.5,
+                line_width=2,
                 line_dash='dash',
                 line_color=color,
-                opacity=0.85
+                opacity=0.8
+            )
+            # Agregar etiqueta de valor en la línea
+            max_count = rentabilidad['rentabilidad_pct'].value_counts().max() * 1.1
+            fig_hist.add_annotation(
+                x=boundary,
+                y=max_count,
+                text=label,
+                showarrow=True,
+                arrowhead=2,
+                arrowsize=1,
+                arrowwidth=1.5,
+                arrowcolor=color,
+                ax=0,
+                ay=-40,
+                font=dict(color=color, size=10)
             )
     st.plotly_chart(fig_hist, use_container_width=True)
 
@@ -1228,15 +1617,18 @@ with tabs[3]:
         st.info("No hay informacion de montos para segmentar tickets.")
     else:
         st.markdown("### Distribucion de ventas por ticket (bins de $2.500)")
-        bin_edges = list(np.arange(0, 37500 + 2500, 2500)) + [np.inf]
+        # Calcular el máximo real de los datos para evitar el salto infinito
+        max_monto = tickets_raw['monto_total_ticket'].max()
+        # Ajustar el máximo al siguiente múltiplo de 2500
+        max_adjusted = int(np.ceil(max_monto / 2500) * 2500)
+
+        # Crear bins usando el máximo real
+        bin_edges = list(np.arange(0, max_adjusted + 2500, 2500))
         etiqueta_bins = []
         for i in range(len(bin_edges) - 1):
             lower = bin_edges[i]
             upper = bin_edges[i + 1]
-            if np.isinf(upper):
-                etiqueta_bins.append("> $37.5k")
-            else:
-                etiqueta_bins.append(f"${lower/1000:.1f}k - ${upper/1000:.1f}k")
+            etiqueta_bins.append(f"${lower/1000:.1f}k - ${upper/1000:.1f}k")
         tipo_bins = pd.CategoricalDtype(categories=etiqueta_bins, ordered=True)
         tickets_raw['rango_ticket'] = pd.cut(
             tickets_raw['monto_total_ticket'],
@@ -1293,13 +1685,31 @@ with tabs[3]:
             line=dict(color='green', width=2, dash='dash')
         )
         fig_monto.update_layout(
-            height=480,
-            margin=dict(t=70, r=40, l=40, b=140),
-            xaxis=dict(title='Venta por ticket', tickangle=-45),
-            yaxis=dict(title='Cantidad de tickets'),
-            yaxis2=dict(title='% acumulado', overlaying='y', side='right', range=[0, 105]),
+            height=550,
+            margin=dict(t=70, r=60, l=60, b=200),
+            xaxis=dict(
+                title='Rango de venta por ticket',
+                tickangle=-90,
+                tickfont=dict(size=10),
+                ticktext=[str(cat) for cat in hist_monto['rango_ticket']],
+                tickvals=list(range(len(hist_monto['rango_ticket'])))
+            ),
+            yaxis=dict(
+                title='Cantidad de tickets',
+                titlefont=dict(size=11, color='#3949ab'),
+                tickfont=dict(color='#3949ab')
+            ),
+            yaxis2=dict(
+                title='% acumulado',
+                titlefont=dict(size=11, color='#ff7043'),
+                tickfont=dict(color='#ff7043'),
+                overlaying='y',
+                side='right',
+                range=[0, 105]
+            ),
             hovermode='x unified',
-            legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1)
+            legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1),
+            template='plotly_white'
         )
         st.plotly_chart(fig_monto, use_container_width=True)
 
