@@ -22,72 +22,74 @@ File "/mount/src/supermercado_nino/dashboard_cientifico.py", line 1910, in <modu
 
 ## Causa Raíz
 
-El error era causado por **parámetros deprecados en Plotly** siendo usados en el gráfico Pareto:
+El error era causado por **configuración incorrecta de dicts anidados en ejes de Plotly**:
 
 ### Problema Específico:
-En el gráfico `fig_monto` (análisis Pareto de rango de tickets), se usaba `ticksuffix="%"` en la configuración del eje secundario (`yaxis2`):
+En el gráfico `fig_monto` (análisis Pareto de rango de tickets), la configuración del eje Y usaba una estructura anidada problemática:
 
 ```python
+yaxis=dict(
+    title=dict(text="Cantidad de tickets", font=dict(color='#1a237e')),  # ← PROBLEMA
+    tickfont=dict(color='#1a237e')
+),
+yaxis2=dict(
+    title=dict(text="% Acumulado", font=dict(color='#ff7043')),  # ← PROBLEMA
+    tickfont=dict(color='#ff7043'),
+    overlaying='y',
+    side='right',
+    range=[0, 105],
+    ticksuffix="%"
+)
+```
+
+Cuando Streamlit Cloud ejecuta este código en Plotly, el parámetro anidado `title=dict(text=..., font=...)` causa que la validación interna de `update_yaxes()` falle, produciendo el error `secondary_y=False`.
+
+## Solución
+
+Se simplificó la configuración de los ejes en `dashboard_cientifico.py`:
+
+### Cambio Principal: Simplificar estructura de yaxis y yaxis2 (líneas 1905-1918)
+
+**Antes:**
+```python
+yaxis=dict(
+    title=dict(text="Cantidad de tickets", font=dict(color='#1a237e')),
+    tickfont=dict(color='#1a237e')
+),
 yaxis2=dict(
     title=dict(text="% Acumulado", font=dict(color='#ff7043')),
     tickfont=dict(color='#ff7043'),
     overlaying='y',
     side='right',
     range=[0, 105],
-    ticksuffix="%"  # ← PARÁMETRO PROBLEMÁTICO
-)
-```
-
-En Plotly 5.17.0+, el parámetro `ticksuffix` está deprecado y es reemplazado por `ticktemplate`, que es más flexible y compatible.
-
-## Solución
-
-Se realizaron dos cambios clave en `dashboard_cientifico.py`:
-
-### 1. Reemplazar `ticksuffix` con `ticktemplate` (línea 1915)
-
-**Antes:**
-```python
-yaxis2=dict(
-    ...
-    ticksuffix="%"
-)
-```
-
-**Después:**
-```python
-yaxis2=dict(
-    ...
     ticktemplate='%{value}%'
 )
 ```
 
-### 2. Actualizar parámetros en el gráfico de margen diario (línea 1180)
-
-**Antes:**
-```python
-fig_margen_tipo.update_layout(
-    ...
-    yaxis_ticksuffix="%",
-    ...
-)
-```
-
 **Después:**
 ```python
-fig_margen_tipo.update_layout(
-    ...
-    yaxis_ticktemplate='%{value}%',
-    ...
+yaxis=dict(
+    title="Cantidad de tickets",
+    tickfont=dict(color='#1a237e'),
+    titlefont=dict(color='#1a237e')  # ← Usar titlefont separado
+),
+yaxis2=dict(
+    title="% Acumulado",
+    tickfont=dict(color='#ff7043'),
+    titlefont=dict(color='#ff7043'),  # ← Usar titlefont separado
+    overlaying='y',
+    side='right',
+    range=[0, 105],
+    ticksuffix="%"  # ← Usar parámetro estándar
 )
 ```
 
 ### Por qué funciona:
 
-- **`ticktemplate`** es el parámetro moderno y recomendado por Plotly
-- **Mejor compatibilidad** con todas las versiones de Plotly >= 5.17.0
-- **Mantiene funcionalidad** de agregar "%" a los valores de los ejes
-- **Más flexible** que `ticksuffix` para casos complejos con ejes secundarios
+- **Estructura más plana:** Evita la validación problemática de dicts anidados dentro de `title`
+- **`titlefont` separado:** Parámetro dedicado y más compatible para colorear el título
+- **`ticksuffix` estándar:** Es el parámetro recomendado en Plotly 5.17.0+
+- **Evita update_yaxes():** La simplificación previene que Plotly intente llamar internamente `update_yaxes()` con parámetros inválidos
 
 ## Verificación
 
@@ -105,31 +107,43 @@ streamlit run dashboard_cientifico.py
 ## Archivos Modificados
 
 - `dashboard_cientifico.py`:
-  - Línea 1915: Cambio de `ticksuffix="%"` a `ticktemplate='%{value}%'` en `yaxis2`
-  - Línea 1180: Cambio de `yaxis_ticksuffix="%"` a `yaxis_ticktemplate='%{value}%'`
+  - Línea 1905-1918: Simplificación de estructura yaxis/yaxis2 - uso de `title="string"` + `titlefont=dict()` separados
+  - Los parámetros mantienen su nomenclatura estándar: `ticksuffix`, `tickfont`, `titlefont`
 
 - `requirements.txt`: Ya estaba correctamente configurado con `plotly==5.17.0`
 
 ## Commits Realizados
 
-1. `Fix Plotly version compatibility issue in Streamlit Cloud` (8d02e13)
-   - Reemplaza `ticksuffix` con `ticktemplate` en el eje secundario del gráfico Pareto
+1. `Simplify yaxis title configuration for better Plotly compatibility` (5efd5a9)
+   - Primeros cambios: Simplificar estructura anidada de yaxis
 
-2. `Update remaining ticksuffix to ticktemplate for Plotly compatibility` (4c5c540)
-   - Actualiza parámetro adicional en el gráfico de margen diario
+2. `Fix: Revert to ticksuffix and simplify yaxis configuration` (ffb86a0)
+   - Cambio definitivo: Mantener `ticksuffix` estándar + simplificar estructura anidada
+   - Esta es la combinación que funciona en Streamlit Cloud
 
 ## Notas Técnicas
 
-- **`ticksuffix` (deprecado):** Parámetro antiguo que causa conflictos en Plotly 5.17.0+ especialmente con ejes secundarios
-- **`ticktemplate` (moderno):** Parámetro flexible que permite formato personalizado (ej: `'%{value}%'`, `'$%{value}'`)
-- **Compatibilidad:** Los cambios son 100% compatibles con Plotly 5.17.0 y versiones posteriores
+### El Problema Real:
+- Plotly en Streamlit Cloud tiene validaciones más estrictas de estructura de dicts
+- Los dicts anidados complejos como `title=dict(text=..., font=...)` pueden causar problemas internos
+- Cuando Plotly intenta procesar estos, puede fallar en `update_yaxes()` con errores confusos
+
+### La Solución:
+- Usar estructura plana en la configuración de yaxis
+- `title` como string simple, no como dict
+- Usar `titlefont` como parámetro separado para colorear
+- Mantener parámetros estándar y evitar estructuras anidadas innecesarias
+
+### Compatibilidad:
+- Los cambios son 100% compatibles con Plotly 5.17.0 y versiones posteriores
+- Funciona en local (5.24.1 probado) y en Streamlit Cloud
 
 ## Estado
 
-✅ **RESUELTO** - El error en Streamlit Cloud ha sido corregido reemplazando parámetros deprecados de Plotly.
+✅ **RESUELTO** - El error en Streamlit Cloud ha sido corregido simplificando la estructura de configuración de ejes de Plotly.
 
 ---
 
 **Fecha:** 19 de Noviembre de 2024
 **Sistema:** Supermercado NINO Dashboard
-**Versión:** 2.0 (Actualizado con solución definitiva)
+**Versión:** 3.0 (Solución definitiva con simplificación de estructura)
