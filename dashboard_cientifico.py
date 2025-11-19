@@ -1125,7 +1125,7 @@ with tabs[0]:
                 marker_color="#283593",
                 texttemplate="%{y:,.0f}",
                 textposition="outside",
-                textfont=dict(size=13, color="#262730", family="Source Sans", weight="bold")
+                textfont=dict(size=13, color="#262730", family="Source Sans")
             )
             # Ajustar el rango del eje Y para dar espacio a los números
             max_y_ticket = kpi_tipo_plot["ticket_promedio"].max()
@@ -1149,7 +1149,7 @@ with tabs[0]:
                 marker_color="#fb8c00",
                 texttemplate="%{y:.2f}",
                 textposition="outside",
-                textfont=dict(size=13, color="#262730", family="Source Sans", weight="bold")
+                textfont=dict(size=13, color="#262730", family="Source Sans")
             )
             # Ajustar el rango del eje Y para dar espacio a los números
             max_y_upt = kpi_tipo_plot["upt"].max()
@@ -1171,7 +1171,7 @@ with tabs[0]:
                 marker_color="#00897b",
                 texttemplate="%{y:.1f}%",
                 textposition="outside",
-                textfont=dict(size=13, color="#262730", family="Source Sans", weight="bold")
+                textfont=dict(size=13, color="#262730", family="Source Sans")
             )
             # Ajustar el rango del eje Y para dar espacio a los números
             max_y_margen = kpi_tipo_plot["margen_pct"].max()
