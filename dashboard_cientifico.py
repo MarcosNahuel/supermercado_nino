@@ -2493,6 +2493,7 @@ with tabs[6]:
             Asi, el insight deja de ser un PDF y se convierte en agenda semanal: decidir, ejecutar y medir contra los mismos indicadores que hoy relatamos.
         </p>
     </div>
+    """
     
 
     st.markdown(informe_html, unsafe_allow_html=True)
