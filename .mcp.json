@@ -9,24 +9,6 @@
         "D:\\OneDrive\\GitHub\\supermercado_nino definitivo claude\\scripts",
         "D:\\OneDrive\\GitHub\\supermercado_nino definitivo claude\\docs"
       ]
-    },
-    "chrome-devtools": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "chrome-devtools-mcp@latest"
-      ]
-    },
-    
-
-        "context7": {
-          "command": "npx",
-          "args": ["-y", "@upstash/context7-mcp"],
-          "env": {
-            "CONTEXT7_API_KEY": "ctx7sk-cc864f8f-d81f-4630-9fbd-673338b08e5b"
-          }
-      
-      
     }
   }
 }
