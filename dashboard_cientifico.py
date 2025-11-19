@@ -1863,81 +1863,81 @@ with tabs[3]:
             # Crear gráfico mejorado con subplots
             fig_monto = make_subplots(specs=[[{"secondary_y": True}]])
 
-        fig_monto.add_trace(
-            go.Bar(
-                x=hist_monto['rango_ticket'].astype(str),
-                y=hist_monto['tickets'],
-                marker_color='#1a237e',
-                name='Cantidad de tickets',
-                text=[f"{int(v):,}" for v in hist_monto['tickets']],
-                textposition='outside',
-                textfont=dict(size=10),
-                hovertemplate='<b>%{x}</b><br>Tickets: %{y:,}<extra></extra>'
-            ),
-            secondary_y=False
-        )
+            fig_monto.add_trace(
+                go.Bar(
+                    x=hist_monto['rango_ticket'].astype(str),
+                    y=hist_monto['tickets'],
+                    marker_color='#1a237e',
+                    name='Cantidad de tickets',
+                    text=[f"{int(v):,}" for v in hist_monto['tickets']],
+                    textposition='outside',
+                    textfont=dict(size=10),
+                    hovertemplate='<b>%{x}</b><br>Tickets: %{y:,}<extra></extra>'
+                ),
+                secondary_y=False
+            )
 
-        fig_monto.add_trace(
-            go.Scatter(
-                x=hist_monto['rango_ticket'].astype(str),
-                y=hist_monto['pct_acumulado'],
-                mode='lines+markers',
-                name='% Acumulado',
-                line=dict(color='#ff7043', width=3),
-                marker=dict(size=8),
-                hovertemplate='<b>%{x}</b><br>Acumulado: %{y:.1f}%<extra></extra>'
-            ),
-            secondary_y=True
-        )
+            fig_monto.add_trace(
+                go.Scatter(
+                    x=hist_monto['rango_ticket'].astype(str),
+                    y=hist_monto['pct_acumulado'],
+                    mode='lines+markers',
+                    name='% Acumulado',
+                    line=dict(color='#ff7043', width=3),
+                    marker=dict(size=8),
+                    hovertemplate='<b>%{x}</b><br>Acumulado: %{y:.1f}%<extra></extra>'
+                ),
+                secondary_y=True
+            )
 
-        # Línea de referencia 80%
-        fig_monto.add_hline(
-            y=80,
-            line_dash="dash",
-            line_color="green",
-            opacity=0.7,
-            annotation_text="80% (Pareto)",
-            annotation_position="right",
-            secondary_y=True
-        )
+            # Línea de referencia 80%
+            fig_monto.add_hline(
+                y=80,
+                line_dash="dash",
+                line_color="green",
+                opacity=0.7,
+                annotation_text="80% (Pareto)",
+                annotation_position="right",
+                secondary_y=True
+            )
 
-        fig_monto.update_xaxes(
-            title_text="Rango de venta por ticket",
-            tickangle=-45,
-            tickfont=dict(size=11)
-        )
+            fig_monto.update_xaxes(
+                title_text="Rango de venta por ticket",
+                tickangle=-45,
+                tickfont=dict(size=11)
+            )
 
-        fig_monto.update_yaxes(
-            title_text="Cantidad de tickets",
-            titlefont=dict(color='#1a237e'),
-            tickfont=dict(color='#1a237e'),
-            secondary_y=False
-        )
+            fig_monto.update_yaxes(
+                title_text="Cantidad de tickets",
+                titlefont=dict(color='#1a237e'),
+                tickfont=dict(color='#1a237e'),
+                secondary_y=False
+            )
 
-        fig_monto.update_yaxes(
-            title_text="% Acumulado",
-            titlefont=dict(color='#ff7043'),
-            tickfont=dict(color='#ff7043'),
-            range=[0, 105],
-            ticksuffix="%",
-            secondary_y=True
-        )
+            fig_monto.update_yaxes(
+                title_text="% Acumulado",
+                titlefont=dict(color='#ff7043'),
+                tickfont=dict(color='#ff7043'),
+                range=[0, 105],
+                ticksuffix="%",
+                secondary_y=True
+            )
 
-        fig_monto.update_layout(
-            height=500,
-            margin=dict(t=50, r=80, l=70, b=120),
-            hovermode='x unified',
-            legend=dict(
-                orientation='h',
-                yanchor='bottom',
-                y=1.02,
-                xanchor='right',
-                x=1
-            ),
-            showlegend=True
-        )
+            fig_monto.update_layout(
+                height=500,
+                margin=dict(t=50, r=80, l=70, b=120),
+                hovermode='x unified',
+                legend=dict(
+                    orientation='h',
+                    yanchor='bottom',
+                    y=1.02,
+                    xanchor='right',
+                    x=1
+                ),
+                showlegend=True
+            )
 
-        render_plotly(fig_monto)
+            render_plotly(fig_monto)
 
         st.markdown("### Segmentos por cuartil del ticket")
         q1_monto = float(tickets_raw['monto_total_ticket'].quantile(0.25))
