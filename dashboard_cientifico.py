@@ -18,6 +18,28 @@ import numpy as np
 import unicodedata
 import json
 import locale
+import plotly.io as pio
+
+# Configuración global de Plotly para mejor rendimiento
+pio.templates.default = "plotly_white"
+plotly_config = {
+    'displayModeBar': False,  # Ocultar barra de herramientas
+    'staticPlot': False,
+    'responsive': True,
+    'displaylogo': False,
+    'modeBarButtonsToRemove': ['pan2d', 'lasso2d', 'select2d']
+}
+
+# Función helper para renderizar gráficos optimizados
+def render_plotly(fig, height=None):
+    """Renderiza un gráfico de Plotly con configuración optimizada"""
+    if height:
+        fig.update_layout(height=height)
+    st.plotly_chart(fig, use_container_width=True, config=plotly_config)
+
+# Configurar pandas para mejor rendimiento
+pd.options.mode.chained_assignment = None  # Desactivar warnings de copia
+pd.options.display.max_rows = 100  # Limitar filas mostradas
 
 # Configurar locale a español
 try:
@@ -34,8 +56,36 @@ except:
 st.set_page_config(
     page_title="NINO - Dashboard Analítico",
     page_icon="📊",
-    layout="wide"
+    layout="wide",
+    initial_sidebar_state="expanded"
 )
+
+# CSS personalizado para mejorar rendimiento y scroll
+st.markdown("""
+<style>
+    /* Habilitar scroll suave */
+    html, body, [data-testid="stAppViewContainer"] {
+        overflow: auto !important;
+        scroll-behavior: smooth;
+    }
+
+    /* Optimizar renderizado de tabs */
+    [data-baseweb="tab-panel"] {
+        overflow: visible !important;
+    }
+
+    /* Reducir animaciones para mejorar performance */
+    * {
+        animation-duration: 0.1s !important;
+        transition-duration: 0.1s !important;
+    }
+
+    /* Optimizar gráficos */
+    .js-plotly-plot {
+        will-change: transform;
+    }
+</style>
+""", unsafe_allow_html=True)
 
 # Función para formatear números al estilo argentino (puntos para miles, comas para decimales)
 def formatear_numero_argentino(numero, decimales=0):
@@ -88,6 +138,19 @@ def traducir_mes_espanol(fecha_str):
         resultado = resultado.replace(en, es)
 
     return resultado
+
+def configurar_grafico_rendimiento(fig):
+    """Configura un gráfico Plotly para mejor rendimiento"""
+    fig.update_layout(
+        # Deshabilitar animaciones para mejor rendimiento
+        transition_duration=0,
+        # Optimizar renderizado - mantener estado durante scroll
+        uirevision='constant',
+        # Optimizar para scroll - deshabilitar zoom/pan por defecto
+        dragmode=False
+    )
+    return fig
+
 st.markdown("""
 <style>
     /* Estilos para las pestañas más grandes */
@@ -633,6 +696,8 @@ with tabs[0]:
                 yaxis_title='Tickets',
                 hovermode='x unified'
             )
+            # Aplicar optimizaciones de rendimiento
+            fig = configurar_grafico_rendimiento(fig)
             return fig, pendiente
 
         st.markdown('### Evolucion de tickets emitidos')
@@ -710,7 +775,7 @@ with tabs[0]:
                 st.info('No hay datos suficientes para el analisis quincenal.')
 
         if fig_temporal is not None:
-            st.plotly_chart(fig_temporal, use_container_width=True)
+            render_plotly(fig_temporal)
             if pendiente_temporal is not None:
                 pendiente_redondeada = round(float(pendiente_temporal), 1)
                 signo = '+' if pendiente_redondeada >= 0 else '-'
@@ -860,7 +925,8 @@ with tabs[0]:
                     ticktext=etiquetas_upt_es,
                     tickvals=fechas_upt
                 )
-                st.plotly_chart(fig_upt, use_container_width=True)
+                fig_upt = configurar_grafico_rendimiento(fig_upt)
+                render_plotly(fig_upt)
 
                 st.caption(
                     f'UPT promedio del periodo: {formatear_numero_argentino(round(float(upt_promedio), 2), 2)} unidades.'
@@ -972,8 +1038,8 @@ with tabs[0]:
                 ticktext=etiquetas_ticket_es,
                 tickvals=fechas_ticket
             )
-
-            st.plotly_chart(fig_ticket_semanal, use_container_width=True)
+            fig_ticket_semanal = configurar_grafico_rendimiento(fig_ticket_semanal)
+            render_plotly(fig_ticket_semanal)
 
             st.caption(
                 f'Cantidad promedio de tickets por semana: {formatear_numero_argentino(round(float(tickets_promedio_global), 0), 0)} tickets'
@@ -1007,7 +1073,8 @@ with tabs[0]:
                 yaxis_tickformat=',.0f',
                 margin=dict(t=60, r=20, l=60, b=40)
             )
-            st.plotly_chart(fig_media_dia, use_container_width=True)
+            fig_media_dia = configurar_grafico_rendimiento(fig_media_dia)
+            render_plotly(fig_media_dia)
 
         with st.expander('Ver detalle complementario por quincena'):
             if not tickets_quincena.empty:
@@ -1023,7 +1090,8 @@ with tabs[0]:
                     xaxis_tickangle=-35,
                     margin=dict(t=60, r=20, l=60, b=40)
                 )
-                st.plotly_chart(fig_quincena, use_container_width=True)
+                fig_quincena = configurar_grafico_rendimiento(fig_quincena)
+                render_plotly(fig_quincena)
             else:
                 st.info('No hay datos suficientes para el analisis por quincena.')
         kpi_tipo_mod = processed_data.get("kpi_tipo_dia_modular")
@@ -1173,7 +1241,7 @@ with tabs[0]:
                     yaxis_title="Día de la semana",
                     margin=dict(l=0, r=0, t=30, b=0)
                 )
-                st.plotly_chart(fig_horario, use_container_width=True)
+                render_plotly(fig_horario)
 
                 top_horas = horario_semana.loc[
                     horario_semana.groupby('dia_idx')['comprobantes'].idxmax()
@@ -1297,7 +1365,7 @@ with tabs[1]:
                 hovermode='x unified',
                 legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1)
             )
-            st.plotly_chart(fig_categoria, use_container_width=True)
+            render_plotly(fig_categoria)
 
             core_df = categoria_filtrada[categoria_filtrada['core_80']].copy()
             core_count = int(core_df.shape[0])
@@ -1333,47 +1401,100 @@ with tabs[1]:
     if kpi_cat is not None and not kpi_cat.empty:
         st.markdown("### Ventas vs margen % por categoria (Top 15)")
         kpi_top = kpi_cat.head(15).copy()
-        fig_margen = go.Figure()
-        fig_margen.add_trace(
-            go.Bar(
-                x=kpi_top['categoria'],
-                y=kpi_top['ventas_totales'],
-                name='Ventas',
-                marker_color='#1a237e',
-                yaxis='y'
-            )
-        )
-        fig_margen.add_trace(
-            go.Scatter(
-                x=kpi_top['categoria'],
-                y=kpi_top['margen_pct'],
-                name='Margen %',
-                mode='lines+markers',
-                line=dict(color='#4caf50', width=3),
-                yaxis='y2'
-            )
-        )
-        fig_margen.update_layout(
-            height=520,
-            margin=dict(t=70, r=40, l=60, b=80),
-            xaxis=dict(title='Categoria', tickangle=-35),
-            yaxis=dict(title='Ventas ($)'),
-            yaxis2=dict(title='Margen %', overlaying='y', side='right'),
-            hovermode='x unified'
-        )
-        st.plotly_chart(fig_margen, use_container_width=True)
 
-        cat_alto_margen = kpi_top.nlargest(3, 'margen_pct')['categoria'].tolist()
-        cat_bajo_margen = kpi_top.nsmallest(3, 'margen_pct')['categoria'].tolist()
+        # Calcular medianas para segmentación por cuadrantes
+        mediana_ventas = kpi_top['ventas_totales'].median()
+        mediana_margen = kpi_top['margen_pct'].median()
+
+        # Asignar cuadrante a cada categoría
+        def asignar_cuadrante(row):
+            if row['ventas_totales'] >= mediana_ventas and row['margen_pct'] >= mediana_margen:
+                return 'Estrellas'
+            elif row['ventas_totales'] >= mediana_ventas and row['margen_pct'] < mediana_margen:
+                return 'Generadores de tráfico'
+            elif row['ventas_totales'] < mediana_ventas and row['margen_pct'] >= mediana_margen:
+                return 'Alta rentabilidad'
+            else:
+                return 'A revisar'
+
+        kpi_top['cuadrante'] = kpi_top.apply(asignar_cuadrante, axis=1)
+
+        # Colores por cuadrante
+        colores_cuadrante = {
+            'Estrellas': '#4caf50',  # Verde
+            'Generadores de tráfico': '#2196f3',  # Azul
+            'Alta rentabilidad': '#ff9800',  # Naranja
+            'A revisar': '#f44336'  # Rojo
+        }
+
+        kpi_top['color'] = kpi_top['cuadrante'].map(colores_cuadrante)
+
+        # Crear scatter plot
+        fig_margen = go.Figure()
+
+        for cuadrante in ['Estrellas', 'Generadores de tráfico', 'Alta rentabilidad', 'A revisar']:
+            data_cuadrante = kpi_top[kpi_top['cuadrante'] == cuadrante]
+            if not data_cuadrante.empty:
+                fig_margen.add_trace(
+                    go.Scatter(
+                        x=data_cuadrante['ventas_totales'],
+                        y=data_cuadrante['margen_pct'],
+                        mode='markers+text',
+                        name=cuadrante,
+                        marker=dict(
+                            size=12,
+                            color=colores_cuadrante[cuadrante],
+                            line=dict(width=1, color='white')
+                        ),
+                        text=data_cuadrante['categoria'],
+                        textposition='top center',
+                        textfont=dict(size=9),
+                        hovertemplate='<b>%{text}</b><br>Ventas: $%{x:,.0f}<br>Margen: %{y:.1f}%<extra></extra>'
+                    )
+                )
+
+        # Añadir líneas de referencia (medianas)
+        fig_margen.add_hline(y=mediana_margen, line_dash="dash", line_color="gray", opacity=0.5,
+                            annotation_text=f"Margen mediano: {mediana_margen:.1f}%",
+                            annotation_position="right")
+        fig_margen.add_vline(x=mediana_ventas, line_dash="dash", line_color="gray", opacity=0.5,
+                            annotation_text=f"Ventas medianas",
+                            annotation_position="top")
+
+        fig_margen.update_layout(
+            height=580,
+            margin=dict(t=70, r=40, l=60, b=60),
+            xaxis=dict(title='Ventas Totales ($)', tickformat='$,.0f'),
+            yaxis=dict(title='Margen %', ticksuffix='%'),
+            hovermode='closest',
+            showlegend=True,
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=1.02,
+                xanchor="right",
+                x=1
+            )
+        )
+        render_plotly(fig_margen)
+
+        # Segmentación por cuadrantes
+        estrellas = kpi_top[kpi_top['cuadrante'] == 'Estrellas']['categoria'].tolist()
+        generadores_trafico = kpi_top[kpi_top['cuadrante'] == 'Generadores de tráfico']['categoria'].tolist()
+        alta_rentabilidad = kpi_top[kpi_top['cuadrante'] == 'Alta rentabilidad']['categoria'].tolist()
+        a_revisar = kpi_top[kpi_top['cuadrante'] == 'A revisar']['categoria'].tolist()
 
         st.markdown(
             f'''
             <div style='background: #fff3e0; border-left: 6px solid #ff9800; padding: 18px; margin: 16px 0; border-radius: 10px;'>
-                <h4 style='color: #e65100; margin: 0;'>Mix por rentabilidad</h4>
+                <h4 style='color: #e65100; margin: 0;'>Segmentación estratégica por rentabilidad</h4>
                 <p style='margin: 8px 0 0 0;'>
-                    Categorias con mayor margen: <b>{', '.join(cat_alto_margen)}</b><br>
-                    Categorias que traccionan volumen con menor margen: <b>{', '.join(cat_bajo_margen)}</b><br><br>
-                    Ajustar precios y promociones permite proteger el margen de las primeras y usar las segundas como gancho de trafico.
+                    {'<b>⭐ Estrellas</b> (Alto volumen + Alto margen): <b>' + ', '.join(estrellas) + '</b><br>' if estrellas else ''}
+                    {'<b>🚀 Generadores de tráfico</b> (Alto volumen + Bajo margen): <b>' + ', '.join(generadores_trafico) + '</b><br>' if generadores_trafico else ''}
+                    {'<b>💎 Alta rentabilidad</b> (Bajo volumen + Alto margen): <b>' + ', '.join(alta_rentabilidad) + '</b><br>' if alta_rentabilidad else ''}
+                    {'<b>⚠️ A revisar</b> (Bajo volumen + Bajo margen): <b>' + ', '.join(a_revisar) + '</b><br>' if a_revisar else ''}
+                    <br>
+                    <b>Estrategia:</b> Potenciar las estrellas, usar generadores de tráfico para atraer clientes, optimizar precios en alta rentabilidad y evaluar descontinuar categorías a revisar.
                 </p>
             </div>
             ''',
@@ -1440,45 +1561,32 @@ with tabs[2]:
                 st.info("No hay reglas de asociacion para esta seleccion.")
                 return
 
+            # Explicación del análisis
+            st.markdown(
+                '''
+                <div style='background: #e3f2fd; border-left: 6px solid #2196f3; padding: 18px; margin: 16px 0; border-radius: 10px;'>
+                    <h4 style='color: #1565c0; margin: 0;'>¿Qué es el Market Basket Analysis?</h4>
+                    <p style='margin: 8px 0 0 0;'>
+                        El <b>análisis de canasta de mercado</b> identifica patrones de compra conjunta. Descubre qué productos suelen comprarse juntos
+                        para optimizar la ubicación en góndolas, crear promociones cruzadas y aumentar el ticket promedio.
+                        <br><br>
+                        <b>Métricas clave:</b><br>
+                        • <b>Soporte:</b> % de transacciones que contienen la combinación<br>
+                        • <b>Confianza:</b> Probabilidad de comprar B cuando se compra A<br>
+                        • <b>Lift:</b> Cuánto más probable es la compra conjunta vs. aleatoria (>1 = asociación positiva)
+                    </p>
+                </div>
+                ''',
+                unsafe_allow_html=True
+            )
+
             col_kpi1, col_kpi2, col_kpi3 = st.columns(3)
             col_kpi1.metric("Reglas evaluadas", len(reglas_df))
-            col_kpi2.metric("Lift maximo", f"{reglas_df['lift'].max():.1f}x")
+            col_kpi2.metric("Lift máximo", f"{reglas_df['lift'].max():.1f}x")
             col_kpi3.metric("Soporte promedio", f"{(reglas_df['support'].mean() * 100):.2f}%")
 
-            if combos_df is not None and not combos_df.empty:
-                st.markdown("### Top combos sugeridos (ordenados por lift)")
-                combos_view = combos_df[['antecedent', 'consequent', 'support', 'confidence', 'lift']].copy()
-                combos_view['support'] = (combos_view['support'] * 100).round(2)
-                combos_view['confidence'] = (combos_view['confidence'] * 100).round(2)
-                combos_view = combos_view.rename(
-                    columns={
-                        'antecedent': 'Antecedente',
-                        'consequent': 'Consecuente',
-                        'support': 'Soporte (%)',
-                        'confidence': 'Confianza (%)',
-                        'lift': 'Lift'
-                    }
-                )
-                st.dataframe(combos_view, use_container_width=True, hide_index=True)
-            else:
-                st.info("No hay combos recomendados para esta seleccion.")
-
-            st.markdown("### Top 20 reglas por lift")
-            reglas_top = reglas_df.nlargest(20, 'lift').copy()
-            tabla_reglas = reglas_top[['antecedents', 'consequents', 'support', 'confidence', 'lift']].rename(
-                columns={
-                    'antecedents': 'Antecedentes',
-                    'consequents': 'Consecuentes',
-                    'support': 'Soporte',
-                    'confidence': 'Confianza',
-                    'lift': 'Lift'
-                }
-            )
-            tabla_reglas['Soporte'] = (tabla_reglas['Soporte'] * 100).round(2)
-            tabla_reglas['Confianza'] = (tabla_reglas['Confianza'] * 100).round(2)
-            st.dataframe(tabla_reglas, use_container_width=True, hide_index=True)
-
-            st.markdown("### Visualizacion: confidence vs support")
+            # Gráfico primero
+            st.markdown("### Visualización: Confianza vs Soporte")
             fig_scatter = px.scatter(
                 reglas_df,
                 x='support',
@@ -1491,11 +1599,66 @@ with tabs[2]:
                     'confidence': 'Confianza',
                     'lift': 'Lift'
                 },
-                title="Reglas de asociacion (tamanio = lift)",
+                title="Reglas de asociación (tamaño y color = lift)",
                 color_continuous_scale='Viridis'
             )
             fig_scatter.update_layout(height=480, margin=dict(t=60, r=20, l=20, b=40))
-            st.plotly_chart(fig_scatter, use_container_width=True)
+            fig_scatter.update_xaxes(tickformat='.1%')
+            fig_scatter.update_yaxes(tickformat='.1%')
+            render_plotly(fig_scatter)
+
+            # Combos sugeridos después del gráfico
+            if combos_df is not None and not combos_df.empty:
+                st.markdown("### Top combos sugeridos (ordenados por lift)")
+                combos_view = combos_df[['antecedent', 'consequent', 'support', 'confidence', 'lift']].copy()
+                combos_view['support'] = (combos_view['support'] * 100).round(2)
+                combos_view['confidence'] = (combos_view['confidence'] * 100).round(2)
+                combos_view = combos_view.rename(
+                    columns={
+                        'antecedent': 'Si compra esto →',
+                        'consequent': '→ También compra esto',
+                        'support': 'Soporte (%)',
+                        'confidence': 'Confianza (%)',
+                        'lift': 'Lift'
+                    }
+                )
+                st.dataframe(combos_view, use_container_width=True, hide_index=True)
+
+                # Insight estratégico
+                top_combo = combos_df.iloc[0]
+                st.markdown(
+                    f'''
+                    <div style='background: #fff3e0; border-left: 6px solid #ff9800; padding: 18px; margin: 16px 0; border-radius: 10px;'>
+                        <h4 style='color: #e65100; margin: 0;'>Oportunidad destacada</h4>
+                        <p style='margin: 8px 0 0 0;'>
+                            <b>Combo top:</b> {top_combo['antecedent']} → {top_combo['consequent']}<br>
+                            Con un lift de <b>{top_combo['lift']:.1f}x</b>, esta combinación tiene {top_combo['lift']:.1f} veces más probabilidad de ocurrir juntos que por separado.
+                            <br><br>
+                            <b>Acciones sugeridas:</b> Ubicar productos cercanos en góndola, crear promoción 2x1 o descuento por combo.
+                        </p>
+                    </div>
+                    ''',
+                    unsafe_allow_html=True
+                )
+            else:
+                st.info("No hay combos recomendados para esta selección.")
+
+            # Tabla de reglas detallada al final
+            st.markdown("### Top 20 reglas por lift")
+            reglas_top = reglas_df.nlargest(20, 'lift').copy()
+            tabla_reglas = reglas_top[['antecedents', 'consequents', 'support', 'confidence', 'lift']].rename(
+                columns={
+                    'antecedents': 'Antecedentes',
+                    'consequents': 'Consecuentes',
+                    'support': 'Soporte (%)',
+                    'confidence': 'Confianza (%)',
+                    'lift': 'Lift'
+                }
+            )
+            tabla_reglas['Soporte (%)'] = (tabla_reglas['Soporte (%)'] * 100).round(2)
+            tabla_reglas['Confianza (%)'] = (tabla_reglas['Confianza (%)'] * 100).round(2)
+            tabla_reglas['Lift'] = tabla_reglas['Lift'].round(2)
+            st.dataframe(tabla_reglas, use_container_width=True, hide_index=True)
 
         general_tab, sin_carniceria_tab = st.tabs(["Vista general", "Sin carniceria"])
 
@@ -1593,7 +1756,7 @@ with tabs[3]:
                 ay=-40,
                 font=dict(color=color, size=10)
             )
-    st.plotly_chart(fig_hist, use_container_width=True)
+    render_plotly(fig_hist)
 
     if not rentabilidad.empty:
         st.markdown(
@@ -1711,7 +1874,7 @@ with tabs[3]:
             legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1),
             template='plotly_white'
         )
-        st.plotly_chart(fig_monto, use_container_width=True)
+        render_plotly(fig_monto)
 
         st.markdown("### Segmentos por cuartil del ticket")
         q1_monto = float(tickets_raw['monto_total_ticket'].quantile(0.25))
@@ -1757,7 +1920,7 @@ with tabs[3]:
             title="Distribucion de tickets por segmento"
         )
         fig_segmento.update_layout(height=360, showlegend=False, yaxis_title='Cantidad de tickets')
-        st.plotly_chart(fig_segmento, use_container_width=True)
+        render_plotly(fig_segmento)
 
         tabla_segmentos = segmentos.copy()
         tabla_segmentos['ticket_promedio'] = tabla_segmentos['ticket_promedio'].apply(lambda x: formatear_moneda_argentina(x, 0))
@@ -1790,7 +1953,7 @@ with tabs[3]:
             title="Distribucion de margen por segmento"
         )
         fig_margen_segmentos.update_layout(height=520, showlegend=False, margin=dict(t=70, r=20, l=20, b=60))
-        st.plotly_chart(fig_margen_segmentos, use_container_width=True)
+        render_plotly(fig_margen_segmentos)
 
         q1_monto_txt = formatear_moneda_argentina(q1_monto, 0)
         q2_monto_txt = formatear_moneda_argentina(q2_monto, 0)
@@ -1886,7 +2049,7 @@ with tabs[4]:
             text=pago_summary['participacion'].astype(str) + '%'
         )
         fig_pago.update_layout(height=420, showlegend=False, yaxis_tickprefix='$', yaxis_tickformat=',.0f')
-        st.plotly_chart(fig_pago, use_container_width=True)
+        render_plotly(fig_pago)
 
         cols = st.columns(len(categorias_pago))
         for col, metodo in zip(cols, categorias_pago):
@@ -1948,7 +2111,7 @@ with tabs[4]:
                 title="Distribucion de venta por ticket segun metodo"
             )
             fig_hist_monto.update_layout(height=420, barmode='overlay', hovermode='x unified')
-            st.plotly_chart(fig_hist_monto, use_container_width=True)
+            render_plotly(fig_hist_monto)
 
             fig_hist_margen = px.histogram(
                 pagos_ticket,
@@ -1959,7 +2122,7 @@ with tabs[4]:
                 title="Distribucion de margen por ticket segun metodo"
             )
             fig_hist_margen.update_layout(height=420, barmode='overlay', hovermode='x unified')
-            st.plotly_chart(fig_hist_margen, use_container_width=True)
+            render_plotly(fig_hist_margen)
         else:
             st.info("No hay tickets individuales para graficar distribuciones por metodo de pago.")
 
