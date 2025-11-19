@@ -1903,12 +1903,14 @@ with tabs[3]:
                     tickfont=dict(size=11)
                 ),
                 yaxis=dict(
-                    title=dict(text="Cantidad de tickets", font=dict(color='#1a237e')),
-                    tickfont=dict(color='#1a237e')
+                    title="Cantidad de tickets",
+                    tickfont=dict(color='#1a237e'),
+                    titlefont=dict(color='#1a237e')
                 ),
                 yaxis2=dict(
-                    title=dict(text="% Acumulado", font=dict(color='#ff7043')),
+                    title="% Acumulado",
                     tickfont=dict(color='#ff7043'),
+                    titlefont=dict(color='#ff7043'),
                     overlaying='y',
                     side='right',
                     range=[0, 105],
