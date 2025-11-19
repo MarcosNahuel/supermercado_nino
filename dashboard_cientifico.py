@@ -1403,14 +1403,85 @@ with tabs[1]:
             st.dataframe(tabla_core, use_container_width=True, hide_index=True)
 
     if kpi_cat is not None and not kpi_cat.empty:
-        st.markdown("### Ventas vs margen % por categoria (Top 15)")
+        st.markdown("### Rendimiento por categoría (Top 15)")
         kpi_top = kpi_cat.head(15).copy()
 
-        # Calcular medianas para segmentación por cuadrantes
-        mediana_ventas = kpi_top['ventas_totales'].median()
-        mediana_margen = kpi_top['margen_pct'].median()
+        # Ordenar por ventas descendente para mejor visualización
+        kpi_top = kpi_top.sort_values('ventas_totales', ascending=False)
 
-        # Asignar cuadrante a cada categoría
+        # Crear dos gráficos separados más claros
+        col1, col2 = st.columns(2)
+
+        with col1:
+            # Gráfico 1: Top 10 por Ventas
+            top10_ventas = kpi_top.head(10).sort_values('ventas_totales', ascending=True)
+
+            fig_ventas = go.Figure()
+            fig_ventas.add_trace(
+                go.Bar(
+                    y=top10_ventas['categoria'],
+                    x=top10_ventas['ventas_totales'],
+                    orientation='h',
+                    marker=dict(
+                        color=top10_ventas['ventas_totales'],
+                        colorscale='Blues',
+                        showscale=False
+                    ),
+                    text=[formatear_moneda_argentina(v, 0) for v in top10_ventas['ventas_totales']],
+                    textposition='outside',
+                    textfont=dict(size=10),
+                    hovertemplate='<b>%{y}</b><br>Ventas: %{text}<extra></extra>'
+                )
+            )
+
+            fig_ventas.update_layout(
+                title='Top 10 Categorías por Ventas',
+                height=450,
+                margin=dict(t=50, r=40, l=150, b=40),
+                xaxis=dict(title='Ventas ($)', showgrid=True),
+                yaxis=dict(title='', tickfont=dict(size=10)),
+                showlegend=False
+            )
+
+            render_plotly(fig_ventas)
+
+        with col2:
+            # Gráfico 2: Top 10 por Margen %
+            top10_margen = kpi_top.nlargest(10, 'margen_pct').sort_values('margen_pct', ascending=True)
+
+            fig_margen = go.Figure()
+            fig_margen.add_trace(
+                go.Bar(
+                    y=top10_margen['categoria'],
+                    x=top10_margen['margen_pct'],
+                    orientation='h',
+                    marker=dict(
+                        color=top10_margen['margen_pct'],
+                        colorscale='Greens',
+                        showscale=False
+                    ),
+                    text=[f"{v:.1f}%" for v in top10_margen['margen_pct']],
+                    textposition='outside',
+                    textfont=dict(size=10),
+                    hovertemplate='<b>%{y}</b><br>Margen: %{x:.1f}%<extra></extra>'
+                )
+            )
+
+            fig_margen.update_layout(
+                title='Top 10 Categorías por Margen %',
+                height=450,
+                margin=dict(t=50, r=40, l=150, b=40),
+                xaxis=dict(title='Margen %', showgrid=True),
+                yaxis=dict(title='', tickfont=dict(size=10)),
+                showlegend=False
+            )
+
+            render_plotly(fig_margen)
+
+        # Calcular segmentación por cuadrantes
+        mediana_ventas = kpi_cat.head(15)['ventas_totales'].median()
+        mediana_margen = kpi_cat.head(15)['margen_pct'].median()
+
         def asignar_cuadrante(row):
             if row['ventas_totales'] >= mediana_ventas and row['margen_pct'] >= mediana_margen:
                 return 'Estrellas'
@@ -1422,65 +1493,6 @@ with tabs[1]:
                 return 'A revisar'
 
         kpi_top['cuadrante'] = kpi_top.apply(asignar_cuadrante, axis=1)
-
-        # Colores por cuadrante
-        colores_cuadrante = {
-            'Estrellas': '#4caf50',  # Verde
-            'Generadores de tráfico': '#2196f3',  # Azul
-            'Alta rentabilidad': '#ff9800',  # Naranja
-            'A revisar': '#f44336'  # Rojo
-        }
-
-        kpi_top['color'] = kpi_top['cuadrante'].map(colores_cuadrante)
-
-        # Crear scatter plot
-        fig_margen = go.Figure()
-
-        for cuadrante in ['Estrellas', 'Generadores de tráfico', 'Alta rentabilidad', 'A revisar']:
-            data_cuadrante = kpi_top[kpi_top['cuadrante'] == cuadrante]
-            if not data_cuadrante.empty:
-                fig_margen.add_trace(
-                    go.Scatter(
-                        x=data_cuadrante['ventas_totales'],
-                        y=data_cuadrante['margen_pct'],
-                        mode='markers+text',
-                        name=cuadrante,
-                        marker=dict(
-                            size=12,
-                            color=colores_cuadrante[cuadrante],
-                            line=dict(width=1, color='white')
-                        ),
-                        text=data_cuadrante['categoria'],
-                        textposition='top center',
-                        textfont=dict(size=9),
-                        hovertemplate='<b>%{text}</b><br>Ventas: $%{x:,.0f}<br>Margen: %{y:.1f}%<extra></extra>'
-                    )
-                )
-
-        # Añadir líneas de referencia (medianas)
-        fig_margen.add_hline(y=mediana_margen, line_dash="dash", line_color="gray", opacity=0.5,
-                            annotation_text=f"Margen mediano: {mediana_margen:.1f}%",
-                            annotation_position="right")
-        fig_margen.add_vline(x=mediana_ventas, line_dash="dash", line_color="gray", opacity=0.5,
-                            annotation_text=f"Ventas medianas",
-                            annotation_position="top")
-
-        fig_margen.update_layout(
-            height=580,
-            margin=dict(t=70, r=40, l=60, b=60),
-            xaxis=dict(title='Ventas Totales ($)', tickformat='$,.0f'),
-            yaxis=dict(title='Margen %', ticksuffix='%'),
-            hovermode='closest',
-            showlegend=True,
-            legend=dict(
-                orientation="h",
-                yanchor="bottom",
-                y=1.02,
-                xanchor="right",
-                x=1
-            )
-        )
-        render_plotly(fig_margen)
 
         # Segmentación por cuadrantes
         estrellas = kpi_top[kpi_top['cuadrante'] == 'Estrellas']['categoria'].tolist()
@@ -1783,29 +1795,45 @@ with tabs[3]:
     if tickets_raw.empty:
         st.info("No hay informacion de montos para segmentar tickets.")
     else:
-        st.markdown("### Distribucion de ventas por ticket (bins de $2.500)")
-        # Calcular el máximo real de los datos para evitar el salto infinito
-        max_monto = tickets_raw['monto_total_ticket'].max()
-        # Ajustar el máximo al siguiente múltiplo de 2500
-        max_adjusted = int(np.ceil(max_monto / 2500) * 2500)
+        st.markdown("### Distribución de ventas por ticket")
 
-        # Crear bins usando el máximo real
-        bin_edges = list(np.arange(0, max_adjusted + 2500, 2500))
+        # Calcular rangos de manera más inteligente
+        max_monto = tickets_raw['monto_total_ticket'].max()
+
+        # Usar bins de $5000 para reducir cantidad de rangos
+        bin_size = 5000
+        max_adjusted = int(np.ceil(max_monto / bin_size) * bin_size)
+
+        # Limitar a máximo 12 bins para mejor visualización
+        num_bins = min(12, int(max_adjusted / bin_size))
+        bin_edges = list(np.arange(0, (num_bins + 1) * bin_size, bin_size))
+
+        # Si quedan datos fuera, agregar categoría final
+        if max_adjusted > num_bins * bin_size:
+            bin_edges.append(float('inf'))
+
         etiqueta_bins = []
         for i in range(len(bin_edges) - 1):
             lower = bin_edges[i]
             upper = bin_edges[i + 1]
-            etiqueta_bins.append(f"${lower/1000:.1f}k - ${upper/1000:.1f}k")
-        tipo_bins = pd.CategoricalDtype(categories=etiqueta_bins, ordered=True)
+            if upper == float('inf'):
+                etiqueta_bins.append(f">${lower/1000:.0f}k+")
+            else:
+                etiqueta_bins.append(f"${lower/1000:.0f}k-${upper/1000:.0f}k")
+
         tickets_raw['rango_ticket'] = pd.cut(
             tickets_raw['monto_total_ticket'],
             bins=bin_edges,
             labels=etiqueta_bins,
             include_lowest=True,
             right=False
-        ).astype(tipo_bins)
+        )
+
+        # Eliminar tickets sin categoría asignada (NaN)
+        tickets_raw = tickets_raw.dropna(subset=['rango_ticket'])
+
         hist_monto = (
-            tickets_raw.groupby('rango_ticket', dropna=False)
+            tickets_raw.groupby('rango_ticket', dropna=True, observed=True)
             .agg(
                 tickets=('ticket_id', 'count'),
                 ventas=('monto_total_ticket', 'sum'),
@@ -1813,6 +1841,13 @@ with tabs[3]:
             )
             .reset_index()
         )
+
+        # Filtrar rangos vacíos
+        hist_monto = hist_monto[hist_monto['tickets'] > 0].copy()
+
+        # Asegurar que no hay NaN en los resultados
+        hist_monto = hist_monto.dropna()
+
         total_tickets = hist_monto['tickets'].sum()
         if total_tickets > 0:
             hist_monto['pct_tickets'] = (hist_monto['tickets'] / total_tickets * 100).round(1)
@@ -1821,63 +1856,83 @@ with tabs[3]:
             hist_monto['pct_tickets'] = 0
             hist_monto['pct_acumulado'] = 0
 
-        fig_monto = go.Figure()
+        # Crear gráfico mejorado con subplots
+        fig_monto = make_subplots(specs=[[{"secondary_y": True}]])
+
         fig_monto.add_trace(
             go.Bar(
-                x=hist_monto['rango_ticket'],
+                x=hist_monto['rango_ticket'].astype(str),
                 y=hist_monto['tickets'],
-                marker_color='#3949ab',
-                name='Tickets',
-                text=hist_monto['tickets'],
+                marker_color='#1a237e',
+                name='Cantidad de tickets',
+                text=[f"{int(v):,}" for v in hist_monto['tickets']],
                 textposition='outside',
-                texttemplate='%{text:,.0f}'
-            )
+                textfont=dict(size=10),
+                hovertemplate='<b>%{x}</b><br>Tickets: %{y:,}<extra></extra>'
+            ),
+            secondary_y=False
         )
+
         fig_monto.add_trace(
             go.Scatter(
-                x=hist_monto['rango_ticket'],
+                x=hist_monto['rango_ticket'].astype(str),
                 y=hist_monto['pct_acumulado'],
                 mode='lines+markers',
-                name='% acumulado',
-                yaxis='y2',
-                line=dict(color='#ff7043', width=3)
-            )
+                name='% Acumulado',
+                line=dict(color='#ff7043', width=3),
+                marker=dict(size=8),
+                hovertemplate='<b>%{x}</b><br>Acumulado: %{y:.1f}%<extra></extra>'
+            ),
+            secondary_y=True
         )
-        fig_monto.add_shape(
-            type='line',
-            x0=-0.5,
-            x1=len(hist_monto['rango_ticket']) - 0.5,
-            y0=80,
-            y1=80,
-            yref='y2',
-            line=dict(color='green', width=2, dash='dash')
+
+        # Línea de referencia 80%
+        fig_monto.add_hline(
+            y=80,
+            line_dash="dash",
+            line_color="green",
+            opacity=0.7,
+            annotation_text="80% (Pareto)",
+            annotation_position="right",
+            secondary_y=True
         )
+
+        fig_monto.update_xaxes(
+            title_text="Rango de venta por ticket",
+            tickangle=-45,
+            tickfont=dict(size=11)
+        )
+
+        fig_monto.update_yaxes(
+            title_text="Cantidad de tickets",
+            titlefont=dict(color='#1a237e'),
+            tickfont=dict(color='#1a237e'),
+            secondary_y=False
+        )
+
+        fig_monto.update_yaxes(
+            title_text="% Acumulado",
+            titlefont=dict(color='#ff7043'),
+            tickfont=dict(color='#ff7043'),
+            range=[0, 105],
+            ticksuffix="%",
+            secondary_y=True
+        )
+
         fig_monto.update_layout(
-            height=550,
-            margin=dict(t=70, r=60, l=60, b=150),
-            xaxis=dict(
-                title='Rango de venta por ticket',
-                tickangle=-45,
-                tickfont=dict(size=10),
-                type='category'
-            ),
-            yaxis=dict(
-                title='Cantidad de tickets',
-                titlefont=dict(size=11, color='#3949ab'),
-                tickfont=dict(color='#3949ab')
-            ),
-            yaxis2=dict(
-                title='% acumulado',
-                titlefont=dict(size=11, color='#ff7043'),
-                tickfont=dict(color='#ff7043'),
-                overlaying='y',
-                side='right',
-                range=[0, 105]
-            ),
+            height=500,
+            margin=dict(t=50, r=80, l=70, b=120),
             hovermode='x unified',
-            legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1),
-            template='plotly_white'
+            legend=dict(
+                orientation='h',
+                yanchor='bottom',
+                y=1.02,
+                xanchor='right',
+                x=1
+            ),
+            showlegend=True
         )
+
         render_plotly(fig_monto)
 
         st.markdown("### Segmentos por cuartil del ticket")
@@ -1914,18 +1969,7 @@ with tabs[3]:
             0
         )
 
-        fig_segmento = px.bar(
-            segmentos,
-            x='segmento_cuartil',
-            y='cantidad_tickets',
-            labels={'segmento_cuartil': 'Segmento', 'cantidad_tickets': 'Cantidad de tickets'},
-            color='segmento_cuartil',
-            color_discrete_sequence=['#1565c0', '#1e88e5', '#42a5f5', '#90caf9'],
-            title="Distribucion de tickets por segmento"
-        )
-        fig_segmento.update_layout(height=360, showlegend=False, xaxis_title='Segmento', yaxis_title='Cantidad de tickets')
-        render_plotly(fig_segmento)
-
+        # Mostrar tabla de segmentos directamente
         tabla_segmentos = segmentos.copy()
         tabla_segmentos['ticket_promedio'] = tabla_segmentos['ticket_promedio'].apply(lambda x: formatear_moneda_argentina(x, 0))
         tabla_segmentos['items_promedio'] = tabla_segmentos['items_promedio'].round(2)
@@ -1945,20 +1989,63 @@ with tabs[3]:
         ]
         st.dataframe(tabla_segmentos, use_container_width=True, hide_index=True)
 
-        fig_margen_segmentos = px.histogram(
-            tickets_raw.dropna(subset=['segmento_cuartil']),
-            x='margen_ticket',
-            facet_col='segmento_cuartil',
-            facet_col_wrap=2,
-            nbins=40,
-            color='segmento_cuartil',
-            color_discrete_sequence=['#1565c0', '#1e88e5', '#42a5f5', '#90caf9'],
-            labels={'margen_ticket': 'Margen por ticket ($)', 'segmento_cuartil': 'Segmento'},
-            title="Distribucion de margen por segmento"
+        # Calcular estadísticas por segmento para visualización
+        st.markdown("### Comparación de métricas por segmento")
+
+        # Usar los valores numéricos originales de segmentos (antes de formatear)
+        # segmentos ya tiene los valores numéricos sin formatear
+
+        fig_margen_segmentos = make_subplots(
+            rows=1, cols=2,
+            subplot_titles=('Ticket Promedio por Segmento', 'Margen Promedio por Segmento'),
+            specs=[[{"type": "bar"}, {"type": "bar"}]]
         )
-        fig_margen_segmentos.update_layout(height=520, showlegend=False, margin=dict(t=70, r=20, l=20, b=60))
-        fig_margen_segmentos.update_xaxes(title_text='Margen por ticket ($)')
-        fig_margen_segmentos.update_yaxes(title_text='Cantidad')
+
+        colores_seg = ['#ef5350', '#42a5f5', '#66bb6a', '#ffa726']
+
+        # Gráfico 1: Ticket promedio
+        fig_margen_segmentos.add_trace(
+            go.Bar(
+                x=segmentos['segmento_cuartil'].astype(str),
+                y=segmentos['ticket_promedio'],
+                marker_color=colores_seg,
+                name='Ticket Promedio',
+                text=[formatear_moneda_argentina(v, 0) for v in segmentos['ticket_promedio']],
+                textposition='outside',
+                textfont=dict(size=11),
+                hovertemplate='<b>%{x}</b><br>Ticket: %{text}<extra></extra>',
+                showlegend=False
+            ),
+            row=1, col=1
+        )
+
+        # Gráfico 2: Margen promedio
+        fig_margen_segmentos.add_trace(
+            go.Bar(
+                x=segmentos['segmento_cuartil'].astype(str),
+                y=segmentos['margen_promedio'],
+                marker_color=colores_seg,
+                name='Margen Promedio',
+                text=[formatear_moneda_argentina(v, 0) for v in segmentos['margen_promedio']],
+                textposition='outside',
+                textfont=dict(size=11),
+                hovertemplate='<b>%{x}</b><br>Margen: %{text}<extra></extra>',
+                showlegend=False
+            ),
+            row=1, col=2
+        )
+
+        fig_margen_segmentos.update_xaxes(title_text="Segmento", row=1, col=1)
+        fig_margen_segmentos.update_xaxes(title_text="Segmento", row=1, col=2)
+        fig_margen_segmentos.update_yaxes(title_text="Monto ($)", row=1, col=1)
+        fig_margen_segmentos.update_yaxes(title_text="Monto ($)", row=1, col=2)
+
+        fig_margen_segmentos.update_layout(
+            height=450,
+            margin=dict(t=80, r=40, l=60, b=60),
+            hovermode='x unified'
+        )
+
         render_plotly(fig_margen_segmentos)
 
         q1_monto_txt = formatear_moneda_argentina(q1_monto, 0)
@@ -2054,8 +2141,16 @@ with tabs[4]:
             title="Ventas acumuladas por metodo de pago",
             text=pago_summary['participacion'].astype(str) + '%'
         )
-        fig_pago.update_layout(height=420, showlegend=False, xaxis_title='Metodo de pago', yaxis_title='Ventas ($)', yaxis_tickprefix='$', yaxis_tickformat=',.0f')
-        fig_pago.update_traces(textposition='auto')
+        fig_pago.update_layout(
+            height=420,
+            showlegend=False,
+            xaxis_title='Metodo de pago',
+            yaxis_title='Ventas ($)',
+            yaxis_tickprefix='$',
+            yaxis_tickformat=',.0f',
+            bargap=0.3  # Reducir espacio entre barras (0.15 = 15% de espacio)
+        )
+        fig_pago.update_traces(textposition='auto', width=0.6)  # Ancho de barras más estrecho
         render_plotly(fig_pago)
 
         cols = st.columns(len(categorias_pago))
@@ -2105,33 +2200,6 @@ with tabs[4]:
         billetera_part = float(pago_summary.loc[pago_summary['medio'] == 'Billetera', 'participacion'].fillna(0).iloc[0])
         digital_part = float(resumen_modalidad.loc[resumen_modalidad['modalidad'] == 'Digitales', 'participacion'].fillna(0).iloc[0])
 
-        if tickets_modular is not None and not tickets_modular.empty:
-            pagos_ticket = tickets_modular.copy()
-            pagos_ticket['medio_normalizado'] = pagos_ticket['tipo_medio_pago'].apply(normalizar_medio)
-
-            fig_hist_monto = px.histogram(
-                pagos_ticket,
-                x='ventas_totales',
-                color='medio_normalizado',
-                nbins=50,
-                labels={'ventas_totales': 'Venta por ticket ($)', 'medio_normalizado': 'Metodo de pago'},
-                title="Distribucion de venta por ticket segun metodo"
-            )
-            fig_hist_monto.update_layout(height=420, barmode='overlay', hovermode='x unified', xaxis_title='Venta por ticket ($)', yaxis_title='Cantidad')
-            render_plotly(fig_hist_monto)
-
-            fig_hist_margen = px.histogram(
-                pagos_ticket,
-                x='margen_total',
-                color='medio_normalizado',
-                nbins=50,
-                labels={'margen_total': 'Margen por ticket ($)', 'medio_normalizado': 'Metodo de pago'},
-                title="Distribucion de margen por ticket segun metodo"
-            )
-            fig_hist_margen.update_layout(height=420, barmode='overlay', hovermode='x unified', xaxis_title='Margen por ticket ($)', yaxis_title='Cantidad')
-            render_plotly(fig_hist_margen)
-        else:
-            st.info("No hay tickets individuales para graficar distribuciones por metodo de pago.")
 
         st.markdown(
             f'''
