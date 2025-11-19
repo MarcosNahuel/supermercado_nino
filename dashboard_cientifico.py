@@ -1860,7 +1860,8 @@ with tabs[3]:
                 hist_monto['pct_tickets'] = 0
                 hist_monto['pct_acumulado'] = 0
 
-            # Crear gráfico con doble eje Y - versión compatible
+            # Crear gráfico con doble eje Y - versión compatible (sin make_subplots)
+            # Actualizado: 2025-01-19 para compatibilidad con Streamlit Cloud
             fig_monto = go.Figure()
 
             # Agregar barras (eje Y primario)
