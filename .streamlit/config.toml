@@ -1,24 +1,13 @@
+[client]
+showErrorDetails = true
+runOnSave = true
+
+[logger]
+level = "info"
+
 [theme]
-primaryColor = "#667eea"
+primaryColor = "#1a237e"
 backgroundColor = "#ffffff"
 secondaryBackgroundColor = "#f0f2f6"
-textColor = "#262730"
+textColor = "#31333F"
 font = "sans serif"
-
-[server]
-headless = true
-port = 8501
-enableCORS = false
-enableXsrfProtection = false
-runOnSave = false
-
-[browser]
-gatherUsageStats = false
-
-[runner]
-fastReruns = true
-magicEnabled = false
-
-[client]
-showErrorDetails = false
-toolbarMode = "minimal"
