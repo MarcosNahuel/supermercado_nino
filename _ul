@@ -6,6 +6,11 @@ Respuesta desde 127.0.0.1: bytes=32 tiempo<1m TTL=128
 Respuesta desde 127.0.0.1: bytes=32 tiempo<1m TTL=128
 Respuesta desde 127.0.0.1: bytes=32 tiempo<1m TTL=128
 Respuesta desde 127.0.0.1: bytes=32 tiempo<1m TTL=128
+<<<<<<< HEAD
+
+Estad¡sticas de ping para 127.0.0.1:
+    Paquetes: enviados = 6, recibidos = 6, perdidos = 0
+=======
 Respuesta desde 127.0.0.1: bytes=32 tiempo<1m TTL=128
 Respuesta desde 127.0.0.1: bytes=32 tiempo<1m TTL=128
 Respuesta desde 127.0.0.1: bytes=32 tiempo<1m TTL=128
@@ -18,6 +23,7 @@ Respuesta desde 127.0.0.1: bytes=32 tiempo<1m TTL=128
 
 Estad¡sticas de ping para 127.0.0.1:
     Paquetes: enviados = 15, recibidos = 15, perdidos = 0
+>>>>>>> edeabf923b60de74f440af3a9054fa704c07fb89
     (0% perdidos),
 Tiempos aproximados de ida y vuelta en milisegundos:
     M¡nimo = 0ms, M ximo = 0ms, Media = 0ms
