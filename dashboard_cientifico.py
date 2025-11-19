@@ -2377,32 +2377,6 @@ with tabs[5]:
 
     st.markdown(estrategias_html, unsafe_allow_html=True)
 
-    # Resumen de impacto acumulado
-    st.markdown("""
-    <div style='background: linear-gradient(135deg, #4caf50 0%, #8bc34a 100%);
-                padding: 30px; margin: 30px 0; border-radius: 15px; color: white;'>
-        <h3 style='margin: 0 0 15px 0;'>📈 IMPACTO ACUMULADO ESTIMADO (6 MESES)</h3>
-        <div style='display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; margin-top: 20px;'>
-            <div style='background: rgba(255,255,255,0.2); padding: 20px; border-radius: 10px; text-align: center;'>
-                <h4 style='margin: 0; font-size: 2rem;'>+12-18%</h4>
-                <p style='margin: 5px 0 0 0;'>Ticket Promedio</p>
-            </div>
-            <div style='background: rgba(255,255,255,0.2); padding: 20px; border-radius: 10px; text-align: center;'>
-                <h4 style='margin: 0; font-size: 2rem;'>+3-5pp</h4>
-                <p style='margin: 5px 0 0 0;'>Margen Bruto</p>
-            </div>
-            <div style='background: rgba(255,255,255,0.2); padding: 20px; border-radius: 10px; text-align: center;'>
-                <h4 style='margin: 0; font-size: 2rem;'>+$2-3M</h4>
-                <p style='margin: 5px 0 0 0;'>Ventas Incrementales/Año</p>
-            </div>
-        </div>
-        <p style='margin: 20px 0 0 0; text-align: center; font-size: 1.1rem;'>
-            <b>Fuente:</b> Estimaciones basadas en benchmarks de sector (Estrategias_Analitica.md)
-            y datos propios de NINO
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
-
 
 # =============================================================================
 # TAB 7: INFORME EJECUTIVO
