@@ -1928,19 +1928,18 @@ with tabs[3]:
                 tickfont=dict(size=11)
             )
 
-            fig_monto.update_yaxes(
-                title_text="Cantidad de tickets",
-                tickfont=dict(color='#1a237e'),
-                secondary_y=False
-            )
-
-            # Configurar eje Y secundario
-            fig_monto.update_yaxes(
-                title_text="% Acumulado",
-                tickfont=dict(color='#ff7043'),
-                ticksuffix="%",
-                range=[0, 105],
-                secondary_y=True
+            # Configurar ejes Y de forma explícita para compatibilidad con Plotly 5.17 en Streamlit Cloud
+            fig_monto.update_layout(
+                yaxis=dict(
+                    title_text="Cantidad de tickets",
+                    tickfont=dict(color='#1a237e')
+                ),
+                yaxis2=dict(
+                    title_text="% Acumulado",
+                    tickfont=dict(color='#ff7043'),
+                    ticksuffix="%",
+                    range=[0, 105]
+                )
             )
 
             # Agregar anotación para el 80%
