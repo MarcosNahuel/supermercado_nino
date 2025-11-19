@@ -30,6 +30,14 @@ data/processed/FASE1_OUTPUT/**
 !data/app_dataset/
 !data/app_dataset/**
 
+# Legacy archives
+legacy/data/processed/FASE1_OUTPUT/
+legacy/data/processed/FASE1_OUTPUT/**
+legacy/data/sample/FASE1_OUTPUT_SAMPLE/
+legacy/data/sample/FASE1_OUTPUT_SAMPLE/**
+legacy/outputs/
+legacy/outputs/**
+
 # Archivos CSV grandes (>100MB)
 *.csv
 !FASE1_OUTPUT_SAMPLE/*.csv
@@ -62,3 +70,28 @@ Thumbs.db
 
 # Windows temp files
 nul
+
+# Carpetas innecesarias para despliegue
+legacy/
+docs/
+RESTO/
+_ul/
+final/
+scripts/
+src/
+
+# Archivos temporales y de configuración local
+*.bat
+*.docx
+*.md.bak
+*.txt
+
+# Archivos de análisis no necesarios
+**/COMBOS_INTELIGENTES*.md
+**/analisis_combos_inteligentes.py
+**/generar_pdf*.py
+**/ESTRUCTURA_REPOSITORIO.md
+**/ACTUALIZACION_AUTOMATICA.md
+
+# Directorio .claude (configuración local)
+.claude/

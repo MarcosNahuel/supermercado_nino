@@ -6,12 +6,15 @@
 
 Dashboard interactivo para analizar 3M+ transacciones de Supermercado NINO, con KPIs ejecutivos, Pareto, Market Basket y segmentación de tickets.
 
+> 📖 **Nueva estructura:** Ver [`ESTRUCTURA_REPOSITORIO.md`](ESTRUCTURA_REPOSITORIO.md) para navegación completa del repositorio.
+
 ## Características clave
 
 - **KPIs ejecutivos** con métricas globales y tendencias mensuales.
 - **Pareto 80/20** para identificar productos críticos y oportunidades de margen.
 - **Market Basket** con reglas Apriori y filtros dinámicos.
 - **Segmentación de tickets** basada en clustering K-Means.
+- **Simulador ML de ROI** para cuantificar combos, marca propia, cross-merchandising, upselling y fidelización con ML.
 - **Dataset ligero en Parquet** incluido en `data/app_dataset/` (sin depender de Supabase).
 - **UI moderna** con Plotly y animaciones personalizadas en Streamlit.
 
@@ -41,61 +44,112 @@ python -m venv .venv
 
 pip install -r requirements.txt
 
-# Opcional: regenerar el paquete Parquet si actualizaste los CSV procesados
-python scripts/build_app_dataset.py
+# Opción 1: Iniciar dashboard directamente
+streamlit run dashboard_cientifico.py
 
-streamlit run app_streamlit_supabase.py
+# Opción 2: Usar script de inicio (Windows)
+iniciar_dashboard.bat
 ```
 
-El dashboard cargará por defecto los archivos Parquet de `data/app_dataset/`. Si esa carpeta no existe, se usa la muestra liviana `data/sample/FASE1_OUTPUT_SAMPLE/` para mantener la demo operativa.
+### 🔄 Actualizar datos después de modificar el CSV central
 
-> ¿Necesitas cargar la base completa en Supabase? El soporte sigue disponible en `docs/DEPLOY_SUPABASE.md` y `docs/SUPABASE_SQL_SCRIPTS.md`, pero ya no es obligatorio para desplegar en Streamlit Cloud.
+Cuando actualices `data/raw/SERIE_COMPROBANTES_COMPLETOS.csv` (ej: cambios en medios de pago), ejecuta:
+
+```bash
+# Opción 1: Script Python automático (recomendado)
+python actualizar_metricas.py
+
+# Opción 2: Script batch Windows (doble clic)
+actualizar_metricas.bat
+```
+
+Este script ejecutará automáticamente:
+1. Pipeline de procesamiento de datos
+2. Copia de archivos a app_dataset
+3. Entrenamiento de modelos ML
+
+Ver documentación completa en [`ACTUALIZACION_AUTOMATICA.md`](ACTUALIZACION_AUTOMATICA.md)
+
+> Las versiones anteriores y archivos legacy se archivaron en `RESTO/` para referencia.
+
+## Módulo ML ROI
+
+El nuevo módulo de **Simulador ML de ROI** entrena seis modelos de machine learning para cuantificar el impacto financiero de las principales palancas comerciales:
+
+- Combos focalizados (matching + uplift).
+- Lanzamiento de marca propia en categorías Pareto A.
+- Cross-merchandising guiado por reglas de asociación.
+- Upselling en línea de caja.
+- Programa de fidelización sin IDs de cliente (proxy por clúster).
+- Predictor base de ticket para estimar el contrafactual.
+
+Los resultados se guardan en `data/ml_results/` y se visualizan en la pestaña **“🤖 Simulador ML ROI”** del dashboard. Ejecutá `python scripts/train_ml_models.py` cada vez que refresques los Parquet para mantener las simulaciones al día.
 
 ## Estructura del proyecto
 
 ```
 supermercado_nino/
-├── app_streamlit_supabase.py      # Dashboard principal (ahora solo datos locales)
-├── FASE1_ANALISIS_COMPLETO.py     # Pipeline ETL de la fase 1
+├── dashboard_cientifico.py           # 🎯 Dashboard científico principal
+├── actualizar_metricas.py            # 🔄 Script de actualización automática
+├── actualizar_metricas.bat           # 🪟 Script Windows (doble clic)
+├── iniciar_dashboard.bat             # 🚀 Iniciar dashboard (Windows)
+├── ACTUALIZACION_AUTOMATICA.md       # 📘 Documentación de actualización
+├── README.md                         # 📖 Documentación principal
+├── requirements.txt                  # 📦 Dependencias Python
 │
-├── scripts/
-│   ├── build_app_dataset.py       # Convierte los CSV procesados a Parquet
-│   ├── migrate_to_supabase.py     # (Opcional) migración a Supabase
-│   ├── setup_supabase_tables.py   # (Opcional) creación de tablas
-│   └── clean_supabase.py          # (Opcional) limpieza de Supabase
+├── src/                              # 💻 Código fuente modular
+│   ├── data_prep/                    #    - Limpieza y normalización
+│   ├── features/                     #    - KPIs, clustering, market basket
+│   ├── ml_models/                    #    - Modelos ML y simuladores ROI
+│   └── utils/                        #    - Utilidades y helpers
 │
-├── data/
-│   ├── raw/                       # Datasets originales (gitignored)
-│   ├── processed/FASE1_OUTPUT/    # Salida del pipeline (gitignored)
-│   ├── app_dataset/               # Parquet listo para la app (versionado)
-│   └── sample/FASE1_OUTPUT_SAMPLE/# Muestra liviana para demos
+├── scripts/                          # 🛠️ Scripts de procesamiento
+│   ├── pipeline/                     #    - Pipeline ETL principal
+│   │   └── main_pipeline.py          #      (scripts/pipeline/main_pipeline.py)
+│   └── train_ml_models.py            #    - Entrenamiento de modelos ML
 │
-├── docs/                          # Documentación funcional y técnica
-│   ├── DEPLOY_SUPABASE.md
-│   ├── SUPABASE_SQL_SCRIPTS.md
-│   ├── RESUMEN_EJECUTIVO_ACTUALIZADO.md
-│   ├── RESUMEN_PROYECTO_FINAL.md
-│   └── CONCLUSIONES_ESTRATEGIAS_FINALES.md
+├── data/                             # 📊 Datos y resultados
+│   ├── raw/                          #    - CSV originales (gitignored)
+│   ├── processed/                    #    - Parquet procesados por pipeline
+│   ├── predictivos/                  #    - Pronósticos semanales
+│   ├── ml_results/                   #    - Resultados de simuladores ML
+│   └── app_dataset/                  #    - Dataset que consume el dashboard
 │
-├── requirements.txt
-└── README.md
+└── RESTO/                            # 🗃️ Archivos archivados
+    ├── app/                          #    - Dashboard versión anterior
+    ├── final/                        #    - Versión pre-reorganización
+    ├── legacy/                       #    - Código y pipelines legacy
+    ├── docs/                         #    - Documentación histórica
+    └── archivos_misc/                #    - Scripts y archivos diversos
 ```
 
 ## Tecnologías
 
 - **Streamlit + Plotly** para la capa de visualización.
-- **Pandas, NumPy, Scikit-learn y MLxtend** para procesamiento analítico.
+- **Pandas, NumPy, Scikit-learn, MLxtend y XGBoost** para procesamiento analítico y simulaciones ML.
 - **PyArrow** para empaquetar los datasets en Parquet (5,5 MB en vez de ~420 MB de CSV).
 - **Scripts opcionales con Supabase** para quien desee escalar la base de datos en la nube.
 
 ## Metodología analítica
 
-1. Limpieza y enriquecimiento de 3M+ comprobantes.
-2. Cálculo de KPIs mensuales y por categoría.
-3. Clasificación ABC para Pareto.
-4. Reglas de asociación (Apriori) para Market Basket.
-5. Clustering K-Means para segmentar tickets.
-6. Empaquetado a Parquet + visualización en Streamlit.
+1. **Limpieza y enriquecimiento** de 3M+ comprobantes con datos de rentabilidad y feriados.
+2. **Cálculo de KPIs** mensuales, por categoría, día de semana, tipo de día y medio de pago.
+3. **Clasificación ABC** (Pareto 80/20) para identificar productos y categorías críticas.
+4. **Reglas de asociación** (Apriori) para Market Basket y generación de combos recomendados.
+5. **Clustering K-Means** para segmentar tickets por comportamiento de compra.
+6. **Pronósticos simples e interpretables** usando Promedios Móviles + Tendencia (no ARIMA).
+7. **Empaquetado a Parquet** + visualización interactiva en Streamlit con storytelling.
+
+### ¿Por qué NO usamos ARIMA para pronósticos?
+
+Este proyecto utiliza **Promedios Móviles con Tendencia** en lugar de modelos ARIMA porque:
+
+- **Transparencia**: Es fácil explicar "promedio de últimas 8 semanas" vs. "ARIMA(1,1,2)"
+- **Auditabilidad**: Los stakeholders pueden verificar los cálculos manualmente
+- **Suficiencia**: Para series cortas (<2 años), ARIMA no ofrece ventajas significativas
+- **Interpretabilidad**: Los gerentes entienden tendencias lineales mejor que parámetros técnicos
+
+Ver documentación completa en `src/features/predictivos_ventas_simple.py`
 
 ## Roadmap
 
@@ -109,10 +163,13 @@ supermercado_nino/
 
 ## Documentación relacionada
 
-- `docs/DEPLOY_SUPABASE.md` – guía opcional para usar Supabase.
-- `docs/SUPABASE_SQL_SCRIPTS.md` – sentencias SQL para limpiar/repoblar Supabase.
-- `docs/RESUMEN_EJECUTIVO_ACTUALIZADO.md` – KPIs consolidados.
-- `docs/RESUMEN_PROYECTO_FINAL.md` y `docs/CONCLUSIONES_ESTRATEGIAS_FINALES.md` – insights y recomendaciones.
+- [`ACTUALIZACION_AUTOMATICA.md`](ACTUALIZACION_AUTOMATICA.md) - Guía completa de actualización automática de métricas
+- [`RESTO/docs/`](RESTO/docs/) - Documentación histórica y técnica archivada
+  - `PIPELINE_ESTRATEGIAS.md` - Blueprint del pipeline unificado
+  - `VALIDACION_FINAL.txt` - Checklist de verificación de KPIs
+  - `FASE1_OUTPUT.log` - Bitácora histórica de la fase 1
+- [`RESTO/legacy/`](RESTO/legacy/) - Dashboards, scripts CSV y datasets archivados
+
 
 ## Contacto y licencia
 
