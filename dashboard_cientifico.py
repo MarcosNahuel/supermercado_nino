@@ -1860,9 +1860,12 @@ with tabs[3]:
                 hist_monto['pct_tickets'] = 0
                 hist_monto['pct_acumulado'] = 0
 
-            # Crear gráfico mejorado con subplots
+            # Crear gráfico mejorado con subplots - compatible con todas las versiones de Plotly
+            from plotly.subplots import make_subplots
+
             fig_monto = make_subplots(specs=[[{"secondary_y": True}]])
 
+            # Agregar barras (eje Y primario)
             fig_monto.add_trace(
                 go.Bar(
                     x=hist_monto['rango_ticket'].astype(str),
@@ -1872,11 +1875,12 @@ with tabs[3]:
                     text=[f"{int(v):,}" for v in hist_monto['tickets']],
                     textposition='outside',
                     textfont=dict(size=10),
-                    hovertemplate='<b>%{x}</b><br>Tickets: %{y:,}<extra></extra>'
-                ),
-                secondary_y=False
+                    hovertemplate='<b>%{x}</b><br>Tickets: %{y:,}<extra></extra>',
+                    yaxis='y'
+                )
             )
 
+            # Agregar línea de % acumulado (eje Y secundario)
             fig_monto.add_trace(
                 go.Scatter(
                     x=hist_monto['rango_ticket'].astype(str),
@@ -1885,48 +1889,35 @@ with tabs[3]:
                     name='% Acumulado',
                     line=dict(color='#ff7043', width=3),
                     marker=dict(size=8),
-                    hovertemplate='<b>%{x}</b><br>Acumulado: %{y:.1f}%<extra></extra>'
-                ),
-                secondary_y=True
+                    hovertemplate='<b>%{x}</b><br>Acumulado: %{y:.1f}%<extra></extra>',
+                    yaxis='y2'
+                )
             )
 
-            # Línea de referencia 80%
-            fig_monto.add_hline(
-                y=80,
-                line_dash="dash",
-                line_color="green",
-                opacity=0.7,
-                annotation_text="80% (Pareto)",
-                annotation_position="right",
-                secondary_y=True
-            )
-
-            fig_monto.update_xaxes(
-                title_text="Rango de venta por ticket",
-                tickangle=-45,
-                tickfont=dict(size=11)
-            )
-
-            fig_monto.update_yaxes(
-                title_text="Cantidad de tickets",
-                titlefont=dict(color='#1a237e'),
-                tickfont=dict(color='#1a237e'),
-                secondary_y=False
-            )
-
-            fig_monto.update_yaxes(
-                title_text="% Acumulado",
-                titlefont=dict(color='#ff7043'),
-                tickfont=dict(color='#ff7043'),
-                range=[0, 105],
-                ticksuffix="%",
-                secondary_y=True
-            )
-
+            # Configurar layout completo
             fig_monto.update_layout(
                 height=500,
                 margin=dict(t=50, r=80, l=70, b=120),
                 hovermode='x unified',
+                xaxis=dict(
+                    title="Rango de venta por ticket",
+                    tickangle=-45,
+                    tickfont=dict(size=11)
+                ),
+                yaxis=dict(
+                    title="Cantidad de tickets",
+                    titlefont=dict(color='#1a237e'),
+                    tickfont=dict(color='#1a237e')
+                ),
+                yaxis2=dict(
+                    title="% Acumulado",
+                    titlefont=dict(color='#ff7043'),
+                    tickfont=dict(color='#ff7043'),
+                    overlaying='y',
+                    side='right',
+                    range=[0, 105],
+                    ticksuffix="%"
+                ),
                 legend=dict(
                     orientation='h',
                     yanchor='bottom',
@@ -1935,6 +1926,28 @@ with tabs[3]:
                     x=1
                 ),
                 showlegend=True
+            )
+
+            # Agregar línea de referencia 80% en el eje secundario
+            fig_monto.add_shape(
+                type="line",
+                x0=-0.5,
+                x1=len(hist_monto)-0.5,
+                y0=80,
+                y1=80,
+                yref='y2',
+                line=dict(color="green", width=2, dash="dash"),
+                opacity=0.7
+            )
+
+            fig_monto.add_annotation(
+                x=len(hist_monto)-1,
+                y=80,
+                yref='y2',
+                text="80% (Pareto)",
+                showarrow=False,
+                xanchor='left',
+                font=dict(color="green", size=10)
             )
 
             render_plotly(fig_monto)
