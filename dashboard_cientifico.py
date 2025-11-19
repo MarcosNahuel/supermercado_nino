@@ -1177,7 +1177,7 @@ with tabs[0]:
             max_y_margen = kpi_tipo_plot["margen_pct"].max()
             fig_margen_tipo.update_layout(
                 height=360,
-                yaxis_ticktemplate='%{value}%',
+                yaxis_ticksuffix="%",
                 yaxis_range=[0, max_y_margen * 1.15],
                 margin=dict(t=60, b=60, l=60, r=20)
             )
@@ -1914,7 +1914,7 @@ with tabs[3]:
                     overlaying='y',
                     side='right',
                     range=[0, 105],
-                    ticktemplate='%{value}%'
+                    ticksuffix="%"
                 ),
                 legend=dict(
                     orientation='h',
