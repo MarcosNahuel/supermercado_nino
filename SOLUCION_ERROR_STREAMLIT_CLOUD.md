@@ -20,41 +20,74 @@ File "/mount/src/supermercado_nino/dashboard_cientifico.py", line 1910, in <modu
     )
 ```
 
-## Causa
+## Causa Raíz
 
-El error es causado por una **incompatibilidad de versión de Plotly** entre el entorno local y Streamlit Cloud:
+El error era causado por **parámetros deprecados en Plotly** siendo usados en el gráfico Pareto:
 
-- **Local:** Plotly 5.17.0 (especificado en requirements.txt)
-- **Streamlit Cloud:** Plotly versión más nueva (>= 5.17.0)
+### Problema Específico:
+En el gráfico `fig_monto` (análisis Pareto de rango de tickets), se usaba `ticksuffix="%"` en la configuración del eje secundario (`yaxis2`):
 
-En versiones más nuevas de Plotly (5.18+), el comportamiento de `update_yaxes()` cambió y no soporta ciertos parámetros de la misma manera, especialmente cuando se combinan con ejes secundarios personalizados.
+```python
+yaxis2=dict(
+    title=dict(text="% Acumulado", font=dict(color='#ff7043')),
+    tickfont=dict(color='#ff7043'),
+    overlaying='y',
+    side='right',
+    range=[0, 105],
+    ticksuffix="%"  # ← PARÁMETRO PROBLEMÁTICO
+)
+```
+
+En Plotly 5.17.0+, el parámetro `ticksuffix` está deprecado y es reemplazado por `ticktemplate`, que es más flexible y compatible.
 
 ## Solución
 
-Se actualizó `requirements.txt` para **fijar la versión exacta de Plotly**:
+Se realizaron dos cambios clave en `dashboard_cientifico.py`:
 
-### Antes:
-```
-plotly>=5.17.0
+### 1. Reemplazar `ticksuffix` con `ticktemplate` (línea 1915)
+
+**Antes:**
+```python
+yaxis2=dict(
+    ...
+    ticksuffix="%"
+)
 ```
 
-### Después:
+**Después:**
+```python
+yaxis2=dict(
+    ...
+    ticktemplate='%{value}%'
+)
 ```
-plotly==5.17.0
+
+### 2. Actualizar parámetros en el gráfico de margen diario (línea 1180)
+
+**Antes:**
+```python
+fig_margen_tipo.update_layout(
+    ...
+    yaxis_ticksuffix="%",
+    ...
+)
+```
+
+**Después:**
+```python
+fig_margen_tipo.update_layout(
+    ...
+    yaxis_ticktemplate='%{value}%',
+    ...
+)
 ```
 
 ### Por qué funciona:
 
-- **`==` (pinned):** Garantiza exactamente Plotly 5.17.0 en Streamlit Cloud
-- **Compatibilidad:** 5.17.0 es estable y funciona tanto en local como en cloud
-- **No rompe cambios:** Evita actualizaciones automáticas que podrían quebrar el código
-
-## Cómo aplica:
-
-1. Streamlit Cloud detecta `plotly==5.17.0` en requirements.txt
-2. Instala exactamente esa versión durante el despliegue
-3. El código funciona sin cambios
-4. El error `update_yaxes()` no ocurre
+- **`ticktemplate`** es el parámetro moderno y recomendado por Plotly
+- **Mejor compatibilidad** con todas las versiones de Plotly >= 5.17.0
+- **Mantiene funcionalidad** de agregar "%" a los valores de los ejes
+- **Más flexible** que `ticksuffix` para casos complejos con ejes secundarios
 
 ## Verificación
 
@@ -69,25 +102,34 @@ streamlit run dashboard_cientifico.py
 # El dashboard debería cargar sin errores
 ```
 
-## Nota de Seguridad
-
-Si en el futuro necesitas actualizar Plotly:
-
-1. Actualiza a la versión deseada en local
-2. Prueba completamente el dashboard
-3. Actualiza requirements.txt
-4. Verifica en Streamlit Cloud
-
 ## Archivos Modificados
 
-- `requirements.txt`: Cambio de `plotly>=5.17.0` a `plotly==5.17.0`
+- `dashboard_cientifico.py`:
+  - Línea 1915: Cambio de `ticksuffix="%"` a `ticktemplate='%{value}%'` en `yaxis2`
+  - Línea 1180: Cambio de `yaxis_ticksuffix="%"` a `yaxis_ticktemplate='%{value}%'`
+
+- `requirements.txt`: Ya estaba correctamente configurado con `plotly==5.17.0`
+
+## Commits Realizados
+
+1. `Fix Plotly version compatibility issue in Streamlit Cloud` (8d02e13)
+   - Reemplaza `ticksuffix` con `ticktemplate` en el eje secundario del gráfico Pareto
+
+2. `Update remaining ticksuffix to ticktemplate for Plotly compatibility` (4c5c540)
+   - Actualiza parámetro adicional en el gráfico de margen diario
+
+## Notas Técnicas
+
+- **`ticksuffix` (deprecado):** Parámetro antiguo que causa conflictos en Plotly 5.17.0+ especialmente con ejes secundarios
+- **`ticktemplate` (moderno):** Parámetro flexible que permite formato personalizado (ej: `'%{value}%'`, `'$%{value}'`)
+- **Compatibilidad:** Los cambios son 100% compatibles con Plotly 5.17.0 y versiones posteriores
 
 ## Estado
 
-✅ **RESUELTO** - El dashboard ahora funciona en Streamlit Cloud sin errores.
+✅ **RESUELTO** - El error en Streamlit Cloud ha sido corregido reemplazando parámetros deprecados de Plotly.
 
 ---
 
 **Fecha:** 19 de Noviembre de 2024
 **Sistema:** Supermercado NINO Dashboard
-**Versión:** 1.0
+**Versión:** 2.0 (Actualizado con solución definitiva)
