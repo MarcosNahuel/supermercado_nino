@@ -19,6 +19,7 @@ import unicodedata
 import json
 import locale
 import plotly.io as pio
+from sklearn.linear_model import LinearRegression
 
 # Configuración global de Plotly para mejor rendimiento
 pio.templates.default = "plotly_white"
@@ -483,6 +484,7 @@ st.markdown(f"""
 # =============================================================================
 tabs = st.tabs([
     "📈 Análisis Temporal",
+    "💰 Márgenes - Costos",
     "🎯 Pareto & Mix",
     "🛒 Market Basket (Combos)",
     "👥 Segmentación",
@@ -533,8 +535,28 @@ with tabs[0]:
                     kpi_periodo_plot['periodo_dt'].dt.to_period('M') != ultimo_mes_incompleto
                 ]
             kpi_periodo_plot['periodo_label'] = kpi_periodo_plot['periodo_dt'].dt.strftime('%Y-%m')
+
+            # Calcular margen % promedio por mes desde rentabilidad_ticket
+            if 'rentabilidad_ticket' in data and data['rentabilidad_ticket'] is not None:
+                detalle_rent = data['rentabilidad_ticket'].copy()
+                detalle_rent['fecha'] = pd.to_datetime(detalle_rent['fecha'])
+                detalle_rent['periodo'] = detalle_rent['fecha'].dt.to_period('M')
+
+                margen_mensual = detalle_rent.groupby('periodo').agg({
+                    'rentabilidad_pct_ticket': 'mean'
+                }).reset_index()
+                margen_mensual['periodo'] = margen_mensual['periodo'].astype(str)
+                margen_mensual['margen_pct'] = margen_mensual['rentabilidad_pct_ticket'] * 100
+
+                # Merge con kpi_periodo_plot
+                kpi_periodo_plot = kpi_periodo_plot.merge(
+                    margen_mensual[['periodo', 'margen_pct']],
+                    left_on=kpi_periodo_plot['periodo_dt'].dt.to_period('M').astype(str),
+                    right_on='periodo',
+                    how='left'
+                )
         else:
-            kpi_periodo_plot = pd.DataFrame(columns=['periodo_label', 'tickets'])
+            kpi_periodo_plot = pd.DataFrame(columns=['periodo_label', 'tickets', 'margen_pct'])
 
         # -------------------------
         # Semanal (tickets por semana)
@@ -712,23 +734,69 @@ with tabs[0]:
 
         if vista_temporal == 'Mensual':
             if not kpi_periodo_plot.empty:
-                df_mensual = kpi_periodo_plot[['periodo_dt', 'tickets']].rename(columns={'periodo_dt': 'periodo'})
-                fig_temporal, pendiente_temporal = construir_figura_tendencia(
-                    df_mensual,
-                    'periodo',
-                    'tickets',
-                    'Mensual - Tickets emitidos',
-                    'mes'
+                df_mensual = kpi_periodo_plot[['periodo_dt', 'tickets', 'margen_pct']].rename(columns={'periodo_dt': 'periodo'})
+
+                # Crear gráfico con dos ejes Y (tickets y margen %)
+                fig_temporal = make_subplots(specs=[[{"secondary_y": True}]])
+
+                # Agregar tickets (eje izquierdo)
+                fig_temporal.add_trace(
+                    go.Scatter(
+                        x=df_mensual['periodo'],
+                        y=df_mensual['tickets'],
+                        name='Tickets',
+                        mode='lines+markers',
+                        line=dict(color='#1f77b4', width=2),
+                        marker=dict(size=8)
+                    ),
+                    secondary_y=False
                 )
-                if fig_temporal is not None:
-                    # Generar etiquetas en español para meses
-                    fechas = df_mensual['periodo']
-                    etiquetas_es = [traducir_mes_espanol(f.strftime('%b %Y')) for f in fechas]
-                    fig_temporal.update_xaxes(
-                        type='category',
-                        ticktext=etiquetas_es,
-                        tickvals=fechas
+
+                # Agregar margen % (eje derecho)
+                if 'margen_pct' in df_mensual.columns and df_mensual['margen_pct'].notna().any():
+                    fig_temporal.add_trace(
+                        go.Scatter(
+                            x=df_mensual['periodo'],
+                            y=df_mensual['margen_pct'],
+                            name='Margen %',
+                            mode='lines+markers',
+                            line=dict(color='#2ca02c', width=2, dash='dash'),
+                            marker=dict(size=8, symbol='diamond')
+                        ),
+                        secondary_y=True
                     )
+
+                # Configurar ejes
+                fig_temporal.update_xaxes(title_text=None)
+                fig_temporal.update_yaxes(title_text="Tickets", secondary_y=False)
+                fig_temporal.update_yaxes(title_text="Margen %", secondary_y=True)
+
+                # Generar etiquetas en español para meses
+                fechas = df_mensual['periodo']
+                etiquetas_es = [traducir_mes_espanol(f.strftime('%b %Y')) for f in fechas]
+                fig_temporal.update_xaxes(
+                    type='category',
+                    ticktext=etiquetas_es,
+                    tickvals=fechas
+                )
+
+                # Layout general
+                fig_temporal.update_layout(
+                    title='Mensual - Tickets emitidos y Margen %',
+                    height=400,
+                    hovermode='x unified',
+                    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+                )
+
+                fig_temporal = configurar_grafico_rendimiento(fig_temporal)
+
+                # Calcular pendiente para tickets
+                X_mensual = np.arange(len(df_mensual)).reshape(-1, 1)
+                y_mensual = df_mensual['tickets'].values
+                model_mensual = LinearRegression()
+                model_mensual.fit(X_mensual, y_mensual)
+                pendiente_temporal = model_mensual.coef_[0]
+
             else:
                 st.info('No hay datos suficientes para el analisis mensual.')
         elif vista_temporal == 'Semanal':
@@ -1282,10 +1350,209 @@ with tabs[0]:
                 st.info("Error generando gráfico horario. Verificar datos de comprobantes_ventas_horario.csv.")
         else:
             st.info("No se pudo construir la vista horaria; verificar la fuente `comprobantes_ventas_horario.csv`.")
+
 # =============================================================================
-# TAB 2: PARETO & MIX
+# TAB 2: MÁRGENES - COSTOS
 # =============================================================================
 with tabs[1]:
+    st.markdown("## 💰 Análisis de Márgenes y Rentabilidad")
+
+    detalle_tickets_margen = data.get('rentabilidad_ticket')
+
+    if detalle_tickets_margen is None or detalle_tickets_margen.empty:
+        st.warning("No se encontraron datos de rentabilidad por ticket.")
+    else:
+        detalle_tickets_margen = detalle_tickets_margen.copy()
+        detalle_tickets_margen['fecha'] = pd.to_datetime(detalle_tickets_margen['fecha'])
+        detalle_tickets_margen['periodo'] = detalle_tickets_margen['fecha'].dt.to_period('M')
+        detalle_tickets_margen['margen_pct'] = detalle_tickets_margen['rentabilidad_pct_ticket'] * 100
+
+        # Filtrar mes incompleto
+        max_fecha = detalle_tickets_margen['fecha'].max()
+        ultimo_mes_incompleto = None
+        if pd.notna(max_fecha):
+            dias_mes = monthrange(max_fecha.year, max_fecha.month)[1]
+            if max_fecha.day < dias_mes:
+                ultimo_mes_incompleto = max_fecha.to_period('M')
+
+        if ultimo_mes_incompleto is not None:
+            detalle_tickets_margen = detalle_tickets_margen[
+                detalle_tickets_margen['periodo'] != ultimo_mes_incompleto
+            ]
+
+        if not detalle_tickets_margen.empty:
+            # KPIs principales
+            col1, col2, col3, col4 = st.columns(4)
+
+            margen_promedio = detalle_tickets_margen['margen_pct'].mean()
+            margen_ticket_promedio = detalle_tickets_margen['margen_ticket'].mean()
+            ticket_promedio = detalle_tickets_margen['monto_total_ticket'].mean()
+
+            with col1:
+                st.metric(
+                    "Margen % Promedio",
+                    f"{margen_promedio:.1f}%",
+                    help="Margen porcentual promedio sobre ventas"
+                )
+
+            with col2:
+                st.metric(
+                    "Margen $ por Ticket",
+                    f"${formatear_numero_argentino(margen_ticket_promedio, 0)}",
+                    help="Margen promedio en pesos por ticket"
+                )
+
+            with col3:
+                st.metric(
+                    "Ticket Promedio",
+                    f"${formatear_numero_argentino(ticket_promedio, 0)}",
+                    help="Venta promedio por ticket"
+                )
+
+            with col4:
+                tickets_totales = len(detalle_tickets_margen)
+                st.metric(
+                    "Total Tickets",
+                    formatear_numero_argentino(tickets_totales, 0),
+                    help="Cantidad total de tickets analizados"
+                )
+
+            # Evolución mensual del margen %
+            st.markdown("### Evolución Mensual del Margen %")
+
+            margen_mensual = detalle_tickets_margen.groupby('periodo').agg({
+                'margen_pct': 'mean',
+                'margen_ticket': 'mean',
+                'monto_total_ticket': 'mean'
+            }).reset_index()
+            margen_mensual['periodo_dt'] = margen_mensual['periodo'].dt.to_timestamp()
+
+            fig_margen_evol = make_subplots(specs=[[{"secondary_y": True}]])
+
+            # Margen % (eje izquierdo)
+            fig_margen_evol.add_trace(
+                go.Scatter(
+                    x=margen_mensual['periodo_dt'],
+                    y=margen_mensual['margen_pct'],
+                    name='Margen %',
+                    mode='lines+markers',
+                    line=dict(color='#2ca02c', width=3),
+                    marker=dict(size=10)
+                ),
+                secondary_y=False
+            )
+
+            # Margen $ por ticket (eje derecho)
+            fig_margen_evol.add_trace(
+                go.Scatter(
+                    x=margen_mensual['periodo_dt'],
+                    y=margen_mensual['margen_ticket'],
+                    name='Margen $ por Ticket',
+                    mode='lines+markers',
+                    line=dict(color='#ff7f0e', width=2, dash='dash'),
+                    marker=dict(size=8, symbol='diamond')
+                ),
+                secondary_y=True
+            )
+
+            fig_margen_evol.update_xaxes(title_text=None)
+            fig_margen_evol.update_yaxes(title_text="Margen %", secondary_y=False)
+            fig_margen_evol.update_yaxes(title_text="Margen $ por Ticket", secondary_y=True)
+
+            fig_margen_evol.update_layout(
+                title='Evolución del Margen Porcentual y en Pesos',
+                height=450,
+                hovermode='x unified',
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+            )
+
+            st.plotly_chart(fig_margen_evol, use_container_width=True)
+
+            # Insight sobre tendencia
+            if len(margen_mensual) >= 2:
+                cambio_margen = margen_mensual.iloc[-1]['margen_pct'] - margen_mensual.iloc[0]['margen_pct']
+                if cambio_margen > 1:
+                    st.success(f"📈 El margen % aumentó {cambio_margen:.1f} puntos porcentuales en el período analizado.")
+                elif cambio_margen < -1:
+                    st.warning(f"📉 El margen % disminuyó {abs(cambio_margen):.1f} puntos porcentuales en el período analizado.")
+                else:
+                    st.info(f"➡️ El margen % se mantuvo relativamente estable ({cambio_margen:+.1f} pp).")
+
+            # Distribución del margen % por cuartiles
+            st.markdown("### Distribución de Tickets por Margen %")
+
+            # Calcular cuartiles
+            q1 = detalle_tickets_margen['margen_pct'].quantile(0.25)
+            q2 = detalle_tickets_margen['margen_pct'].quantile(0.50)
+            q3 = detalle_tickets_margen['margen_pct'].quantile(0.75)
+
+            detalle_tickets_margen['cuartil'] = pd.cut(
+                detalle_tickets_margen['margen_pct'],
+                bins=[-np.inf, q1, q2, q3, np.inf],
+                labels=['Q1 (Bajo)', 'Q2 (Medio-Bajo)', 'Q3 (Medio-Alto)', 'Q4 (Alto)']
+            )
+
+            cuartiles_stats = detalle_tickets_margen.groupby('cuartil').agg({
+                'ticket_id': 'count',
+                'margen_pct': 'mean',
+                'margen_ticket': 'sum',
+                'monto_total_ticket': 'sum'
+            }).reset_index()
+            cuartiles_stats.columns = ['Cuartil', 'Cantidad Tickets', 'Margen % Promedio', 'Margen $ Total', 'Ventas Totales']
+
+            col1, col2 = st.columns(2)
+
+            with col1:
+                # Gráfico de distribución
+                fig_dist = px.histogram(
+                    detalle_tickets_margen,
+                    x='margen_pct',
+                    nbins=50,
+                    title='Distribución de Margen % por Ticket',
+                    labels={'margen_pct': 'Margen %', 'count': 'Cantidad de Tickets'}
+                )
+                fig_dist.update_traces(marker_color='#2ca02c')
+                fig_dist.update_layout(height=400, showlegend=False)
+                st.plotly_chart(fig_dist, use_container_width=True)
+
+            with col2:
+                # Gráfico de cuartiles
+                fig_cuartiles = px.bar(
+                    cuartiles_stats,
+                    x='Cuartil',
+                    y='Cantidad Tickets',
+                    title='Tickets por Cuartil de Margen %',
+                    color='Cuartil',
+                    color_discrete_sequence=['#d62728', '#ff7f0e', '#2ca02c', '#1f77b4']
+                )
+                fig_cuartiles.update_layout(height=400, showlegend=False)
+                st.plotly_chart(fig_cuartiles, use_container_width=True)
+
+            # Tabla resumen de cuartiles
+            st.markdown("### Resumen por Cuartiles")
+            cuartiles_stats['Margen % Promedio'] = cuartiles_stats['Margen % Promedio'].apply(lambda x: f"{x:.1f}%")
+            cuartiles_stats['Margen $ Total'] = cuartiles_stats['Margen $ Total'].apply(lambda x: f"${formatear_numero_argentino(x, 0)}")
+            cuartiles_stats['Ventas Totales'] = cuartiles_stats['Ventas Totales'].apply(lambda x: f"${formatear_numero_argentino(x, 0)}")
+            cuartiles_stats['Cantidad Tickets'] = cuartiles_stats['Cantidad Tickets'].apply(lambda x: formatear_numero_argentino(x, 0))
+
+            st.dataframe(cuartiles_stats, use_container_width=True, hide_index=True)
+
+            # Insights accionables
+            st.markdown("### 💡 Insights Accionables")
+            st.info("""
+            **Estrategias según cuartiles:**
+            - **Q1 (Bajo margen):** Revisar precios, optimizar mix de productos, considerar marcas propias
+            - **Q2-Q3 (Margen medio):** Oportunidad de upselling y venta cruzada
+            - **Q4 (Alto margen):** Analizar patrones para replicar en otros tickets
+            """)
+
+        else:
+            st.warning("No hay datos suficientes después de filtrar el mes incompleto.")
+
+# =============================================================================
+# TAB 3: PARETO & MIX
+# =============================================================================
+with tabs[7]:
     st.markdown("## Analisis de Pareto - optimizar mix de productos")
 
     pareto_prod = data.get('pareto_prod')
@@ -1519,7 +1786,7 @@ with tabs[1]:
 # =============================================================================
 # TAB 3: MARKET BASKET (COMBOS)
 # =============================================================================
-with tabs[2]:
+with tabs[7]:
     st.markdown("## Market Basket Analysis - combos estrategicos")
 
     reglas = data.get('reglas')
@@ -1688,7 +1955,7 @@ with tabs[2]:
 # =============================================================================
 # TAB 4: SEGMENTACION
 # =============================================================================
-with tabs[3]:
+with tabs[7]:
     st.markdown("## Segmentacion de tickets - personalizar estrategias")
 
     rentabilidad = data['rentabilidad_ticket'].copy()
@@ -2091,7 +2358,7 @@ with tabs[3]:
 # =============================================================================
 # TAB 5: MEDIOS DE PAGO
 # =============================================================================
-with tabs[4]:
+with tabs[7]:
     st.markdown("## Analisis de medios de pago")
 
     kpi_pago = data.get('kpi_pago')
@@ -2239,7 +2506,7 @@ with tabs[4]:
 # =============================================================================
 # TAB 6: ESTRATEGIAS PRIORIZADAS
 # =============================================================================
-with tabs[5]:
+with tabs[7]:
     st.markdown("## 🚀 Estrategias Priorizadas - Plan de Acción")
 
     st.markdown("""
@@ -2381,7 +2648,7 @@ with tabs[5]:
 # =============================================================================
 # TAB 7: INFORME EJECUTIVO
 # =============================================================================
-with tabs[6]:
+with tabs[7]:
     st.markdown("## Y Informe Ejecutivo")
 
     alcance = data['alcance'].iloc[0]
