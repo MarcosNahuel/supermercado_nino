@@ -1787,6 +1787,25 @@ with tabs[0]:
 with tabs[6]:
     st.markdown("## 💰 Análisis de Rentabilidad y Márgenes")
 
+    # Nota metodológica prominente al inicio
+    st.markdown("""
+    <div style='background: linear-gradient(135deg, #f57c00 0%, #ff9800 100%);
+                padding: 1.5rem 2rem; border-radius: 12px; margin-bottom: 2rem;
+                border-left: 6px solid #e65100; box-shadow: 0 4px 6px rgba(0,0,0,0.1);'>
+        <h3 style='margin: 0 0 1rem 0; color: white; font-size: 1.3rem;'>
+            ⚠️ NOTA METODOLÓGICA IMPORTANTE
+        </h3>
+        <p style='font-size: 1.1rem; margin: 0 0 0.8rem 0; line-height: 1.7; color: white; font-weight: 500;'>
+            Los márgenes presentados en esta sección fueron calculados utilizando <b>márgenes promedio por categoría</b>
+            obtenidos de datos históricos de ventas.
+        </p>
+        <p style='font-size: 1.1rem; margin: 0; line-height: 1.7; color: white; font-weight: 500;'>
+            📊 Estos cálculos son <b>aproximaciones</b> y serán actualizados cuando se disponga de los
+            <b>costos reales de cada producto individual</b>.
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+
     # =========================================================================
     # SECCIÓN 1: ANÁLISIS DE RENTABILIDAD POR PRODUCTO
     # =========================================================================
@@ -1804,10 +1823,6 @@ with tabs[6]:
             <li>Oportunidades de mejora de pricing</li>
             <li>Productos de baja rentabilidad que requieren atención</li>
         </ul>
-        <p style='margin: 0.8rem 0 0 0; font-size: 0.85rem; font-style: italic; opacity: 0.9;'>
-            ℹ️ <b>Nota metodológica:</b> Los márgenes se calculan a partir de datos históricos de ventas y márgenes por línea.
-            Para productos sin datos de margen, se utiliza el promedio de su categoría.
-        </p>
     </div>
     """, unsafe_allow_html=True)
 
@@ -1981,25 +1996,29 @@ with tabs[6]:
         col1, col2 = st.columns(2)
 
         with col1:
-            st.markdown("#### ⭐ Top 10 Más Rentables")
-            top_rentables = pareto_prod.nlargest(10, 'margen_pct')[
-                ['descripcion', 'categoria', 'margen_pct', 'ventas']
+            st.markdown("#### ⭐ Top 10 Más Rentables (P × Q)")
+            st.caption("Productos que generan mayor rentabilidad total en $")
+            top_rentables = pareto_prod.nlargest(10, 'margen')[
+                ['descripcion', 'categoria', 'margen', 'margen_pct', 'ventas']
             ].copy()
+            top_rentables['Margen Total'] = top_rentables['margen'].apply(lambda x: formatear_moneda_argentina(x, 0))
             top_rentables['Margen %'] = top_rentables['margen_pct'].apply(lambda x: f"{x:.1f}%")
             top_rentables['Ventas'] = top_rentables['ventas'].apply(lambda x: formatear_moneda_argentina(x, 0))
-            top_rentables = top_rentables.drop(columns=['margen_pct', 'ventas'])
-            top_rentables.columns = ['Producto', 'Categoría', 'Margen %', 'Ventas']
+            top_rentables = top_rentables.drop(columns=['margen', 'margen_pct', 'ventas'])
+            top_rentables.columns = ['Producto', 'Categoría', 'Margen Total $', 'Margen %', 'Ventas']
             st.dataframe(top_rentables, use_container_width=True, hide_index=True)
 
         with col2:
-            st.markdown("#### ⚠️ Top 10 Menor Margen")
-            top_bajo_margen = pareto_prod.nsmallest(10, 'margen_pct')[
-                ['descripcion', 'categoria', 'margen_pct', 'ventas']
+            st.markdown("#### ⚠️ Top 10 Menor Rentabilidad Total")
+            st.caption("Productos con menor contribución de margen en $")
+            top_bajo_margen = pareto_prod.nsmallest(10, 'margen')[
+                ['descripcion', 'categoria', 'margen', 'margen_pct', 'ventas']
             ].copy()
+            top_bajo_margen['Margen Total'] = top_bajo_margen['margen'].apply(lambda x: formatear_moneda_argentina(x, 0))
             top_bajo_margen['Margen %'] = top_bajo_margen['margen_pct'].apply(lambda x: f"{x:.1f}%")
             top_bajo_margen['Ventas'] = top_bajo_margen['ventas'].apply(lambda x: formatear_moneda_argentina(x, 0))
-            top_bajo_margen = top_bajo_margen.drop(columns=['margen_pct', 'ventas'])
-            top_bajo_margen.columns = ['Producto', 'Categoría', 'Margen %', 'Ventas']
+            top_bajo_margen = top_bajo_margen.drop(columns=['margen', 'margen_pct', 'ventas'])
+            top_bajo_margen.columns = ['Producto', 'Categoría', 'Margen Total $', 'Margen %', 'Ventas']
             st.dataframe(top_bajo_margen, use_container_width=True, hide_index=True)
 
         # Resumen por Cuadrante
@@ -2025,185 +2044,179 @@ with tabs[6]:
 
     st.markdown("<br><br>", unsafe_allow_html=True)
 
-    # Banner informativo con nota sobre simulación
-    st.markdown("""
-    <div style='background: linear-gradient(135deg, #1976d2 0%, #2196f3 100%);
-                padding: 1.8rem; border-radius: 12px; margin: 2rem 0 1.5rem 0; color: white;'>
-        <h3 style='margin: 0 0 0.8rem 0; color: white;'>🧪 Simulación: Análisis de Costos (Vista Previa)</h3>
-        <p style='margin: 0; font-size: 0.95rem; line-height: 1.5;'>
-            <b>💡 Nota:</b> Esta sección muestra una <b>simulación con datos ficticios</b> para demostrar las capacidades
-            de análisis cuando se integren datos reales de costos.
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
+    # Banner informativo colapsable
+    with st.expander("📊 **CÁLCULOS APROXIMADOS** - Requiere Costos Reales de Productos", expanded=False):
+        st.markdown("""
+        <div style='background: linear-gradient(135deg, #1976d2 0%, #2196f3 100%);
+                    padding: 1.5rem; border-radius: 12px; margin-bottom: 1.5rem; color: white;'>
+            <h4 style='margin: 0 0 0.8rem 0; color: white;'>⚠️ Simulación con Datos Ficticios</h4>
+            <p style='margin: 0; font-size: 0.95rem; line-height: 1.5;'>
+                Esta sección muestra <b>cálculos aproximados basados en datos sintéticos</b>.<br>
+                Para análisis reales, se requieren costos unitarios de cada producto.
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
 
-    st.markdown("""
-    <div style='background: #e3f2fd; border-left: 6px solid #2196f3; padding: 1.2rem; border-radius: 8px; margin-bottom: 1.5rem;'>
-        <p style='margin: 0; color: #1565c0; line-height: 1.6;'>
-            <b>Cuando se dispongan de datos reales de costos, este módulo permitirá:</b>
-        </p>
-        <ul style='margin: 0.5rem 0 0 1.2rem; padding: 0; color: #1565c0;'>
-            <li>Análisis de punto de equilibrio por producto</li>
-            <li>Estructura de costos (fijos vs variables)</li>
-            <li>Comparación precio de venta vs costo total</li>
-            <li>Identificación de productos con pricing subóptimo</li>
-        </ul>
-    </div>
-    """, unsafe_allow_html=True)
+        st.markdown("""
+        <div style='background: #e3f2fd; border-left: 6px solid #2196f3; padding: 1.2rem; border-radius: 8px; margin-bottom: 1.5rem;'>
+            <p style='margin: 0; color: #1565c0; line-height: 1.6;'>
+                <b>📋 Datos necesarios para activar análisis real:</b>
+            </p>
+            <ul style='margin: 0.5rem 0 0 1.2rem; padding: 0; color: #1565c0;'>
+                <li><b>📦 Costo de compra unitario</b> por producto (precio proveedor)</li>
+                <li><b>🚚 Costos logísticos</b> (transporte, almacenamiento, mermas)</li>
+                <li><b>💼 Costos fijos mensuales</b> (alquiler, servicios, personal)</li>
+                <li><b>📊 Criterio de asignación</b> de costos indirectos (overhead)</li>
+            </ul>
+        </div>
+        """, unsafe_allow_html=True)
 
-    # Generar datos sintéticos para la simulación
-    # Seleccionar 10 productos de muestra
-    productos_muestra = pareto_prod.nlargest(10, 'ventas').copy()
+        # Generar datos sintéticos para la simulación
+        # Seleccionar 10 productos de muestra
+        productos_muestra = pareto_prod.nlargest(10, 'ventas').copy()
 
-    # Generar costos sintéticos (simulación)
-    np.random.seed(42)  # Para reproducibilidad
-    productos_muestra['precio_venta'] = productos_muestra['ventas'] / np.maximum(productos_muestra['ventas'] / 43078.348, 1)  # Precio promedio simulado
-    productos_muestra['costo_producto'] = productos_muestra['precio_venta'] * (1 - productos_muestra['margen_pct'] / 100)
-    productos_muestra['logistica'] = productos_muestra['costo_producto'] * np.random.uniform(0.08, 0.12, len(productos_muestra))
-    productos_muestra['overhead'] = productos_muestra['costo_producto'] * np.random.uniform(0.05, 0.10, len(productos_muestra))
-    productos_muestra['margen_neto'] = productos_muestra['precio_venta'] - productos_muestra['costo_producto'] - productos_muestra['logistica'] - productos_muestra['overhead']
-    productos_muestra['margen_neto_pct'] = (productos_muestra['margen_neto'] / productos_muestra['precio_venta']) * 100
+        # Generar costos sintéticos (simulación)
+        np.random.seed(42)  # Para reproducibilidad
+        productos_muestra['precio_venta'] = productos_muestra['ventas'] / np.maximum(productos_muestra['ventas'] / 43078.348, 1)  # Precio promedio simulado
+        productos_muestra['costo_producto'] = productos_muestra['precio_venta'] * (1 - productos_muestra['margen_pct'] / 100)
+        productos_muestra['logistica'] = productos_muestra['costo_producto'] * np.random.uniform(0.08, 0.12, len(productos_muestra))
+        productos_muestra['overhead'] = productos_muestra['costo_producto'] * np.random.uniform(0.05, 0.10, len(productos_muestra))
+        productos_muestra['margen_neto'] = productos_muestra['precio_venta'] - productos_muestra['costo_producto'] - productos_muestra['logistica'] - productos_muestra['overhead']
+        productos_muestra['margen_neto_pct'] = (productos_muestra['margen_neto'] / productos_muestra['precio_venta']) * 100
 
-    # Waterfall: De Precio de Venta a Margen Neto (ejemplo con un producto)
-    st.markdown("### 💧 Waterfall: De Precio de Venta a Margen Neto")
+        # Waterfall: De Precio de Venta a Margen Neto (ejemplo con un producto)
+        st.markdown("### 💧 Waterfall: De Precio de Venta a Margen Neto")
 
-    st.markdown("**Desglose de Costos: MUSLO DE POLLO (Ejemplo)**")
+        st.markdown("**Desglose de Costos: MUSLO DE POLLO (Ejemplo)**")
 
-    # Valores sintéticos para el waterfall
-    precio_venta_ej = 43078.348
-    costo_producto_ej = 23691.091
-    logistica_ej = 2446.246
-    overhead_ej = 3012.484
-    margen_neto_ej = precio_venta_ej - costo_producto_ej - logistica_ej - overhead_ej
+        # Valores sintéticos para el waterfall
+        precio_venta_ej = 43078.348
+        costo_producto_ej = 23691.091
+        logistica_ej = 2446.246
+        overhead_ej = 3012.484
+        margen_neto_ej = precio_venta_ej - costo_producto_ej - logistica_ej - overhead_ej
 
-    # Crear waterfall chart
-    fig_waterfall = go.Figure(go.Waterfall(
-        name = "Desglose",
-        orientation = "v",
-        measure = ["relative", "relative", "relative", "relative", "total"],
-        x = ["Precio Venta", "Costo Producto", "Logística", "Overhead", "Margen Neto"],
-        textposition = "outside",
-        text = [
-            f"${formatear_numero_argentino(precio_venta_ej, 0)}",
-            f"-${formatear_numero_argentino(costo_producto_ej, 0)}",
-            f"-${formatear_numero_argentino(logistica_ej, 0)}",
-            f"-${formatear_numero_argentino(overhead_ej, 0)}",
-            f"${formatear_numero_argentino(margen_neto_ej, 0)}"
-        ],
-        y = [
-            precio_venta_ej,
-            -costo_producto_ej,
-            -logistica_ej,
-            -overhead_ej,
-            margen_neto_ej
-        ],
-        connector = {"line":{"color":"rgb(63, 63, 63)"}},
-        decreasing = {"marker":{"color":"#f44336"}},
-        increasing = {"marker":{"color":"#2196f3"}},
-        totals = {"marker":{"color":"#4caf50"}}
-    ))
+        # Crear waterfall chart
+        fig_waterfall = go.Figure(go.Waterfall(
+            name = "Desglose",
+            orientation = "v",
+            measure = ["relative", "relative", "relative", "relative", "total"],
+            x = ["Precio Venta", "Costo Producto", "Logística", "Overhead", "Margen Neto"],
+            textposition = "outside",
+            text = [
+                f"${formatear_numero_argentino(precio_venta_ej, 0)}",
+                f"-${formatear_numero_argentino(costo_producto_ej, 0)}",
+                f"-${formatear_numero_argentino(logistica_ej, 0)}",
+                f"-${formatear_numero_argentino(overhead_ej, 0)}",
+                f"${formatear_numero_argentino(margen_neto_ej, 0)}"
+            ],
+            y = [
+                precio_venta_ej,
+                -costo_producto_ej,
+                -logistica_ej,
+                -overhead_ej,
+                margen_neto_ej
+            ],
+            connector = {"line":{"color":"rgb(63, 63, 63)"}},
+            decreasing = {"marker":{"color":"#f44336"}},
+            increasing = {"marker":{"color":"#2196f3"}},
+            totals = {"marker":{"color":"#4caf50"}}
+        ))
 
-    fig_waterfall.update_layout(
-        title="Desglose de Costos: MUSLO DE POLLO",
-        showlegend=False,
-        height=450,
-        yaxis_title="Monto ($)"
-    )
-
-    fig_waterfall = configurar_grafico_rendimiento(fig_waterfall)
-    render_plotly(fig_waterfall)
-
-    # Estructura de Costos Simulada por Categoría
-    st.markdown("### 📊 Estructura de Costos Simulada por Categoría")
-
-    col1, col2 = st.columns(2)
-
-    with col1:
-        st.markdown("**Estructura de Costos Promedio**")
-
-        # Calcular promedios para el pie chart
-        costo_promedio = 55.0  # % del precio
-        logistica_promedio = 9.0
-        overhead_promedio = 6.0
-        margen_promedio = 30.0
-
-        fig_pie_costos = go.Figure(data=[go.Pie(
-            labels=['Costo Producto', 'Margen Neto', 'Logística', 'Overhead'],
-            values=[costo_promedio, margen_promedio, logistica_promedio, overhead_promedio],
-            marker=dict(colors=['#f44336', '#ff9800', '#4caf50', '#2196f3']),
-            textinfo='label+percent',
-            textposition='auto',
-            hovertemplate='<b>%{label}</b><br>%{percent}<extra></extra>'
-        )])
-
-        fig_pie_costos.update_layout(
-            showlegend=True,
-            height=350,
-            legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5)
+        fig_waterfall.update_layout(
+            title="Desglose de Costos: MUSLO DE POLLO",
+            showlegend=False,
+            height=450,
+            yaxis_title="Monto ($)"
         )
 
-        fig_pie_costos = configurar_grafico_rendimiento(fig_pie_costos)
-        render_plotly(fig_pie_costos)
+        fig_waterfall = configurar_grafico_rendimiento(fig_waterfall)
+        render_plotly(fig_waterfall)
 
-    with col2:
-        st.markdown("### 🎯 Análisis de Punto de Equilibrio")
+        # Estructura de Costos Simulada por Categoría
+        st.markdown("### 📊 Estructura de Costos Simulada por Categoría")
 
-        st.metric(
-            "Unidades en Equilibrio/Mes",
-            "0",
-            help="Unidades necesarias para cubrir costos fijos"
-        )
+        col1, col2 = st.columns(2)
 
-        st.metric(
-            "Ventas en Equilibrio/Mes",
-            formatear_moneda_argentina(16666.667, 0),
-            help="Facturación mínima para alcanzar punto de equilibrio"
-        )
+        with col1:
+            st.markdown("**Estructura de Costos Promedio**")
 
-        st.metric(
-            "Margen de Contribución",
-            "30.0%",
-            help="Porcentaje que aporta cada venta a cubrir costos fijos"
-        )
+            # Calcular promedios para el pie chart
+            costo_promedio = 55.0  # % del precio
+            logistica_promedio = 9.0
+            overhead_promedio = 6.0
+            margen_promedio = 30.0
 
-    # Top 10 Productos: Precio vs Costo Simulado
-    st.markdown("### 🔍 Top 10 Productos: Precio vs Costo Simulado")
+            fig_pie_costos = go.Figure(data=[go.Pie(
+                labels=['Costo Producto', 'Margen Neto', 'Logística', 'Overhead'],
+                values=[costo_promedio, margen_promedio, logistica_promedio, overhead_promedio],
+                marker=dict(colors=['#f44336', '#ff9800', '#4caf50', '#2196f3']),
+                textinfo='label+percent',
+                textposition='auto',
+                hovertemplate='<b>%{label}</b><br>%{percent}<extra></extra>'
+            )])
 
-    tabla_costos = productos_muestra[
-        ['descripcion', 'categoria', 'precio_venta', 'costo_producto', 'margen_pct', 'margen_neto_pct']
-    ].copy()
+            fig_pie_costos.update_layout(
+                showlegend=True,
+                height=350,
+                legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5)
+            )
 
-    tabla_costos.columns = ['Producto', 'Categoría', 'Precio Venta', 'Costo Unitario', 'Margen $', 'Margen %']
-    tabla_costos['Precio Venta'] = tabla_costos['Precio Venta'].apply(lambda x: formatear_moneda_argentina(x, 0))
-    tabla_costos['Costo Unitario'] = tabla_costos['Costo Unitario'].apply(lambda x: formatear_moneda_argentina(x, 0))
-    tabla_costos['Margen $'] = tabla_costos['Margen $'].apply(lambda x: f"{x:.1f}%")
-    tabla_costos['Margen %'] = tabla_costos['Margen %'].apply(lambda x: f"{x:.1f}%")
+            fig_pie_costos = configurar_grafico_rendimiento(fig_pie_costos)
+            render_plotly(fig_pie_costos)
 
-    st.dataframe(tabla_costos, use_container_width=True, hide_index=True)
+        with col2:
+            st.markdown("### 🎯 Análisis de Punto de Equilibrio")
 
-    # Banner de próximos pasos
-    st.markdown("""
-    <div style='background: linear-gradient(135deg, #283593 0%, #3949ab 100%);
-                padding: 1.8rem; border-radius: 12px; margin-top: 2rem; color: white;'>
-        <h3 style='margin: 0 0 0.8rem 0; color: #ffd54f;'>🚀 Próximos Pasos para Activar Análisis Real</h3>
-        <p style='margin: 0 0 0.8rem 0; font-size: 0.95rem;'>
-            <b>Para habilitar el análisis de costos con datos reales, se requiere:</b>
-        </p>
-        <ul style='margin: 0; padding-left: 1.5rem; line-height: 1.8;'>
-            <li><b>📦 Costos de compra:</b> Precio de adquisición de cada producto del proveedor</li>
-            <li><b>🚚 Costos logísticos:</b> Transporte, almacenamiento, mermas</li>
-            <li><b>💼 Costos fijos mensuales:</b> Alquiler, servicios, personal</li>
-            <li><b>📋 Asignación de overhead:</b> Criterio de distribución de costos indirectos</li>
-        </ul>
-        <p style='margin: 1rem 0 0 0; font-size: 0.9rem; font-style: italic;'>
-            💡 Con estos datos, el dashboard podrá:<br>
-            • Identificar productos con pricing subóptimo<br>
-            • Calcular punto de equilibrio real por producto/categoría<br>
-            • Optimizar márgenes y detectar oportunidades de mejora<br>
-            • Simular impacto de cambios de precio en rentabilidad
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
+            st.metric(
+                "Unidades en Equilibrio/Mes",
+                "0",
+                help="Unidades necesarias para cubrir costos fijos"
+            )
+
+            st.metric(
+                "Ventas en Equilibrio/Mes",
+                formatear_moneda_argentina(16666.667, 0),
+                help="Facturación mínima para alcanzar punto de equilibrio"
+            )
+
+            st.metric(
+                "Margen de Contribución",
+                "30.0%",
+                help="Porcentaje que aporta cada venta a cubrir costos fijos"
+            )
+
+        # Top 10 Productos: Precio vs Costo Simulado
+        st.markdown("### 🔍 Top 10 Productos: Precio vs Costo Simulado")
+
+        tabla_costos = productos_muestra[
+            ['descripcion', 'categoria', 'precio_venta', 'costo_producto', 'margen_pct', 'margen_neto_pct']
+        ].copy()
+
+        tabla_costos.columns = ['Producto', 'Categoría', 'Precio Venta', 'Costo Unitario', 'Margen $', 'Margen %']
+        tabla_costos['Precio Venta'] = tabla_costos['Precio Venta'].apply(lambda x: formatear_moneda_argentina(x, 0))
+        tabla_costos['Costo Unitario'] = tabla_costos['Costo Unitario'].apply(lambda x: formatear_moneda_argentina(x, 0))
+        tabla_costos['Margen $'] = tabla_costos['Margen $'].apply(lambda x: f"{x:.1f}%")
+        tabla_costos['Margen %'] = tabla_costos['Margen %'].apply(lambda x: f"{x:.1f}%")
+
+        st.dataframe(tabla_costos, use_container_width=True, hide_index=True)
+
+        # Banner de próximos pasos
+        st.markdown("""
+        <div style='background: linear-gradient(135deg, #283593 0%, #3949ab 100%);
+                    padding: 1.5rem; border-radius: 12px; margin-top: 1.5rem; color: white;'>
+            <h4 style='margin: 0 0 0.8rem 0; color: #ffd54f;'>🚀 Análisis Posible con Datos Reales</h4>
+            <p style='margin: 0 0 0.5rem 0; font-size: 0.9rem; line-height: 1.6;'>
+                Con costos reales de productos, se podrá realizar:
+            </p>
+            <ul style='margin: 0; padding-left: 1.2rem; line-height: 1.6; font-size: 0.9rem;'>
+                <li>Identificar productos con pricing subóptimo</li>
+                <li>Calcular punto de equilibrio real por producto/categoría</li>
+                <li>Optimizar márgenes y detectar oportunidades de mejora</li>
+                <li>Simular impacto de cambios de precio en rentabilidad</li>
+            </ul>
+        </div>
+        """, unsafe_allow_html=True)
 
 # =============================================================================
 # TAB 2: PARETO & MIX
@@ -2319,9 +2332,9 @@ with tabs[1]:
                 (categoria_filtrada['core_80']) | (categoria_filtrada.index < 15)
             ].copy().head(15)
             tabla_core['ventas'] = tabla_core['ventas'].apply(lambda x: formatear_moneda_argentina(x, 0))
-            tabla_core['margen_linea'] = tabla_core['margen_linea'].apply(lambda x: formatear_moneda_argentina(x, 0))
+            tabla_core['margen'] = tabla_core['margen'].apply(lambda x: formatear_moneda_argentina(x, 0))
             tabla_core['pct_acumulado_categoria'] = tabla_core['pct_acumulado_categoria'].round(1).astype(str) + '%'
-            tabla_core = tabla_core[['descripcion', 'ventas', 'margen_linea', 'pct_acumulado_categoria']]
+            tabla_core = tabla_core[['descripcion', 'ventas', 'margen', 'pct_acumulado_categoria']]
             tabla_core.columns = ['Producto', 'Ventas', 'Margen', '% acumulado']
             st.dataframe(tabla_core, use_container_width=True, hide_index=True)
 
