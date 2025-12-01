@@ -61,29 +61,262 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# CSS personalizado para mejorar rendimiento y scroll
+# CSS personalizado moderno con mejores prácticas
 st.markdown("""
 <style>
-    /* Habilitar scroll suave */
+    /* ===== VARIABLES CSS (Design Tokens) ===== */
+    :root {
+        --primary-gradient: linear-gradient(135deg, #1a237e 0%, #283593 100%);
+        --success-gradient: linear-gradient(135deg, #2e7d32 0%, #388e3c 100%);
+        --info-gradient: linear-gradient(135deg, #1976d2 0%, #2196f3 100%);
+        --warning-gradient: linear-gradient(135deg, #f57c00 0%, #ff9800 100%);
+
+        --shadow-sm: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.08);
+        --shadow-md: 0 4px 6px rgba(0,0,0,0.1), 0 2px 4px rgba(0,0,0,0.06);
+        --shadow-lg: 0 10px 30px rgba(26, 35, 126, 0.15);
+        --shadow-xl: 0 20px 50px rgba(26, 35, 126, 0.25);
+
+        --radius-sm: 8px;
+        --radius-md: 12px;
+        --radius-lg: 16px;
+        --radius-xl: 20px;
+
+        --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+        --transition-base: 300ms cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    /* ===== MEJORAS GLOBALES ===== */
     html, body, [data-testid="stAppViewContainer"] {
         overflow: auto !important;
         scroll-behavior: smooth;
+        font-feature-settings: 'liga' 1, 'calt' 1; /* Ligaduras tipográficas */
     }
 
-    /* Optimizar renderizado de tabs */
+    /* ===== OPTIMIZACIÓN DE PERFORMANCE ===== */
+    * {
+        animation-duration: 0.15s !important;
+        transition-duration: var(--transition-fast) !important;
+    }
+
+    /* Optimizar gráficos con GPU acceleration */
+    .js-plotly-plot,
+    [data-testid="stPlotlyChart"] {
+        will-change: transform;
+        transform: translateZ(0);
+        backface-visibility: hidden;
+    }
+
+    /* ===== TABS MODERNOS ===== */
+    [data-baseweb="tab-list"] {
+        gap: 8px;
+        background: linear-gradient(to bottom, #f8f9fa, #ffffff);
+        padding: 12px 16px;
+        border-radius: var(--radius-md);
+        box-shadow: var(--shadow-sm);
+    }
+
+    [data-baseweb="tab"] {
+        border-radius: var(--radius-sm) !important;
+        font-weight: 500 !important;
+        padding: 10px 20px !important;
+        transition: all var(--transition-base) !important;
+        border: 1px solid transparent !important;
+    }
+
+    [data-baseweb="tab"]:hover {
+        background: rgba(26, 35, 126, 0.05) !important;
+        transform: translateY(-1px);
+    }
+
+    [data-baseweb="tab"][aria-selected="true"] {
+        background: var(--primary-gradient) !important;
+        color: white !important;
+        box-shadow: var(--shadow-md);
+        border: none !important;
+    }
+
     [data-baseweb="tab-panel"] {
         overflow: visible !important;
+        padding-top: 24px;
+        animation: fadeIn 0.3s ease-in;
     }
 
-    /* Reducir animaciones para mejorar performance */
-    * {
-        animation-duration: 0.1s !important;
-        transition-duration: 0.1s !important;
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
     }
 
-    /* Optimizar gráficos */
-    .js-plotly-plot {
-        will-change: transform;
+    /* ===== MÉTRICAS (st.metric) MEJORADAS ===== */
+    [data-testid="stMetric"] {
+        background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+        padding: 20px;
+        border-radius: var(--radius-md);
+        box-shadow: var(--shadow-md);
+        border: 1px solid rgba(0,0,0,0.05);
+        transition: all var(--transition-base);
+    }
+
+    [data-testid="stMetric"]:hover {
+        transform: translateY(-2px);
+        box-shadow: var(--shadow-lg);
+    }
+
+    [data-testid="stMetricLabel"] {
+        font-size: 0.875rem !important;
+        font-weight: 600 !important;
+        letter-spacing: 0.5px;
+        text-transform: uppercase;
+        color: #64748b !important;
+    }
+
+    [data-testid="stMetricValue"] {
+        font-size: 2rem !important;
+        font-weight: 700 !important;
+        background: var(--primary-gradient);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+    }
+
+    /* ===== BOTONES MEJORADOS ===== */
+    .stButton > button {
+        border-radius: var(--radius-sm);
+        font-weight: 600;
+        padding: 0.5rem 1.5rem;
+        transition: all var(--transition-base);
+        box-shadow: var(--shadow-sm);
+        border: 1px solid rgba(26, 35, 126, 0.1);
+    }
+
+    .stButton > button:hover {
+        transform: translateY(-2px);
+        box-shadow: var(--shadow-md);
+        border-color: rgba(26, 35, 126, 0.3);
+    }
+
+    /* ===== DATAFRAMES ESTILIZADOS ===== */
+    [data-testid="stDataFrame"] {
+        border-radius: var(--radius-md);
+        overflow: hidden;
+        box-shadow: var(--shadow-md);
+        border: 1px solid rgba(0,0,0,0.05);
+    }
+
+    /* ===== EXPANDABLES MEJORADOS ===== */
+    [data-testid="stExpander"] {
+        border-radius: var(--radius-md);
+        border: 1px solid rgba(0,0,0,0.08);
+        box-shadow: var(--shadow-sm);
+        transition: all var(--transition-base);
+    }
+
+    [data-testid="stExpander"]:hover {
+        box-shadow: var(--shadow-md);
+    }
+
+    /* ===== INPUTS Y CONTROLES ===== */
+    .stRadio > div {
+        gap: 12px;
+    }
+
+    .stRadio > div > label {
+        background: #f8f9fa;
+        padding: 8px 16px;
+        border-radius: var(--radius-sm);
+        transition: all var(--transition-base);
+        border: 2px solid transparent;
+        font-weight: 500;
+    }
+
+    .stRadio > div > label:hover {
+        background: #e3f2fd;
+        transform: translateY(-1px);
+    }
+
+    .stRadio > div > label[data-checked="true"] {
+        background: var(--primary-gradient);
+        color: white !important;
+        box-shadow: var(--shadow-sm);
+    }
+
+    /* ===== MARKDOWN HEADINGS MEJORADOS ===== */
+    h1, h2, h3, h4, h5, h6 {
+        letter-spacing: -0.02em;
+        font-weight: 700;
+    }
+
+    h2 {
+        border-bottom: 3px solid;
+        border-image: var(--primary-gradient) 1;
+        padding-bottom: 12px;
+        margin-bottom: 24px;
+    }
+
+    /* ===== TOOLTIPS Y HELPS ===== */
+    [data-testid="stTooltipHoverTarget"] {
+        transition: transform var(--transition-fast);
+    }
+
+    [data-testid="stTooltipHoverTarget"]:hover {
+        transform: scale(1.1);
+    }
+
+    /* ===== INFO/WARNING/SUCCESS BOXES ===== */
+    [data-testid="stAlert"] {
+        border-radius: var(--radius-md);
+        border-left-width: 4px;
+        box-shadow: var(--shadow-sm);
+    }
+
+    /* ===== SCROLLBAR PERSONALIZADO ===== */
+    ::-webkit-scrollbar {
+        width: 10px;
+        height: 10px;
+    }
+
+    ::-webkit-scrollbar-track {
+        background: #f1f1f1;
+        border-radius: 10px;
+    }
+
+    ::-webkit-scrollbar-thumb {
+        background: linear-gradient(180deg, #1a237e, #283593);
+        border-radius: 10px;
+        transition: background var(--transition-base);
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+        background: linear-gradient(180deg, #0d47a1, #1565c0);
+    }
+
+    /* ===== ANIMACIONES SUAVES ===== */
+    @keyframes slideUp {
+        from {
+            opacity: 0;
+            transform: translateY(20px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    /* ===== RESPONSIVE ADJUSTMENTS ===== */
+    @media (max-width: 768px) {
+        [data-testid="stMetricValue"] {
+            font-size: 1.5rem !important;
+        }
+
+        [data-baseweb="tab"] {
+            padding: 8px 12px !important;
+            font-size: 0.875rem !important;
+        }
+    }
+
+    /* ===== LOADING INDICATOR MEJORADO ===== */
+    [data-testid="stSpinner"] > div {
+        border-color: rgba(26, 35, 126, 0.1);
+        border-top-color: #1a237e;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -484,12 +717,12 @@ st.markdown(f"""
 # =============================================================================
 tabs = st.tabs([
     "📈 Análisis Temporal",
-    "💰 Márgenes - Costos",
     "🎯 Pareto & Mix",
     "🛒 Market Basket (Combos)",
     "👥 Segmentación",
     "💳 Medios de Pago",
     "🚀 Estrategias Priorizadas",
+    "💰 Márgenes - Costos",
     "📋 Informe Ejecutivo"
 ])
 
@@ -542,11 +775,13 @@ with tabs[0]:
                 detalle_rent['fecha'] = pd.to_datetime(detalle_rent['fecha'])
                 detalle_rent['periodo'] = detalle_rent['fecha'].dt.to_period('M')
 
+                # Calcular margen % correctamente: suma(margen) / suma(ventas) * 100
                 margen_mensual = detalle_rent.groupby('periodo').agg({
-                    'rentabilidad_pct_ticket': 'mean'
+                    'margen_ticket': 'sum',
+                    'monto_total_ticket': 'sum'
                 }).reset_index()
                 margen_mensual['periodo'] = margen_mensual['periodo'].astype(str)
-                margen_mensual['margen_pct'] = margen_mensual['rentabilidad_pct_ticket'] * 100
+                margen_mensual['margen_pct'] = (margen_mensual['margen_ticket'] / margen_mensual['monto_total_ticket']) * 100
 
                 # Merge con kpi_periodo_plot
                 kpi_periodo_plot = kpi_periodo_plot.merge(
@@ -734,68 +969,16 @@ with tabs[0]:
 
         if vista_temporal == 'Mensual':
             if not kpi_periodo_plot.empty:
-                df_mensual = kpi_periodo_plot[['periodo_dt', 'tickets', 'margen_pct']].rename(columns={'periodo_dt': 'periodo'})
+                df_mensual = kpi_periodo_plot[['periodo_dt', 'tickets']].rename(columns={'periodo_dt': 'periodo'})
 
-                # Crear gráfico con dos ejes Y (tickets y margen %)
-                fig_temporal = make_subplots(specs=[[{"secondary_y": True}]])
-
-                # Agregar tickets (eje izquierdo)
-                fig_temporal.add_trace(
-                    go.Scatter(
-                        x=df_mensual['periodo'],
-                        y=df_mensual['tickets'],
-                        name='Tickets',
-                        mode='lines+markers',
-                        line=dict(color='#1f77b4', width=2),
-                        marker=dict(size=8)
-                    ),
-                    secondary_y=False
+                # Usar el mismo formato que semanal/quincenal con promedio y tendencia
+                fig_temporal, pendiente_temporal = construir_figura_tendencia(
+                    df_mensual,
+                    'periodo',
+                    'tickets',
+                    'Mensual - Tickets emitidos',
+                    'tickets'
                 )
-
-                # Agregar margen % (eje derecho)
-                if 'margen_pct' in df_mensual.columns and df_mensual['margen_pct'].notna().any():
-                    fig_temporal.add_trace(
-                        go.Scatter(
-                            x=df_mensual['periodo'],
-                            y=df_mensual['margen_pct'],
-                            name='Margen %',
-                            mode='lines+markers',
-                            line=dict(color='#2ca02c', width=2, dash='dash'),
-                            marker=dict(size=8, symbol='diamond')
-                        ),
-                        secondary_y=True
-                    )
-
-                # Configurar ejes
-                fig_temporal.update_xaxes(title_text=None)
-                fig_temporal.update_yaxes(title_text="Tickets", secondary_y=False)
-                fig_temporal.update_yaxes(title_text="Margen %", secondary_y=True)
-
-                # Generar etiquetas en español para meses
-                fechas = df_mensual['periodo']
-                etiquetas_es = [traducir_mes_espanol(f.strftime('%b %Y')) for f in fechas]
-                fig_temporal.update_xaxes(
-                    type='category',
-                    ticktext=etiquetas_es,
-                    tickvals=fechas
-                )
-
-                # Layout general
-                fig_temporal.update_layout(
-                    title='Mensual - Tickets emitidos y Margen %',
-                    height=400,
-                    hovermode='x unified',
-                    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
-                )
-
-                fig_temporal = configurar_grafico_rendimiento(fig_temporal)
-
-                # Calcular pendiente para tickets
-                X_mensual = np.arange(len(df_mensual)).reshape(-1, 1)
-                y_mensual = df_mensual['tickets'].values
-                model_mensual = LinearRegression()
-                model_mensual.fit(X_mensual, y_mensual)
-                pendiente_temporal = model_mensual.coef_[0]
 
             else:
                 st.info('No hay datos suficientes para el analisis mensual.')
@@ -1126,6 +1309,94 @@ with tabs[0]:
         else:
             st.info('No hay datos suficientes para calcular la cantidad promedio de tickets por semana.')
 
+        # ============================================================================
+        # EVOLUCIÓN DEL TICKET PROMEDIO
+        # ============================================================================
+        st.markdown('### Evolución del ticket promedio')
+
+        # Calcular ticket promedio mensual
+        detalle_tickets['mes_ticket_prom'] = detalle_tickets['fecha'].dt.to_period('M').dt.to_timestamp()
+        df_ticket_promedio = (
+            detalle_tickets.groupby('mes_ticket_prom', as_index=False)
+            .agg(
+                ticket_promedio=('monto_total_ticket', 'mean')
+            )
+            .sort_values('mes_ticket_prom')
+        )
+
+        if df_ticket_promedio is not None and not df_ticket_promedio.empty and len(df_ticket_promedio) > 1:
+            # Calcular promedio global y tendencia
+            ticket_prom_global = df_ticket_promedio['ticket_promedio'].mean()
+
+            # Regresión lineal para tendencia
+            X_ticket = np.arange(len(df_ticket_promedio)).reshape(-1, 1)
+            y_ticket = df_ticket_promedio['ticket_promedio'].values
+            model_ticket = LinearRegression()
+            model_ticket.fit(X_ticket, y_ticket)
+            tendencia_ticket = model_ticket.predict(X_ticket)
+
+            # Crear gráfico
+            fig_ticket_evol = go.Figure()
+
+            # Línea de ticket promedio real
+            fig_ticket_evol.add_trace(go.Scatter(
+                x=df_ticket_promedio['mes_ticket_prom'],
+                y=df_ticket_promedio['ticket_promedio'],
+                mode='lines+markers',
+                name='Ticket promedio',
+                line=dict(color='#1976d2', width=3),
+                marker=dict(size=10, color='#1976d2')
+            ))
+
+            # Línea de tendencia
+            fig_ticket_evol.add_trace(go.Scatter(
+                x=df_ticket_promedio['mes_ticket_prom'],
+                y=tendencia_ticket,
+                mode='lines',
+                name='Tendencia',
+                line=dict(color='#ef6c00', width=2, dash='dash')
+            ))
+
+            # Línea de promedio
+            fig_ticket_evol.add_trace(go.Scatter(
+                x=df_ticket_promedio['mes_ticket_prom'],
+                y=[ticket_prom_global] * len(df_ticket_promedio),
+                mode='lines',
+                name='Promedio',
+                line=dict(color='#424242', width=1, dash='dot')
+            ))
+
+            # Formato de etiquetas
+            etiquetas_ticket_evol = [traducir_mes_espanol(f.strftime('%b. %Y')) for f in df_ticket_promedio['mes_ticket_prom']]
+
+            fig_ticket_evol.update_xaxes(
+                type='category',
+                ticktext=etiquetas_ticket_evol,
+                tickvals=df_ticket_promedio['mes_ticket_prom'],
+                title=None
+            )
+
+            fig_ticket_evol.update_yaxes(
+                title='Ticket promedio ($)',
+                tickprefix='$',
+                tickformat=',.0f'
+            )
+
+            fig_ticket_evol.update_layout(
+                title='Mensual - Ticket promedio',
+                height=400,
+                hovermode='x unified',
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+                showlegend=True
+            )
+
+            fig_ticket_evol = configurar_grafico_rendimiento(fig_ticket_evol)
+            render_plotly(fig_ticket_evol)
+
+            st.caption(f'Ticket promedio del periodo: ${formatear_numero_argentino(round(float(ticket_prom_global), 0), 0)}')
+        else:
+            st.info('No hay datos suficientes para el análisis de ticket promedio.')
+
         st.markdown('### Ticket promedio por dia de la semana')
         if tickets_dia is not None and not tickets_dia.empty:
             fig_media_dia = px.bar(
@@ -1145,6 +1416,165 @@ with tabs[0]:
             )
             fig_media_dia = configurar_grafico_rendimiento(fig_media_dia)
             render_plotly(fig_media_dia)
+
+        # ============================================================================
+        # MARGEN PROMEDIO POR TICKET (%)
+        # ============================================================================
+        st.markdown('### Margen promedio por ticket (%)')
+
+        st.markdown('Selecciona la granularidad')
+        vista_margen = st.radio(
+            '',
+            ['Mensual', 'Quincenal', 'Semanal'],
+            horizontal=True,
+            index=0,  # Por defecto Mensual
+            key='vista_margen_temporal',
+            label_visibility='collapsed'
+        )
+
+        # Calcular margen % según granularidad
+        df_margen_temporal = None
+        periodo_col_margen = None
+        titulo_margen = None
+
+        if vista_margen == 'Mensual':
+            detalle_tickets['mes_margen'] = detalle_tickets['fecha'].dt.to_period('M').dt.to_timestamp()
+            df_margen_temporal = (
+                detalle_tickets.groupby('mes_margen', as_index=False)
+                .agg(
+                    margen_ticket=('margen_ticket', 'sum'),
+                    monto_total_ticket=('monto_total_ticket', 'sum')
+                )
+                .sort_values('mes_margen')
+            )
+            df_margen_temporal['margen_pct'] = (df_margen_temporal['margen_ticket'] / df_margen_temporal['monto_total_ticket']) * 100
+            periodo_col_margen = 'mes_margen'
+            titulo_margen = 'Mensual - Margen % por Ticket'
+
+        elif vista_margen == 'Quincenal':
+            detalle_tickets['quincena_margen'] = detalle_tickets['fecha'].apply(
+                lambda x: pd.Timestamp(year=x.year, month=x.month, day=1 if x.day <= 15 else 15)
+            )
+            df_margen_temporal = (
+                detalle_tickets.groupby('quincena_margen', as_index=False)
+                .agg(
+                    margen_ticket=('margen_ticket', 'sum'),
+                    monto_total_ticket=('monto_total_ticket', 'sum')
+                )
+                .sort_values('quincena_margen')
+            )
+            df_margen_temporal['margen_pct'] = (df_margen_temporal['margen_ticket'] / df_margen_temporal['monto_total_ticket']) * 100
+            periodo_col_margen = 'quincena_margen'
+            titulo_margen = 'Quincenal - Margen % por Ticket'
+
+        else:  # Semanal
+            detalle_tickets['semana_margen'] = detalle_tickets['fecha'].dt.to_period('W').apply(lambda x: x.start_time)
+            df_margen_temporal = (
+                detalle_tickets.groupby('semana_margen', as_index=False)
+                .agg(
+                    margen_ticket=('margen_ticket', 'sum'),
+                    monto_total_ticket=('monto_total_ticket', 'sum')
+                )
+                .sort_values('semana_margen')
+            )
+            df_margen_temporal['margen_pct'] = (df_margen_temporal['margen_ticket'] / df_margen_temporal['monto_total_ticket']) * 100
+            periodo_col_margen = 'semana_margen'
+            titulo_margen = 'Semanal - Margen % por Ticket'
+
+        if df_margen_temporal is not None and not df_margen_temporal.empty and len(df_margen_temporal) > 1:
+            # Calcular promedio y tendencia
+            margen_promedio_periodo = df_margen_temporal['margen_pct'].mean()
+
+            # Regresión lineal para tendencia
+            X_margen = np.arange(len(df_margen_temporal)).reshape(-1, 1)
+            y_margen = df_margen_temporal['margen_pct'].values
+            model_margen = LinearRegression()
+            model_margen.fit(X_margen, y_margen)
+            tendencia_margen = model_margen.predict(X_margen)
+
+            # Crear gráfico
+            fig_margen_temporal = go.Figure()
+
+            # Línea de margen real
+            fig_margen_temporal.add_trace(go.Scatter(
+                x=df_margen_temporal[periodo_col_margen],
+                y=df_margen_temporal['margen_pct'],
+                mode='lines+markers',
+                name='Margen',
+                line=dict(color='#2e7d32', width=3),
+                marker=dict(size=10, color='#2e7d32')
+            ))
+
+            # Línea de tendencia
+            fig_margen_temporal.add_trace(go.Scatter(
+                x=df_margen_temporal[periodo_col_margen],
+                y=tendencia_margen,
+                mode='lines',
+                name='Tendencia',
+                line=dict(color='#ef6c00', width=2, dash='dash')
+            ))
+
+            # Línea de promedio
+            fig_margen_temporal.add_trace(go.Scatter(
+                x=df_margen_temporal[periodo_col_margen],
+                y=[margen_promedio_periodo] * len(df_margen_temporal),
+                mode='lines',
+                name='Promedio',
+                line=dict(color='#424242', width=1, dash='dot')
+            ))
+
+            # Formato de etiquetas según granularidad
+            if vista_margen == 'Mensual':
+                etiquetas_margen = [traducir_mes_espanol(f.strftime('%b. %Y')) for f in df_margen_temporal[periodo_col_margen]]
+            else:
+                etiquetas_margen = [traducir_mes_espanol(f.strftime('%d-%b')) for f in df_margen_temporal[periodo_col_margen]]
+
+            fig_margen_temporal.update_xaxes(
+                type='category',
+                ticktext=etiquetas_margen,
+                tickvals=df_margen_temporal[periodo_col_margen],
+                title=None
+            )
+
+            fig_margen_temporal.update_yaxes(
+                title='Margen promedio (%)',
+                ticksuffix='%'
+            )
+
+            fig_margen_temporal.update_layout(
+                title=titulo_margen,
+                height=400,
+                hovermode='x unified',
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+                showlegend=True
+            )
+
+            fig_margen_temporal = configurar_grafico_rendimiento(fig_margen_temporal)
+            render_plotly(fig_margen_temporal)
+
+            # Análisis de variación
+            variacion_margen = df_margen_temporal['margen_pct'].std()
+            st.markdown(f"Margen promedio del periodo: **{margen_promedio_periodo:.2f}%**")
+
+            # Insight sobre estabilidad del margen
+            if variacion_margen < 0.5:
+                st.info(f"""
+                ✅ **Margen estable:** El margen por ticket se mantiene relativamente constante alrededor del {margen_promedio_periodo:.2f}%.
+                La variación es de {variacion_margen:.1f}pp en el período.
+                """)
+            elif variacion_margen < 1.5:
+                st.warning(f"""
+                ⚠️ **Margen moderadamente variable:** El margen por ticket muestra cierta variabilidad ({variacion_margen:.1f}pp),
+                promediando {margen_promedio_periodo:.2f}%. Revisar factores que afectan la rentabilidad.
+                """)
+            else:
+                st.error(f"""
+                🔴 **Margen muy variable:** El margen por ticket presenta alta variabilidad ({variacion_margen:.1f}pp)
+                alrededor del promedio de {margen_promedio_periodo:.2f}%. Se recomienda investigar causas.
+                """)
+
+        else:
+            st.info('No hay datos suficientes para el análisis de margen en esta granularidad.')
 
         with st.expander('Ver detalle complementario por quincena'):
             if not tickets_quincena.empty:
@@ -1352,207 +1782,433 @@ with tabs[0]:
             st.info("No se pudo construir la vista horaria; verificar la fuente `comprobantes_ventas_horario.csv`.")
 
 # =============================================================================
-# TAB 2: MÁRGENES - COSTOS
+# TAB 7: MÁRGENES - COSTOS (movido al final)
+# =============================================================================
+with tabs[6]:
+    st.markdown("## 💰 Análisis de Rentabilidad y Márgenes")
+
+    # =========================================================================
+    # SECCIÓN 1: ANÁLISIS DE RENTABILIDAD POR PRODUCTO
+    # =========================================================================
+
+    # Banner verde informativo
+    st.markdown("""
+    <div style='background: linear-gradient(135deg, #2e7d32 0%, #388e3c 100%);
+                padding: 1.8rem; border-radius: 12px; margin-bottom: 1.5rem; color: white;'>
+        <h3 style='margin: 0 0 0.8rem 0; color: white;'>📊 Análisis de Rentabilidad por Producto</h3>
+        <p style='margin: 0; font-size: 0.95rem; line-height: 1.5;'>
+            Este módulo analiza el <b>margen bruto real</b> de cada producto basado en datos históricos de ventas, identificando:
+        </p>
+        <ul style='margin: 0.5rem 0 0 1.2rem; padding: 0;'>
+            <li>Productos estrella (alto margen + alto volumen)</li>
+            <li>Oportunidades de mejora de pricing</li>
+            <li>Productos de baja rentabilidad que requieren atención</li>
+        </ul>
+        <p style='margin: 0.8rem 0 0 0; font-size: 0.85rem; font-style: italic; opacity: 0.9;'>
+            ℹ️ <b>Nota metodológica:</b> Los márgenes se calculan a partir de datos históricos de ventas y márgenes por línea.
+            Para productos sin datos de margen, se utiliza el promedio de su categoría.
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # Obtener datos de productos
+    pareto_prod = data.get('pareto_prod')
+
+    if pareto_prod is None or pareto_prod.empty:
+        st.warning("No hay datos de productos disponibles para el análisis de rentabilidad.")
+    else:
+        pareto_prod = pareto_prod.copy()
+
+        # Calcular margen_pct si no existe
+        if 'margen_pct' not in pareto_prod.columns:
+            pareto_prod['margen_pct'] = (pareto_prod['margen_linea'] / pareto_prod['ventas'] * 100).fillna(0)
+
+        # Renombrar margen_linea a margen para consistencia
+        if 'margen_linea' in pareto_prod.columns and 'margen' not in pareto_prod.columns:
+            pareto_prod['margen'] = pareto_prod['margen_linea']
+
+        # Filtrar productos con datos inconsistentes y reemplazar con promedio por categoría
+        # Calcular margen promedio por categoría para productos con margen 0 o negativo
+        margen_promedio_global = pareto_prod[pareto_prod['margen_pct'] > 0]['margen_pct'].mean()
+        margen_por_categoria = pareto_prod[pareto_prod['margen_pct'] > 0].groupby('categoria')['margen_pct'].mean().to_dict()
+
+        # Reemplazar márgenes <= 0 con el promedio de la categoría, o global si no hay dato
+        for idx in pareto_prod[pareto_prod['margen_pct'] <= 0].index:
+            categoria = pareto_prod.loc[idx, 'categoria']
+            if categoria in margen_por_categoria:
+                pareto_prod.loc[idx, 'margen_pct'] = margen_por_categoria[categoria]
+            else:
+                pareto_prod.loc[idx, 'margen_pct'] = margen_promedio_global
+
+            # Ajustar también el margen absoluto
+            ventas = pareto_prod.loc[idx, 'ventas']
+            pareto_prod.loc[idx, 'margen'] = ventas * pareto_prod.loc[idx, 'margen_pct'] / 100
+
+        # Vista Ejecutiva de Rentabilidad
+        st.markdown("### 📊 Vista Ejecutiva de Rentabilidad")
+
+        # Calcular métricas globales
+        ventas_totales = pareto_prod['ventas'].sum()
+        margen_total = pareto_prod['margen'].sum()
+        margen_promedio_pct = (margen_total / ventas_totales * 100) if ventas_totales > 0 else 0
+        productos_rentables = len(pareto_prod[pareto_prod['margen_pct'] > margen_promedio_pct])
+
+        col1, col2, col3, col4 = st.columns(4)
+
+        with col1:
+            st.metric(
+                "💰 Ventas Totales",
+                formatear_moneda_argentina(ventas_totales, 0),
+                help="Facturación total del catálogo"
+            )
+
+        with col2:
+            st.metric(
+                "💎 Margen Total",
+                formatear_moneda_argentina(margen_total, 0),
+                help="Rentabilidad acumulada"
+            )
+
+        with col3:
+            st.metric(
+                "📈 Margen Promedio",
+                f"{margen_promedio_pct:.1f}%",
+                help="Margen porcentual promedio"
+            )
+
+        with col4:
+            st.metric(
+                "⭐ Productos Rentables",
+                formatear_numero_argentino(productos_rentables, 0),
+                help=f"{(productos_rentables/len(pareto_prod)*100):.1f}% del catálogo"
+            )
+
+        # Matriz de Productos: Volumen vs Rentabilidad
+        st.markdown("### 🎯 Matriz de Productos: Volumen vs Rentabilidad (Top 200)")
+
+        # Preparar datos para scatter plot (solo top 200 por volumen)
+        top_productos = pareto_prod.nlargest(200, 'ventas').copy()
+
+        # Clasificar productos en cuadrantes
+        ventas_mediana = top_productos['ventas'].median()
+        margen_mediano = top_productos['margen_pct'].median()
+
+        def clasificar_producto(row):
+            if row['ventas'] > ventas_mediana and row['margen_pct'] > margen_mediano:
+                return '⭐ Estrellas'
+            elif row['ventas'] > ventas_mediana and row['margen_pct'] <= margen_mediano:
+                return '🚦 Generadores de Tráfico'
+            elif row['ventas'] <= ventas_mediana and row['margen_pct'] > margen_mediano:
+                return '💎 Joyas Ocultas'
+            else:
+                return '⚠️ A Revisar'
+
+        top_productos['clasificacion'] = top_productos.apply(clasificar_producto, axis=1)
+
+        # Crear scatter plot
+        fig_matriz = px.scatter(
+            top_productos,
+            x='ventas',
+            y='margen_pct',
+            color='clasificacion',
+            size='margen',
+            hover_data={
+                'descripcion': True,
+                'ventas': ':$,.0f',
+                'margen': ':$,.0f',
+                'margen_pct': ':.1f',
+                'clasificacion': True
+            },
+            labels={
+                'ventas': 'Ventas Totales ($)',
+                'margen_pct': 'Margen (%)',
+                'clasificacion': 'Clasificación'
+            },
+            color_discrete_map={
+                '⭐ Estrellas': '#4caf50',
+                '🚦 Generadores de Tráfico': '#2196f3',
+                '💎 Joyas Ocultas': '#ff9800',
+                '⚠️ A Revisar': '#f44336'
+            },
+            height=500
+        )
+
+        # Agregar líneas de referencia (medianas)
+        fig_matriz.add_hline(
+            y=margen_mediano,
+            line_dash="dash",
+            line_color="gray",
+            annotation_text=f"Margen mediano: {margen_mediano:.1f}%",
+            annotation_position="right"
+        )
+
+        fig_matriz.add_vline(
+            x=ventas_mediana,
+            line_dash="dash",
+            line_color="gray",
+            annotation_text=f"Ventas medianas: ${formatear_numero_argentino(ventas_mediana, 0)}",
+            annotation_position="top"
+        )
+
+        fig_matriz.update_layout(
+            title="Matriz de Productos: Volumen vs Rentabilidad (Top 200)",
+            xaxis_title="Ventas Totales ($)",
+            yaxis_title="Margen (%)",
+            legend_title="Clasificación en Tráfico",
+            hovermode='closest'
+        )
+
+        fig_matriz = configurar_grafico_rendimiento(fig_matriz)
+        render_plotly(fig_matriz)
+
+        # Interpretación de la Matriz
+        st.markdown("### 📖 Interpretación de la Matriz")
+
+        st.markdown("""
+        <div style='background: #f5f5f5; padding: 1.2rem; border-radius: 8px; border-left: 4px solid #2196f3;'>
+            <ul style='margin: 0; padding-left: 1.5rem; line-height: 1.8;'>
+                <li><b>⭐ Estrellas</b> (alto volumen + alto margen): <b>Proteger y promocionar.</b> Son los productos ideales.</li>
+                <li><b>🚦 Generadores de Tráfico</b> (alto volumen + bajo margen): <b>Usar para atraer clientes</b>, optimizar costos.</li>
+                <li><b>💎 Joyas Ocultas</b> (bajo volumen + alto margen): <b>Impulsar ventas</b> con promociones y mejor exhibición.</li>
+                <li><b>⚠️ A Revisar</b> (bajo volumen + bajo margen): <b>Evaluar descatalogar</b> o replantear estrategia de precios.</li>
+            </ul>
+        </div>
+        """, unsafe_allow_html=True)
+
+        # Productos Extremos
+        st.markdown("### 🔍 Productos Extremos")
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            st.markdown("#### ⭐ Top 10 Más Rentables")
+            top_rentables = pareto_prod.nlargest(10, 'margen_pct')[
+                ['descripcion', 'categoria', 'margen_pct', 'ventas']
+            ].copy()
+            top_rentables['Margen %'] = top_rentables['margen_pct'].apply(lambda x: f"{x:.1f}%")
+            top_rentables['Ventas'] = top_rentables['ventas'].apply(lambda x: formatear_moneda_argentina(x, 0))
+            top_rentables = top_rentables.drop(columns=['margen_pct', 'ventas'])
+            top_rentables.columns = ['Producto', 'Categoría', 'Margen %', 'Ventas']
+            st.dataframe(top_rentables, use_container_width=True, hide_index=True)
+
+        with col2:
+            st.markdown("#### ⚠️ Top 10 Menor Margen")
+            top_bajo_margen = pareto_prod.nsmallest(10, 'margen_pct')[
+                ['descripcion', 'categoria', 'margen_pct', 'ventas']
+            ].copy()
+            top_bajo_margen['Margen %'] = top_bajo_margen['margen_pct'].apply(lambda x: f"{x:.1f}%")
+            top_bajo_margen['Ventas'] = top_bajo_margen['ventas'].apply(lambda x: formatear_moneda_argentina(x, 0))
+            top_bajo_margen = top_bajo_margen.drop(columns=['margen_pct', 'ventas'])
+            top_bajo_margen.columns = ['Producto', 'Categoría', 'Margen %', 'Ventas']
+            st.dataframe(top_bajo_margen, use_container_width=True, hide_index=True)
+
+        # Resumen por Cuadrante
+        st.markdown("### 📊 Resumen por Cuadrante")
+
+        resumen_cuadrantes = top_productos.groupby('clasificacion').agg({
+            'descripcion': 'count',
+            'ventas': 'sum',
+            'margen': 'sum',
+            'margen_pct': 'mean'
+        }).reset_index()
+
+        resumen_cuadrantes.columns = ['Cuadrante', 'Nº Productos', 'Ventas Totales', 'Margen Total', 'Margen % Promedio']
+        resumen_cuadrantes['Ventas Totales'] = resumen_cuadrantes['Ventas Totales'].apply(lambda x: formatear_moneda_argentina(x, 0))
+        resumen_cuadrantes['Margen Total'] = resumen_cuadrantes['Margen Total'].apply(lambda x: formatear_moneda_argentina(x, 0))
+        resumen_cuadrantes['Margen % Promedio'] = resumen_cuadrantes['Margen % Promedio'].apply(lambda x: f"{x:.1f}%")
+
+        st.dataframe(resumen_cuadrantes, use_container_width=True, hide_index=True)
+
+    # =========================================================================
+    # SECCIÓN 2: ANÁLISIS DE COSTOS (PROTOTIPO CON DATOS SINTÉTICOS)
+    # =========================================================================
+
+    st.markdown("<br><br>", unsafe_allow_html=True)
+
+    # Banner informativo con nota sobre simulación
+    st.markdown("""
+    <div style='background: linear-gradient(135deg, #1976d2 0%, #2196f3 100%);
+                padding: 1.8rem; border-radius: 12px; margin: 2rem 0 1.5rem 0; color: white;'>
+        <h3 style='margin: 0 0 0.8rem 0; color: white;'>🧪 Simulación: Análisis de Costos (Vista Previa)</h3>
+        <p style='margin: 0; font-size: 0.95rem; line-height: 1.5;'>
+            <b>💡 Nota:</b> Esta sección muestra una <b>simulación con datos ficticios</b> para demostrar las capacidades
+            de análisis cuando se integren datos reales de costos.
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown("""
+    <div style='background: #e3f2fd; border-left: 6px solid #2196f3; padding: 1.2rem; border-radius: 8px; margin-bottom: 1.5rem;'>
+        <p style='margin: 0; color: #1565c0; line-height: 1.6;'>
+            <b>Cuando se dispongan de datos reales de costos, este módulo permitirá:</b>
+        </p>
+        <ul style='margin: 0.5rem 0 0 1.2rem; padding: 0; color: #1565c0;'>
+            <li>Análisis de punto de equilibrio por producto</li>
+            <li>Estructura de costos (fijos vs variables)</li>
+            <li>Comparación precio de venta vs costo total</li>
+            <li>Identificación de productos con pricing subóptimo</li>
+        </ul>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # Generar datos sintéticos para la simulación
+    # Seleccionar 10 productos de muestra
+    productos_muestra = pareto_prod.nlargest(10, 'ventas').copy()
+
+    # Generar costos sintéticos (simulación)
+    np.random.seed(42)  # Para reproducibilidad
+    productos_muestra['precio_venta'] = productos_muestra['ventas'] / np.maximum(productos_muestra['ventas'] / 43078.348, 1)  # Precio promedio simulado
+    productos_muestra['costo_producto'] = productos_muestra['precio_venta'] * (1 - productos_muestra['margen_pct'] / 100)
+    productos_muestra['logistica'] = productos_muestra['costo_producto'] * np.random.uniform(0.08, 0.12, len(productos_muestra))
+    productos_muestra['overhead'] = productos_muestra['costo_producto'] * np.random.uniform(0.05, 0.10, len(productos_muestra))
+    productos_muestra['margen_neto'] = productos_muestra['precio_venta'] - productos_muestra['costo_producto'] - productos_muestra['logistica'] - productos_muestra['overhead']
+    productos_muestra['margen_neto_pct'] = (productos_muestra['margen_neto'] / productos_muestra['precio_venta']) * 100
+
+    # Waterfall: De Precio de Venta a Margen Neto (ejemplo con un producto)
+    st.markdown("### 💧 Waterfall: De Precio de Venta a Margen Neto")
+
+    st.markdown("**Desglose de Costos: MUSLO DE POLLO (Ejemplo)**")
+
+    # Valores sintéticos para el waterfall
+    precio_venta_ej = 43078.348
+    costo_producto_ej = 23691.091
+    logistica_ej = 2446.246
+    overhead_ej = 3012.484
+    margen_neto_ej = precio_venta_ej - costo_producto_ej - logistica_ej - overhead_ej
+
+    # Crear waterfall chart
+    fig_waterfall = go.Figure(go.Waterfall(
+        name = "Desglose",
+        orientation = "v",
+        measure = ["relative", "relative", "relative", "relative", "total"],
+        x = ["Precio Venta", "Costo Producto", "Logística", "Overhead", "Margen Neto"],
+        textposition = "outside",
+        text = [
+            f"${formatear_numero_argentino(precio_venta_ej, 0)}",
+            f"-${formatear_numero_argentino(costo_producto_ej, 0)}",
+            f"-${formatear_numero_argentino(logistica_ej, 0)}",
+            f"-${formatear_numero_argentino(overhead_ej, 0)}",
+            f"${formatear_numero_argentino(margen_neto_ej, 0)}"
+        ],
+        y = [
+            precio_venta_ej,
+            -costo_producto_ej,
+            -logistica_ej,
+            -overhead_ej,
+            margen_neto_ej
+        ],
+        connector = {"line":{"color":"rgb(63, 63, 63)"}},
+        decreasing = {"marker":{"color":"#f44336"}},
+        increasing = {"marker":{"color":"#2196f3"}},
+        totals = {"marker":{"color":"#4caf50"}}
+    ))
+
+    fig_waterfall.update_layout(
+        title="Desglose de Costos: MUSLO DE POLLO",
+        showlegend=False,
+        height=450,
+        yaxis_title="Monto ($)"
+    )
+
+    fig_waterfall = configurar_grafico_rendimiento(fig_waterfall)
+    render_plotly(fig_waterfall)
+
+    # Estructura de Costos Simulada por Categoría
+    st.markdown("### 📊 Estructura de Costos Simulada por Categoría")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.markdown("**Estructura de Costos Promedio**")
+
+        # Calcular promedios para el pie chart
+        costo_promedio = 55.0  # % del precio
+        logistica_promedio = 9.0
+        overhead_promedio = 6.0
+        margen_promedio = 30.0
+
+        fig_pie_costos = go.Figure(data=[go.Pie(
+            labels=['Costo Producto', 'Margen Neto', 'Logística', 'Overhead'],
+            values=[costo_promedio, margen_promedio, logistica_promedio, overhead_promedio],
+            marker=dict(colors=['#f44336', '#ff9800', '#4caf50', '#2196f3']),
+            textinfo='label+percent',
+            textposition='auto',
+            hovertemplate='<b>%{label}</b><br>%{percent}<extra></extra>'
+        )])
+
+        fig_pie_costos.update_layout(
+            showlegend=True,
+            height=350,
+            legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5)
+        )
+
+        fig_pie_costos = configurar_grafico_rendimiento(fig_pie_costos)
+        render_plotly(fig_pie_costos)
+
+    with col2:
+        st.markdown("### 🎯 Análisis de Punto de Equilibrio")
+
+        st.metric(
+            "Unidades en Equilibrio/Mes",
+            "0",
+            help="Unidades necesarias para cubrir costos fijos"
+        )
+
+        st.metric(
+            "Ventas en Equilibrio/Mes",
+            formatear_moneda_argentina(16666.667, 0),
+            help="Facturación mínima para alcanzar punto de equilibrio"
+        )
+
+        st.metric(
+            "Margen de Contribución",
+            "30.0%",
+            help="Porcentaje que aporta cada venta a cubrir costos fijos"
+        )
+
+    # Top 10 Productos: Precio vs Costo Simulado
+    st.markdown("### 🔍 Top 10 Productos: Precio vs Costo Simulado")
+
+    tabla_costos = productos_muestra[
+        ['descripcion', 'categoria', 'precio_venta', 'costo_producto', 'margen_pct', 'margen_neto_pct']
+    ].copy()
+
+    tabla_costos.columns = ['Producto', 'Categoría', 'Precio Venta', 'Costo Unitario', 'Margen $', 'Margen %']
+    tabla_costos['Precio Venta'] = tabla_costos['Precio Venta'].apply(lambda x: formatear_moneda_argentina(x, 0))
+    tabla_costos['Costo Unitario'] = tabla_costos['Costo Unitario'].apply(lambda x: formatear_moneda_argentina(x, 0))
+    tabla_costos['Margen $'] = tabla_costos['Margen $'].apply(lambda x: f"{x:.1f}%")
+    tabla_costos['Margen %'] = tabla_costos['Margen %'].apply(lambda x: f"{x:.1f}%")
+
+    st.dataframe(tabla_costos, use_container_width=True, hide_index=True)
+
+    # Banner de próximos pasos
+    st.markdown("""
+    <div style='background: linear-gradient(135deg, #283593 0%, #3949ab 100%);
+                padding: 1.8rem; border-radius: 12px; margin-top: 2rem; color: white;'>
+        <h3 style='margin: 0 0 0.8rem 0; color: #ffd54f;'>🚀 Próximos Pasos para Activar Análisis Real</h3>
+        <p style='margin: 0 0 0.8rem 0; font-size: 0.95rem;'>
+            <b>Para habilitar el análisis de costos con datos reales, se requiere:</b>
+        </p>
+        <ul style='margin: 0; padding-left: 1.5rem; line-height: 1.8;'>
+            <li><b>📦 Costos de compra:</b> Precio de adquisición de cada producto del proveedor</li>
+            <li><b>🚚 Costos logísticos:</b> Transporte, almacenamiento, mermas</li>
+            <li><b>💼 Costos fijos mensuales:</b> Alquiler, servicios, personal</li>
+            <li><b>📋 Asignación de overhead:</b> Criterio de distribución de costos indirectos</li>
+        </ul>
+        <p style='margin: 1rem 0 0 0; font-size: 0.9rem; font-style: italic;'>
+            💡 Con estos datos, el dashboard podrá:<br>
+            • Identificar productos con pricing subóptimo<br>
+            • Calcular punto de equilibrio real por producto/categoría<br>
+            • Optimizar márgenes y detectar oportunidades de mejora<br>
+            • Simular impacto de cambios de precio en rentabilidad
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+
+# =============================================================================
+# TAB 2: PARETO & MIX
 # =============================================================================
 with tabs[1]:
-    st.markdown("## 💰 Análisis de Márgenes y Rentabilidad")
-
-    detalle_tickets_margen = data.get('rentabilidad_ticket')
-
-    if detalle_tickets_margen is None or detalle_tickets_margen.empty:
-        st.warning("No se encontraron datos de rentabilidad por ticket.")
-    else:
-        detalle_tickets_margen = detalle_tickets_margen.copy()
-        detalle_tickets_margen['fecha'] = pd.to_datetime(detalle_tickets_margen['fecha'])
-        detalle_tickets_margen['periodo'] = detalle_tickets_margen['fecha'].dt.to_period('M')
-        detalle_tickets_margen['margen_pct'] = detalle_tickets_margen['rentabilidad_pct_ticket'] * 100
-
-        # Filtrar mes incompleto
-        max_fecha = detalle_tickets_margen['fecha'].max()
-        ultimo_mes_incompleto = None
-        if pd.notna(max_fecha):
-            dias_mes = monthrange(max_fecha.year, max_fecha.month)[1]
-            if max_fecha.day < dias_mes:
-                ultimo_mes_incompleto = max_fecha.to_period('M')
-
-        if ultimo_mes_incompleto is not None:
-            detalle_tickets_margen = detalle_tickets_margen[
-                detalle_tickets_margen['periodo'] != ultimo_mes_incompleto
-            ]
-
-        if not detalle_tickets_margen.empty:
-            # KPIs principales
-            col1, col2, col3, col4 = st.columns(4)
-
-            margen_promedio = detalle_tickets_margen['margen_pct'].mean()
-            margen_ticket_promedio = detalle_tickets_margen['margen_ticket'].mean()
-            ticket_promedio = detalle_tickets_margen['monto_total_ticket'].mean()
-
-            with col1:
-                st.metric(
-                    "Margen % Promedio",
-                    f"{margen_promedio:.1f}%",
-                    help="Margen porcentual promedio sobre ventas"
-                )
-
-            with col2:
-                st.metric(
-                    "Margen $ por Ticket",
-                    f"${formatear_numero_argentino(margen_ticket_promedio, 0)}",
-                    help="Margen promedio en pesos por ticket"
-                )
-
-            with col3:
-                st.metric(
-                    "Ticket Promedio",
-                    f"${formatear_numero_argentino(ticket_promedio, 0)}",
-                    help="Venta promedio por ticket"
-                )
-
-            with col4:
-                tickets_totales = len(detalle_tickets_margen)
-                st.metric(
-                    "Total Tickets",
-                    formatear_numero_argentino(tickets_totales, 0),
-                    help="Cantidad total de tickets analizados"
-                )
-
-            # Evolución mensual del margen %
-            st.markdown("### Evolución Mensual del Margen %")
-
-            margen_mensual = detalle_tickets_margen.groupby('periodo').agg({
-                'margen_pct': 'mean',
-                'margen_ticket': 'mean',
-                'monto_total_ticket': 'mean'
-            }).reset_index()
-            margen_mensual['periodo_dt'] = margen_mensual['periodo'].dt.to_timestamp()
-
-            fig_margen_evol = make_subplots(specs=[[{"secondary_y": True}]])
-
-            # Margen % (eje izquierdo)
-            fig_margen_evol.add_trace(
-                go.Scatter(
-                    x=margen_mensual['periodo_dt'],
-                    y=margen_mensual['margen_pct'],
-                    name='Margen %',
-                    mode='lines+markers',
-                    line=dict(color='#2ca02c', width=3),
-                    marker=dict(size=10)
-                ),
-                secondary_y=False
-            )
-
-            # Margen $ por ticket (eje derecho)
-            fig_margen_evol.add_trace(
-                go.Scatter(
-                    x=margen_mensual['periodo_dt'],
-                    y=margen_mensual['margen_ticket'],
-                    name='Margen $ por Ticket',
-                    mode='lines+markers',
-                    line=dict(color='#ff7f0e', width=2, dash='dash'),
-                    marker=dict(size=8, symbol='diamond')
-                ),
-                secondary_y=True
-            )
-
-            fig_margen_evol.update_xaxes(title_text=None)
-            fig_margen_evol.update_yaxes(title_text="Margen %", secondary_y=False)
-            fig_margen_evol.update_yaxes(title_text="Margen $ por Ticket", secondary_y=True)
-
-            fig_margen_evol.update_layout(
-                title='Evolución del Margen Porcentual y en Pesos',
-                height=450,
-                hovermode='x unified',
-                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
-            )
-
-            st.plotly_chart(fig_margen_evol, use_container_width=True)
-
-            # Insight sobre tendencia
-            if len(margen_mensual) >= 2:
-                cambio_margen = margen_mensual.iloc[-1]['margen_pct'] - margen_mensual.iloc[0]['margen_pct']
-                if cambio_margen > 1:
-                    st.success(f"📈 El margen % aumentó {cambio_margen:.1f} puntos porcentuales en el período analizado.")
-                elif cambio_margen < -1:
-                    st.warning(f"📉 El margen % disminuyó {abs(cambio_margen):.1f} puntos porcentuales en el período analizado.")
-                else:
-                    st.info(f"➡️ El margen % se mantuvo relativamente estable ({cambio_margen:+.1f} pp).")
-
-            # Distribución del margen % por cuartiles
-            st.markdown("### Distribución de Tickets por Margen %")
-
-            # Calcular cuartiles
-            q1 = detalle_tickets_margen['margen_pct'].quantile(0.25)
-            q2 = detalle_tickets_margen['margen_pct'].quantile(0.50)
-            q3 = detalle_tickets_margen['margen_pct'].quantile(0.75)
-
-            detalle_tickets_margen['cuartil'] = pd.cut(
-                detalle_tickets_margen['margen_pct'],
-                bins=[-np.inf, q1, q2, q3, np.inf],
-                labels=['Q1 (Bajo)', 'Q2 (Medio-Bajo)', 'Q3 (Medio-Alto)', 'Q4 (Alto)']
-            )
-
-            cuartiles_stats = detalle_tickets_margen.groupby('cuartil').agg({
-                'ticket_id': 'count',
-                'margen_pct': 'mean',
-                'margen_ticket': 'sum',
-                'monto_total_ticket': 'sum'
-            }).reset_index()
-            cuartiles_stats.columns = ['Cuartil', 'Cantidad Tickets', 'Margen % Promedio', 'Margen $ Total', 'Ventas Totales']
-
-            col1, col2 = st.columns(2)
-
-            with col1:
-                # Gráfico de distribución
-                fig_dist = px.histogram(
-                    detalle_tickets_margen,
-                    x='margen_pct',
-                    nbins=50,
-                    title='Distribución de Margen % por Ticket',
-                    labels={'margen_pct': 'Margen %', 'count': 'Cantidad de Tickets'}
-                )
-                fig_dist.update_traces(marker_color='#2ca02c')
-                fig_dist.update_layout(height=400, showlegend=False)
-                st.plotly_chart(fig_dist, use_container_width=True)
-
-            with col2:
-                # Gráfico de cuartiles
-                fig_cuartiles = px.bar(
-                    cuartiles_stats,
-                    x='Cuartil',
-                    y='Cantidad Tickets',
-                    title='Tickets por Cuartil de Margen %',
-                    color='Cuartil',
-                    color_discrete_sequence=['#d62728', '#ff7f0e', '#2ca02c', '#1f77b4']
-                )
-                fig_cuartiles.update_layout(height=400, showlegend=False)
-                st.plotly_chart(fig_cuartiles, use_container_width=True)
-
-            # Tabla resumen de cuartiles
-            st.markdown("### Resumen por Cuartiles")
-            cuartiles_stats['Margen % Promedio'] = cuartiles_stats['Margen % Promedio'].apply(lambda x: f"{x:.1f}%")
-            cuartiles_stats['Margen $ Total'] = cuartiles_stats['Margen $ Total'].apply(lambda x: f"${formatear_numero_argentino(x, 0)}")
-            cuartiles_stats['Ventas Totales'] = cuartiles_stats['Ventas Totales'].apply(lambda x: f"${formatear_numero_argentino(x, 0)}")
-            cuartiles_stats['Cantidad Tickets'] = cuartiles_stats['Cantidad Tickets'].apply(lambda x: formatear_numero_argentino(x, 0))
-
-            st.dataframe(cuartiles_stats, use_container_width=True, hide_index=True)
-
-            # Insights accionables
-            st.markdown("### 💡 Insights Accionables")
-            st.info("""
-            **Estrategias según cuartiles:**
-            - **Q1 (Bajo margen):** Revisar precios, optimizar mix de productos, considerar marcas propias
-            - **Q2-Q3 (Margen medio):** Oportunidad de upselling y venta cruzada
-            - **Q4 (Alto margen):** Analizar patrones para replicar en otros tickets
-            """)
-
-        else:
-            st.warning("No hay datos suficientes después de filtrar el mes incompleto.")
-
-# =============================================================================
-# TAB 3: PARETO & MIX
-# =============================================================================
-with tabs[7]:
     st.markdown("## Analisis de Pareto - optimizar mix de productos")
 
     pareto_prod = data.get('pareto_prod')
@@ -1786,7 +2442,7 @@ with tabs[7]:
 # =============================================================================
 # TAB 3: MARKET BASKET (COMBOS)
 # =============================================================================
-with tabs[7]:
+with tabs[2]:
     st.markdown("## Market Basket Analysis - combos estrategicos")
 
     reglas = data.get('reglas')
@@ -1955,7 +2611,7 @@ with tabs[7]:
 # =============================================================================
 # TAB 4: SEGMENTACION
 # =============================================================================
-with tabs[7]:
+with tabs[3]:
     st.markdown("## Segmentacion de tickets - personalizar estrategias")
 
     rentabilidad = data['rentabilidad_ticket'].copy()
@@ -2358,7 +3014,7 @@ with tabs[7]:
 # =============================================================================
 # TAB 5: MEDIOS DE PAGO
 # =============================================================================
-with tabs[7]:
+with tabs[4]:
     st.markdown("## Analisis de medios de pago")
 
     kpi_pago = data.get('kpi_pago')
@@ -2503,10 +3159,7 @@ with tabs[7]:
 # =============================================================================
 # TAB 6: ESTRATEGIAS PRIORIZADAS
 # =============================================================================
-# =============================================================================
-# TAB 6: ESTRATEGIAS PRIORIZADAS
-# =============================================================================
-with tabs[7]:
+with tabs[5]:
     st.markdown("## 🚀 Estrategias Priorizadas - Plan de Acción")
 
     st.markdown("""
@@ -2646,7 +3299,7 @@ with tabs[7]:
 
 
 # =============================================================================
-# TAB 7: INFORME EJECUTIVO
+# TAB 8: INFORME EJECUTIVO
 # =============================================================================
 with tabs[7]:
     st.markdown("## Y Informe Ejecutivo")
