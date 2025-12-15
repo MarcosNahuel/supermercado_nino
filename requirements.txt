@@ -6,3 +6,4 @@ pyarrow>=14.0.0
 python-dateutil
 scikit-learn
 scipy
+statsmodels==0.14.5
