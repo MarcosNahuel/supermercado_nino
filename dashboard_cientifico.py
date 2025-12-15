@@ -650,87 +650,112 @@ if not data:
     st.stop()
 
 # =============================================================================
-# HEADER
+# HEADER COMPACTO
 # =============================================================================
 st.markdown("""
 <div style='background: linear-gradient(135deg, #1a237e 0%, #283593 100%);
-            padding: 2.5rem; border-radius: 15px; text-align: center;
-            box-shadow: 0 10px 30px rgba(26, 35, 126, 0.4); margin-bottom: 2rem;'>
-    <h1 style='color: #ffd700; margin: 0; font-size: 2.8rem; font-weight: 800;'>
+            padding: 1rem 1.5rem; border-radius: 10px; text-align: center;
+            box-shadow: 0 4px 15px rgba(26, 35, 126, 0.3); margin-bottom: 1rem;'>
+    <h2 style='color: #ffd700; margin: 0; font-size: 1.5rem; font-weight: 700;'>
         📊 SUPERMERCADO NINO - DASHBOARD ANALÍTICO
-    </h1>
-    <p style='color: rgba(255,255,255,0.95); margin: 0.8rem 0 0 0; font-size: 1.2rem;'>
-        Insights de Datos para Aumentar Rentabilidad del Ticket
-    </p>
+    </h2>
 </div>
 """, unsafe_allow_html=True)
 
 # =============================================================================
-# RESUMEN EJECUTIVO
+# MENÚ LATERAL (SIDEBAR)
 # =============================================================================
-st.markdown("## 📊 Resumen Ejecutivo del Dataset")
-
 alcance = data['alcance'].iloc[0]
 kpis = data['kpis_base'].iloc[0]
 
-col1, col2, col3, col4 = st.columns(4)
-with col1:
-    st.metric("📅 Período", f"{alcance['min_fecha'].strftime('%d/%m/%Y')}\n{alcance['max_fecha'].strftime('%d/%m/%Y')}")
-with col2:
-    st.metric("🧾 Tickets", formatear_numero_argentino(alcance['n_tickets']))
-with col3:
-    st.metric("Codigos de producto unicos", formatear_numero_argentino(alcance['n_skus_unicos']))
-with col4:
-    st.metric("💰 Ventas Totales", f"{formatear_moneda_argentina(alcance['ventas_total']/1e6, 1)}M")
-
-st.markdown("### KPIs Principales")
-col1, col2, col3, col4 = st.columns(4)
-with col1:
-    st.metric("Rentabilidad Global", f"{formatear_numero_argentino(kpis['rentabilidad_global']*100, 2)}%")
-with col2:
-    st.metric("Ticket Promedio", formatear_moneda_argentina(kpis['ticket_promedio']))
-with col3:
-    st.metric("Items/Ticket", formatear_numero_argentino(kpis['items_promedio_ticket'], 2))
-with col4:
-    st.metric("Margen/Ticket", f"{formatear_numero_argentino((kpis['rentabilidad_promedio_ticket']/kpis['ticket_promedio'])*100, 1)}%")
-
-# Calcular los valores formateados ANTES de usarlos en el texto
+# Calcular valores para usar en varias secciones
 rentabilidad_global_pct = formatear_numero_argentino(kpis['rentabilidad_global']*100, 2)
 ticket_promedio = formatear_moneda_argentina(kpis['ticket_promedio'])
 margen_ticket_pct = formatear_numero_argentino((kpis['rentabilidad_promedio_ticket']/kpis['ticket_promedio'])*100, 1)
 mendocino_promedio = formatear_numero_argentino(10800)
 
-st.markdown(f"""
-<div style='background: #e8f5e9; border-left: 6px solid #4caf50; padding: 20px; margin: 20px 0; border-radius: 10px;'>
-    <h4 style='color: #2e7d32; margin: 0;'>💡 Insight Clave</h4>
-    <p style='margin: 10px 0 0 0;'>
-        Con <b>rentabilidad global del {rentabilidad_global_pct}%</b> y <b>ticket promedio de {ticket_promedio}</b>,
-        NINO está <b>por encima del promedio</b> mendocino (${mendocino_promedio} según INDEC).
-        Sin embargo, el <b>margen por ticket ({margen_ticket_pct}%)</b> indica oportunidad de optimizar
-        el <b>mix de productos</b> hacia categorías de mayor rentabilidad.
-    </p>
-</div>
-""", unsafe_allow_html=True)
+with st.sidebar:
+    st.markdown("""
+    <div style='text-align: center; padding: 10px 0; border-bottom: 2px solid #1a237e; margin-bottom: 15px;'>
+        <h3 style='color: #1a237e; margin: 0;'>🧭 Navegación</h3>
+    </div>
+    """, unsafe_allow_html=True)
+
+    menu_options = [
+        "📊 Resumen Ejecutivo",
+        "📈 Análisis Temporal",
+        "🎯 Pareto & Mix",
+        "🛒 Market Basket & Combos",
+        "👑 Tribu Premium",
+        "👥 Segmentación",
+        "💳 Medios de Pago",
+        "🚀 Estrategias Priorizadas",
+        "💰 Márgenes - Costos",
+        "🔮 Forecasting",
+        "📋 Informe Ejecutivo"
+    ]
+
+    selected_menu = st.radio(
+        "Seleccionar sección:",
+        menu_options,
+        label_visibility="collapsed"
+    )
+
+    st.markdown("---")
+    # Mini resumen en sidebar
+    st.markdown(f"""
+    <div style='background: #f5f5f5; padding: 10px; border-radius: 8px; font-size: 0.85rem;'>
+        <b>📅 Período:</b> {alcance['min_fecha'].strftime('%d/%m/%y')} - {alcance['max_fecha'].strftime('%d/%m/%y')}<br>
+        <b>🧾 Tickets:</b> {formatear_numero_argentino(alcance['n_tickets'])}<br>
+        <b>💰 Ventas:</b> {formatear_moneda_argentina(alcance['ventas_total']/1e6, 1)}M
+    </div>
+    """, unsafe_allow_html=True)
 
 # =============================================================================
-# TABS PRINCIPALES
+# CONTENIDO SEGÚN MENÚ SELECCIONADO
 # =============================================================================
-tabs = st.tabs([
-    "📈 Análisis Temporal",
-    "🎯 Pareto & Mix",
-    "🛒 Market Basket (Combos)",
-    "👥 Segmentación",
-    "💳 Medios de Pago",
-    "🚀 Estrategias Priorizadas",
-    "💰 Márgenes - Costos",
-    "📋 Informe Ejecutivo"
-])
 
-# =============================================================================
-# TAB 1: ANALISIS TEMPORAL
-# =============================================================================
-with tabs[0]:
-    st.markdown("## Ritmo de comprobantes")
+# --- RESUMEN EJECUTIVO ---
+if selected_menu == "📊 Resumen Ejecutivo":
+    st.markdown("## 📊 Resumen Ejecutivo del Dataset")
+
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("📅 Período", f"{alcance['min_fecha'].strftime('%d/%m/%Y')}\n{alcance['max_fecha'].strftime('%d/%m/%Y')}")
+    with col2:
+        st.metric("🧾 Tickets", formatear_numero_argentino(alcance['n_tickets']))
+    with col3:
+        st.metric("Códigos de producto únicos", formatear_numero_argentino(alcance['n_skus_unicos']))
+    with col4:
+        st.metric("💰 Ventas Totales", f"{formatear_moneda_argentina(alcance['ventas_total']/1e6, 1)}M")
+
+    st.markdown("### KPIs Principales")
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("Rentabilidad Global", f"{rentabilidad_global_pct}%")
+    with col2:
+        st.metric("Ticket Promedio", ticket_promedio)
+    with col3:
+        st.metric("Items/Ticket", formatear_numero_argentino(kpis['items_promedio_ticket'], 2))
+    with col4:
+        st.metric("Margen/Ticket", f"{margen_ticket_pct}%")
+
+    st.markdown(f"""
+    <div style='background: #e8f5e9; border-left: 6px solid #4caf50; padding: 20px; margin: 20px 0; border-radius: 10px;'>
+        <h4 style='color: #2e7d32; margin: 0;'>💡 Insight Clave</h4>
+        <p style='margin: 10px 0 0 0;'>
+            Con <b>rentabilidad global del {rentabilidad_global_pct}%</b> y <b>ticket promedio de {ticket_promedio}</b>,
+            NINO está <b>por encima del promedio</b> mendocino (${mendocino_promedio} según INDEC).
+            Sin embargo, el <b>margen por ticket ({margen_ticket_pct}%)</b> indica oportunidad de optimizar
+            el <b>mix de productos</b> hacia categorías de mayor rentabilidad.
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+
+# --- ANÁLISIS TEMPORAL (incluye Estacionalidad) ---
+elif selected_menu == "📈 Análisis Temporal":
+    st.markdown("## 📈 Análisis Temporal")
+    st.markdown("### Ritmo de comprobantes")
 
     detalle_tickets = data.get('rentabilidad_ticket')
 
@@ -1047,7 +1072,7 @@ with tabs[0]:
         # Selector de granularidad para UPT
         st.markdown('Selecciona la granularidad')
         vista_upt = st.radio(
-            '',
+            'Granularidad UPT',
             ['Mensual', 'Quincenal', 'Semanal'],
             horizontal=True,
             index=2,  # Por defecto Semanal
@@ -1424,7 +1449,7 @@ with tabs[0]:
 
         st.markdown('Selecciona la granularidad')
         vista_margen = st.radio(
-            '',
+            'Granularidad margen',
             ['Mensual', 'Quincenal', 'Semanal'],
             horizontal=True,
             index=0,  # Por defecto Mensual
@@ -1781,10 +1806,194 @@ with tabs[0]:
         else:
             st.info("No se pudo construir la vista horaria; verificar la fuente `comprobantes_ventas_horario.csv`.")
 
+    # -------------------------
+    # ESTACIONALIDAD Y EVENTOS (Expander)
+    # -------------------------
+    with st.expander("📅 Estacionalidad y Eventos (Quincenas, Feriados, Mensual)", expanded=True):
+        st.markdown("""
+        <div style='background: linear-gradient(135deg, #00695c 0%, #00897b 100%);
+                    padding: 1rem 1.5rem; border-radius: 10px; margin-bottom: 1.5rem; color: white;'>
+            <h4 style='margin: 0; color: white;'>🗓️ Patrones Temporales del Negocio</h4>
+            <p style='margin: 0.5rem 0 0 0; font-size: 0.9rem;'>
+                Efecto de quincenas (días de cobro), feriados y estacionalidad mensual.
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+
+        rentabilidad_est = data.get('rentabilidad_ticket')
+
+        if rentabilidad_est is not None and not rentabilidad_est.empty:
+            rentabilidad_est = rentabilidad_est.copy()
+            rentabilidad_est['fecha'] = pd.to_datetime(rentabilidad_est['fecha'])
+            rentabilidad_est['dia_mes'] = rentabilidad_est['fecha'].dt.day
+            rentabilidad_est['mes'] = rentabilidad_est['fecha'].dt.month
+
+            # === EFECTO QUINCENA ===
+            st.markdown("#### 💰 Efecto Quincena (Días de Cobro)")
+
+            def clasificar_quincena_est(dia):
+                if dia <= 5:
+                    return "1ra Quincena (1-5)"
+                elif dia <= 10:
+                    return "Post 1ra (6-10)"
+                elif dia <= 15:
+                    return "Pre 2da (11-15)"
+                elif dia <= 20:
+                    return "2da Quincena (16-20)"
+                elif dia <= 25:
+                    return "Post 2da (21-25)"
+                else:
+                    return "Fin de Mes (26-31)"
+
+            rentabilidad_est['periodo_quincena'] = rentabilidad_est['dia_mes'].apply(clasificar_quincena_est)
+
+            quincena_analysis = rentabilidad_est.groupby('periodo_quincena').agg({
+                'ticket_id': 'count',
+                'monto_total_ticket': ['sum', 'mean'],
+                'margen_ticket': 'sum'
+            }).reset_index()
+            quincena_analysis.columns = ['Periodo', 'Tickets', 'Ventas', 'Ticket Promedio', 'Margen']
+
+            orden_periodos = [
+                "1ra Quincena (1-5)", "Post 1ra (6-10)", "Pre 2da (11-15)",
+                "2da Quincena (16-20)", "Post 2da (21-25)", "Fin de Mes (26-31)"
+            ]
+            quincena_analysis['orden'] = quincena_analysis['Periodo'].map({p: i for i, p in enumerate(orden_periodos)})
+            quincena_analysis = quincena_analysis.sort_values('orden')
+
+            col_q1, col_q2 = st.columns(2)
+
+            with col_q1:
+                fig_quincena = px.bar(
+                    quincena_analysis,
+                    x='Periodo',
+                    y='Ticket Promedio',
+                    title='Ticket Promedio por Período del Mes',
+                    color='Ticket Promedio',
+                    color_continuous_scale='Greens'
+                )
+                fig_quincena.update_layout(
+                    height=350,
+                    xaxis_tickangle=-45,
+                    yaxis_tickprefix='$',
+                    yaxis_tickformat=',.0f',
+                    showlegend=False
+                )
+                fig_quincena.update_coloraxes(showscale=False)
+                render_plotly(fig_quincena)
+
+            with col_q2:
+                fig_tickets_q = px.bar(
+                    quincena_analysis,
+                    x='Periodo',
+                    y='Tickets',
+                    title='Cantidad de Tickets por Período',
+                    color='Tickets',
+                    color_continuous_scale='Blues'
+                )
+                fig_tickets_q.update_layout(
+                    height=350,
+                    xaxis_tickangle=-45,
+                    showlegend=False
+                )
+                fig_tickets_q.update_coloraxes(showscale=False)
+                render_plotly(fig_tickets_q)
+
+            periodo_max_ticket = quincena_analysis.loc[quincena_analysis['Ticket Promedio'].idxmax(), 'Periodo']
+            periodo_max_vol = quincena_analysis.loc[quincena_analysis['Tickets'].idxmax(), 'Periodo']
+
+            st.markdown(f"""
+            <div style='background: #e8f5e9; border-left: 5px solid #4caf50; padding: 15px; margin: 12px 0; border-radius: 8px;'>
+                <b style='color: #2e7d32;'>💡 Efecto Día de Cobro:</b>
+                <b>{periodo_max_ticket}</b> tiene el ticket más alto |
+                <b>{periodo_max_vol}</b> concentra el mayor volumen |
+                Recomendación: Promociones de alto valor en días 1-5 y 16-20
+            </div>
+            """, unsafe_allow_html=True)
+
+            # === EFECTO FERIADOS ===
+            st.markdown("#### 🎉 Efecto Feriados")
+            try:
+                detalle_lineas_fer = pd.read_parquet('data/processed/detalle_lineas.parquet')
+                if 'es_feriado' in detalle_lineas_fer.columns:
+                    feriados_analysis = detalle_lineas_fer.groupby('es_feriado').agg({
+                        'ticket_id': 'nunique',
+                        'importe_total': 'sum',
+                        'margen_linea': 'sum'
+                    }).reset_index()
+                    feriados_analysis['ticket_promedio'] = feriados_analysis['importe_total'] / feriados_analysis['ticket_id']
+
+                    feriado_data = feriados_analysis[feriados_analysis['es_feriado'] == True]
+                    normal_data = feriados_analysis[feriados_analysis['es_feriado'] == False]
+
+                    if not feriado_data.empty and not normal_data.empty:
+                        ticket_feriado = float(feriado_data['ticket_promedio'].iloc[0])
+                        ticket_normal = float(normal_data['ticket_promedio'].iloc[0])
+                        variacion_feriado = ((ticket_feriado / ticket_normal) - 1) * 100
+
+                        col_f1, col_f2, col_f3 = st.columns(3)
+                        with col_f1:
+                            st.metric("Tickets en Feriados", formatear_numero_argentino(int(feriado_data['ticket_id'].iloc[0]), 0))
+                        with col_f2:
+                            st.metric("Ticket Prom. Feriado", formatear_moneda_argentina(ticket_feriado, 0), delta=f"{variacion_feriado:+.1f}%")
+                        with col_f3:
+                            st.metric("Margen Feriados", formatear_moneda_argentina(float(feriado_data['margen_linea'].iloc[0]), 0))
+
+                        if variacion_feriado > 0:
+                            st.success(f"📈 Los feriados generan un ticket {variacion_feriado:.1f}% mayor. Oportunidad para promociones.")
+                    else:
+                        st.info("Datos de feriados insuficientes para comparación.")
+                else:
+                    st.info("No hay columna 'es_feriado' en los datos.")
+            except Exception:
+                st.info("No se encontraron datos de feriados.")
+
+            # === ESTACIONALIDAD MENSUAL ===
+            st.markdown("#### 📊 Estacionalidad Mensual")
+            meses_esp = {1: 'Ene', 2: 'Feb', 3: 'Mar', 4: 'Abr', 5: 'May', 6: 'Jun',
+                         7: 'Jul', 8: 'Ago', 9: 'Sep', 10: 'Oct', 11: 'Nov', 12: 'Dic'}
+
+            mensual = rentabilidad_est.groupby('mes').agg({
+                'ticket_id': 'count',
+                'monto_total_ticket': ['sum', 'mean'],
+                'margen_ticket': 'sum'
+            }).reset_index()
+            mensual.columns = ['Mes', 'Tickets', 'Ventas', 'Ticket Promedio', 'Margen']
+            mensual['Mes Nombre'] = mensual['Mes'].map(meses_esp)
+
+            fig_mensual = go.Figure()
+            fig_mensual.add_trace(go.Bar(
+                x=mensual['Mes Nombre'],
+                y=mensual['Ventas'],
+                name='Ventas',
+                marker_color='#1976d2',
+                yaxis='y'
+            ))
+            fig_mensual.add_trace(go.Scatter(
+                x=mensual['Mes Nombre'],
+                y=mensual['Ticket Promedio'],
+                name='Ticket Promedio',
+                mode='lines+markers',
+                line=dict(color='#ff9800', width=3),
+                marker=dict(size=8),
+                yaxis='y2'
+            ))
+            fig_mensual.update_layout(
+                title='Ventas y Ticket Promedio por Mes',
+                height=400,
+                yaxis=dict(title='Ventas ($)', tickprefix='$', tickformat=',.0f'),
+                yaxis2=dict(title='Ticket Prom ($)', overlaying='y', side='right', tickprefix='$', tickformat=',.0f'),
+                hovermode='x unified',
+                legend=dict(orientation='h', yanchor='bottom', y=1.02)
+            )
+            render_plotly(fig_mensual)
+        else:
+            st.warning("No hay datos disponibles para el análisis de estacionalidad.")
+
 # =============================================================================
-# TAB 7: MÁRGENES - COSTOS (movido al final)
+# MÁRGENES - COSTOS
 # =============================================================================
-with tabs[6]:
+elif selected_menu == "💰 Márgenes - Costos":
     st.markdown("## 💰 Análisis de Rentabilidad y Márgenes")
 
     # Nota metodológica prominente al inicio
@@ -2219,10 +2428,10 @@ with tabs[6]:
         """, unsafe_allow_html=True)
 
 # =============================================================================
-# TAB 2: PARETO & MIX
+# PARETO & MIX
 # =============================================================================
-with tabs[1]:
-    st.markdown("## Analisis de Pareto - optimizar mix de productos")
+elif selected_menu == "🎯 Pareto & Mix":
+    st.markdown("## 🎯 Análisis de Pareto - optimizar mix de productos")
 
     pareto_prod = data.get('pareto_prod')
     kpi_cat = data.get('kpi_categoria')
@@ -2453,10 +2662,10 @@ with tabs[1]:
             unsafe_allow_html=True
         )
 # =============================================================================
-# TAB 3: MARKET BASKET (COMBOS)
+# MARKET BASKET & COMBOS
 # =============================================================================
-with tabs[2]:
-    st.markdown("## Market Basket Analysis - combos estrategicos")
+elif selected_menu == "🛒 Market Basket & Combos":
+    st.markdown("## 🛒 Market Basket Analysis - Combos Estratégicos")
 
     reglas = data.get('reglas')
     combos = data.get('combos')
@@ -2559,58 +2768,8 @@ with tabs[2]:
             fig_scatter.update_yaxes(tickformat='.1%', title='Confianza (%)')
             render_plotly(fig_scatter)
 
-            # Combos sugeridos después del gráfico
-            if combos_df is not None and not combos_df.empty:
-                st.markdown("### Top combos sugeridos (ordenados por lift)")
-                combos_view = combos_df[['antecedent', 'consequent', 'support', 'confidence', 'lift']].copy()
-                combos_view['support'] = (combos_view['support'] * 100).round(2)
-                combos_view['confidence'] = (combos_view['confidence'] * 100).round(2)
-                combos_view = combos_view.rename(
-                    columns={
-                        'antecedent': 'Si compra esto →',
-                        'consequent': '→ También compra esto',
-                        'support': 'Soporte (%)',
-                        'confidence': 'Confianza (%)',
-                        'lift': 'Lift'
-                    }
-                )
-                st.dataframe(combos_view, use_container_width=True, hide_index=True)
-
-                # Insight estratégico
-                top_combo = combos_df.iloc[0]
-                st.markdown(
-                    f'''
-                    <div style='background: #fff3e0; border-left: 6px solid #ff9800; padding: 18px; margin: 16px 0; border-radius: 10px;'>
-                        <h4 style='color: #e65100; margin: 0;'>Oportunidad destacada</h4>
-                        <p style='margin: 8px 0 0 0;'>
-                            <b>Combo top:</b> {top_combo['antecedent']} → {top_combo['consequent']}<br>
-                            Con un lift de <b>{top_combo['lift']:.1f}x</b>, esta combinación tiene {top_combo['lift']:.1f} veces más probabilidad de ocurrir juntos que por separado.
-                            <br><br>
-                            <b>Acciones sugeridas:</b> Ubicar productos cercanos en góndola, crear promoción 2x1 o descuento por combo.
-                        </p>
-                    </div>
-                    ''',
-                    unsafe_allow_html=True
-                )
-            else:
-                st.info("No hay combos recomendados para esta selección.")
-
-            # Tabla de reglas detallada al final
-            st.markdown("### Top 20 reglas por lift")
-            reglas_top = reglas_df.nlargest(20, 'lift').copy()
-            tabla_reglas = reglas_top[['antecedents', 'consequents', 'support', 'confidence', 'lift']].rename(
-                columns={
-                    'antecedents': 'Antecedentes',
-                    'consequents': 'Consecuentes',
-                    'support': 'Soporte (%)',
-                    'confidence': 'Confianza (%)',
-                    'lift': 'Lift'
-                }
-            )
-            tabla_reglas['Soporte (%)'] = (tabla_reglas['Soporte (%)'] * 100).round(2)
-            tabla_reglas['Confianza (%)'] = (tabla_reglas['Confianza (%)'] * 100).round(2)
-            tabla_reglas['Lift'] = tabla_reglas['Lift'].round(2)
-            st.dataframe(tabla_reglas, use_container_width=True, hide_index=True)
+            # Nota: Se ocultaron "Top combos sugeridos" y "Top 20 reglas" porque
+            # el contenido relevante está curado en la sección de Combos Estratégicos más abajo
 
         general_tab, sin_carniceria_tab = st.tabs(["Vista general", "Sin carniceria"])
 
@@ -2621,11 +2780,233 @@ with tabs[2]:
             reglas_filtradas = reglas_mba[~reglas_mba['con_carniceria']]
             combos_filtrados = combos_mba[~combos_mba['con_carniceria']] if not combos_mba.empty else combos_mba
             render_vista(reglas_filtradas, combos_filtrados)
+
+        # -------------------------
+        # COMBOS ESTRATÉGICOS CURADOS - SECCIÓN PRINCIPAL
+        # -------------------------
+        st.markdown("---")
+        st.markdown("### 🎯 Combos Estratégicos para Implementar")
+
+        st.markdown("""
+        <div style='background: linear-gradient(135deg, #1565c0 0%, #1976d2 100%);
+                    padding: 1.2rem 1.5rem; border-radius: 10px; margin-bottom: 1.5rem; color: white;'>
+            <h4 style='margin: 0 0 0.5rem 0; color: white;'>📊 Resultado del Análisis Market Basket</h4>
+            <p style='margin: 0; font-size: 0.95rem;'>
+                Identificamos <b>patrones de compra conjunta</b> reales de tus clientes.
+                Estos combos ya se venden juntos naturalmente → <b>formalízalos con descuento para aumentar frecuencia y ticket</b>.
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+
+        # Tabs para Carnicería vs Sin Carnicería
+        tab_carniceria, tab_sin_carniceria = st.tabs(["🥩 Combos Carnicería", "🧀 Combos Sin Carnicería"])
+
+        with tab_carniceria:
+            st.markdown("""
+            <div style='background: #ffebee; border-left: 5px solid #c62828; padding: 12px; margin-bottom: 15px; border-radius: 8px;'>
+                <b style='color: #c62828;'>🥩 Carnicería = Mayor Lift</b> | Los cortes de carne tienen las asociaciones más fuertes del supermercado.
+                Ideal para <b>packs de asado</b> los fines de semana.
+            </div>
+            """, unsafe_allow_html=True)
+
+            # Cards de combos de carnicería
+            col_c1, col_c2 = st.columns(2)
+
+            with col_c1:
+                st.markdown("""
+                <div style='background: white; border: 2px solid #c62828; border-radius: 12px; padding: 20px; margin-bottom: 15px;'>
+                    <div style='display: flex; justify-content: space-between; align-items: center;'>
+                        <h4 style='margin: 0; color: #c62828;'>🔥 ASADO COMPLETO</h4>
+                        <span style='background: #c62828; color: white; padding: 5px 12px; border-radius: 20px; font-weight: bold;'>Lift 16.2x</span>
+                    </div>
+                    <p style='margin: 10px 0 5px 0; font-size: 1.1rem;'><b>Morcilla + Chorizo + Costilla</b></p>
+                    <p style='margin: 0; color: #666; font-size: 0.9rem;'>Soporte: 0.64% de tickets</p>
+                    <hr style='margin: 12px 0; border-color: #eee;'>
+                    <p style='margin: 0; color: #2e7d32; font-size: 0.9rem;'>
+                        <b>✓ Acción:</b> Pack "Asado para 6" con 10% dto. Display en carnicería sábados.
+                    </p>
+                </div>
+                """, unsafe_allow_html=True)
+
+                st.markdown("""
+                <div style='background: white; border: 2px solid #c62828; border-radius: 12px; padding: 20px; margin-bottom: 15px;'>
+                    <div style='display: flex; justify-content: space-between; align-items: center;'>
+                        <h4 style='margin: 0; color: #c62828;'>🥩 ASADO BÁSICO</h4>
+                        <span style='background: #e57373; color: white; padding: 5px 12px; border-radius: 20px; font-weight: bold;'>Lift 10.5x</span>
+                    </div>
+                    <p style='margin: 10px 0 5px 0; font-size: 1.1rem;'><b>Vacío + Costilla Arqueada</b></p>
+                    <p style='margin: 0; color: #666; font-size: 0.9rem;'>Soporte: 0.52% de tickets</p>
+                    <hr style='margin: 12px 0; border-color: #eee;'>
+                    <p style='margin: 0; color: #2e7d32; font-size: 0.9rem;'>
+                        <b>✓ Acción:</b> Pack "Asado Clásico" para familias pequeñas.
+                    </p>
+                </div>
+                """, unsafe_allow_html=True)
+
+            with col_c2:
+                st.markdown("""
+                <div style='background: white; border: 2px solid #c62828; border-radius: 12px; padding: 20px; margin-bottom: 15px;'>
+                    <div style='display: flex; justify-content: space-between; align-items: center;'>
+                        <h4 style='margin: 0; color: #c62828;'>🍗 MILANESAS MIXTAS</h4>
+                        <span style='background: #e57373; color: white; padding: 5px 12px; border-radius: 20px; font-weight: bold;'>Lift 7.3x</span>
+                    </div>
+                    <p style='margin: 10px 0 5px 0; font-size: 1.1rem;'><b>Milanesas Carne + Pollo NINO</b></p>
+                    <p style='margin: 0; color: #666; font-size: 0.9rem;'>Soporte: 1.24% de tickets</p>
+                    <hr style='margin: 12px 0; border-color: #eee;'>
+                    <p style='margin: 0; color: #2e7d32; font-size: 0.9rem;'>
+                        <b>✓ Acción:</b> Bandeja "Milanesas Surtidas" ideal para familias.
+                    </p>
+                </div>
+                """, unsafe_allow_html=True)
+
+                st.markdown("""
+                <div style='background: white; border: 2px solid #c62828; border-radius: 12px; padding: 20px; margin-bottom: 15px;'>
+                    <div style='display: flex; justify-content: space-between; align-items: center;'>
+                        <h4 style='margin: 0; color: #c62828;'>🌭 PARRILLERO</h4>
+                        <span style='background: #ef9a9a; color: #b71c1c; padding: 5px 12px; border-radius: 20px; font-weight: bold;'>Lift 6.5x</span>
+                    </div>
+                    <p style='margin: 10px 0 5px 0; font-size: 1.1rem;'><b>Chorizo + Costilla</b></p>
+                    <p style='margin: 0; color: #666; font-size: 0.9rem;'>Soporte: 1.05% de tickets</p>
+                    <hr style='margin: 12px 0; border-color: #eee;'>
+                    <p style='margin: 0; color: #2e7d32; font-size: 0.9rem;'>
+                        <b>✓ Acción:</b> Promo "Parrilla Express" para asados rápidos.
+                    </p>
+                </div>
+                """, unsafe_allow_html=True)
+
+        with tab_sin_carniceria:
+            st.markdown("""
+            <div style='background: #fff8e1; border-left: 5px solid #ff8f00; padding: 12px; margin-bottom: 15px; border-radius: 8px;'>
+                <b style='color: #e65100;'>🧀 Fiambrería y Almacén</b> | Combos de alta frecuencia para compras diarias y semanales.
+                Ideal para <b>góndola destacada</b> y sugerencias en caja.
+            </div>
+            """, unsafe_allow_html=True)
+
+            col_f1, col_f2 = st.columns(2)
+
+            with col_f1:
+                # FIAMBRERÍA
+                st.markdown("""
+                <div style='background: white; border: 2px solid #ff8f00; border-radius: 12px; padding: 20px; margin-bottom: 15px;'>
+                    <div style='display: flex; justify-content: space-between; align-items: center;'>
+                        <h4 style='margin: 0; color: #e65100;'>🧀 PICADA FIAMBRES</h4>
+                        <span style='background: #ff8f00; color: white; padding: 5px 12px; border-radius: 20px; font-weight: bold;'>Lift 6.9x</span>
+                    </div>
+                    <p style='margin: 10px 0 5px 0; font-size: 1.1rem;'><b>Mortadela Paladini + Salame Lario</b></p>
+                    <p style='margin: 0; color: #666; font-size: 0.9rem;'>Soporte: 0.59% de tickets</p>
+                    <hr style='margin: 12px 0; border-color: #eee;'>
+                    <p style='margin: 0; color: #2e7d32; font-size: 0.9rem;'>
+                        <b>✓ Acción:</b> Bandeja "Picada NINO" para eventos/fines de semana.
+                    </p>
+                </div>
+                """, unsafe_allow_html=True)
+
+                st.markdown("""
+                <div style='background: white; border: 2px solid #ff8f00; border-radius: 12px; padding: 20px; margin-bottom: 15px;'>
+                    <div style='display: flex; justify-content: space-between; align-items: center;'>
+                        <h4 style='margin: 0; color: #e65100;'>🥪 SANDWICH CLÁSICO</h4>
+                        <span style='background: #ffb74d; color: #e65100; padding: 5px 12px; border-radius: 20px; font-weight: bold;'>Lift 5.7x</span>
+                    </div>
+                    <p style='margin: 10px 0 5px 0; font-size: 1.1rem;'><b>Queso Ilolay + Jamón Paladini</b></p>
+                    <p style='margin: 0; color: #666; font-size: 0.9rem;'>Soporte: 1.85% de tickets (¡alto volumen!)</p>
+                    <hr style='margin: 12px 0; border-color: #eee;'>
+                    <p style='margin: 0; color: #2e7d32; font-size: 0.9rem;'>
+                        <b>✓ Acción:</b> Exhibir juntos. "Combo Sandwich" cerca de panificados.
+                    </p>
+                </div>
+                """, unsafe_allow_html=True)
+
+                st.markdown("""
+                <div style='background: white; border: 2px solid #ff8f00; border-radius: 12px; padding: 20px; margin-bottom: 15px;'>
+                    <div style='display: flex; justify-content: space-between; align-items: center;'>
+                        <h4 style='margin: 0; color: #e65100;'>🧀 FIAMBRERÍA PREMIUM</h4>
+                        <span style='background: #ffe0b2; color: #e65100; padding: 5px 12px; border-radius: 20px; font-weight: bold;'>Lift 4.9x</span>
+                    </div>
+                    <p style='margin: 10px 0 5px 0; font-size: 1.1rem;'><b>Paleta Piamontesa + Barra Santa María</b></p>
+                    <p style='margin: 0; color: #666; font-size: 0.9rem;'>Soporte: 1.83% de tickets</p>
+                    <hr style='margin: 12px 0; border-color: #eee;'>
+                    <p style='margin: 0; color: #2e7d32; font-size: 0.9rem;'>
+                        <b>✓ Acción:</b> Combo premium para clientes de alto valor.
+                    </p>
+                </div>
+                """, unsafe_allow_html=True)
+
+            with col_f2:
+                # ALMACÉN
+                st.markdown("""
+                <div style='background: white; border: 2px solid #2e7d32; border-radius: 12px; padding: 20px; margin-bottom: 15px;'>
+                    <div style='display: flex; justify-content: space-between; align-items: center;'>
+                        <h4 style='margin: 0; color: #2e7d32;'>🍞 REPOSTERÍA</h4>
+                        <span style='background: #2e7d32; color: white; padding: 5px 12px; border-radius: 20px; font-weight: bold;'>Lift 4.8x</span>
+                    </div>
+                    <p style='margin: 10px 0 5px 0; font-size: 1.1rem;'><b>Harina Leudante + Harina 0000</b></p>
+                    <p style='margin: 0; color: #666; font-size: 0.9rem;'>Soporte: 0.52% de tickets</p>
+                    <hr style='margin: 12px 0; border-color: #eee;'>
+                    <p style='margin: 0; color: #2e7d32; font-size: 0.9rem;'>
+                        <b>✓ Acción:</b> Pack "Kit Repostero" con recetario incluido.
+                    </p>
+                </div>
+                """, unsafe_allow_html=True)
+
+                st.markdown("""
+                <div style='background: white; border: 2px solid #2e7d32; border-radius: 12px; padding: 20px; margin-bottom: 15px;'>
+                    <div style='display: flex; justify-content: space-between; align-items: center;'>
+                        <h4 style='margin: 0; color: #2e7d32;'>🧉 KIT MATE</h4>
+                        <span style='background: #66bb6a; color: white; padding: 5px 12px; border-radius: 20px; font-weight: bold;'>Lift 2.9x</span>
+                    </div>
+                    <p style='margin: 10px 0 5px 0; font-size: 1.1rem;'><b>Yerba Verdeflor + Azúcar Ledesma</b></p>
+                    <p style='margin: 0; color: #666; font-size: 0.9rem;'>Soporte: 0.99% de tickets</p>
+                    <hr style='margin: 12px 0; border-color: #eee;'>
+                    <p style='margin: 0; color: #2e7d32; font-size: 0.9rem;'>
+                        <b>✓ Acción:</b> Exhibir juntos en góndola de infusiones.
+                    </p>
+                </div>
+                """, unsafe_allow_html=True)
+
+                st.markdown("""
+                <div style='background: white; border: 2px solid #2e7d32; border-radius: 12px; padding: 20px; margin-bottom: 15px;'>
+                    <div style='display: flex; justify-content: space-between; align-items: center;'>
+                        <h4 style='margin: 0; color: #2e7d32;'>🛒 BÁSICOS ALACENA</h4>
+                        <span style='background: #a5d6a7; color: #1b5e20; padding: 5px 12px; border-radius: 20px; font-weight: bold;'>Lift 2.7x</span>
+                    </div>
+                    <p style='margin: 10px 0 5px 0; font-size: 1.1rem;'><b>Arroz Tío Carlos + Azúcar Ledesma</b></p>
+                    <p style='margin: 0; color: #666; font-size: 0.9rem;'>Soporte: 0.79% de tickets</p>
+                    <hr style='margin: 12px 0; border-color: #eee;'>
+                    <p style='margin: 0; color: #2e7d32; font-size: 0.9rem;'>
+                        <b>✓ Acción:</b> Incluir en "Pack Despensa Mensual".
+                    </p>
+                </div>
+                """, unsafe_allow_html=True)
+
+        # Resumen de acciones
+        st.markdown("""
+        <div style='background: #e8f5e9; border: 2px solid #4caf50; border-radius: 12px; padding: 20px; margin-top: 20px;'>
+            <h4 style='margin: 0 0 15px 0; color: #2e7d32;'>📋 Resumen de Implementación</h4>
+            <div style='display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px;'>
+                <div style='background: white; padding: 15px; border-radius: 8px; text-align: center;'>
+                    <span style='font-size: 2rem;'>🥩</span>
+                    <p style='margin: 5px 0 0 0; font-weight: bold; color: #c62828;'>Carnicería</p>
+                    <p style='margin: 5px 0 0 0; font-size: 0.85rem; color: #666;'>4 packs de asado<br>Foco: Sábados</p>
+                </div>
+                <div style='background: white; padding: 15px; border-radius: 8px; text-align: center;'>
+                    <span style='font-size: 2rem;'>🧀</span>
+                    <p style='margin: 5px 0 0 0; font-weight: bold; color: #e65100;'>Fiambrería</p>
+                    <p style='margin: 5px 0 0 0; font-size: 0.85rem; color: #666;'>3 combos picada/sandwich<br>Alto volumen</p>
+                </div>
+                <div style='background: white; padding: 15px; border-radius: 8px; text-align: center;'>
+                    <span style='font-size: 2rem;'>🛒</span>
+                    <p style='margin: 5px 0 0 0; font-weight: bold; color: #2e7d32;'>Almacén</p>
+                    <p style='margin: 5px 0 0 0; font-size: 0.85rem; color: #666;'>3 kits básicos<br>Compra mensual</p>
+                </div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
 # =============================================================================
-# TAB 4: SEGMENTACION
+# SEGMENTACIÓN
 # =============================================================================
-with tabs[3]:
-    st.markdown("## Segmentacion de tickets - personalizar estrategias")
+elif selected_menu == "👥 Segmentación":
+    st.markdown("## 👥 Segmentación de tickets - personalizar estrategias")
 
     rentabilidad = data['rentabilidad_ticket'].copy()
     rentabilidad['rentabilidad_pct'] = rentabilidad['rentabilidad_pct_ticket'] * 100
@@ -2907,7 +3288,7 @@ with tabs[3]:
         tickets_raw['segmento_cuartil'] = tickets_raw['segmento_cuartil'].astype(segmento_order)
 
         segmentos = (
-            tickets_raw.groupby('segmento_cuartil')
+            tickets_raw.groupby('segmento_cuartil', observed=True)
             .agg(
                 cantidad_tickets=('ticket_id', 'count'),
                 ticket_promedio=('monto_total_ticket', 'mean'),
@@ -3025,10 +3406,10 @@ with tabs[3]:
 
         st.info("No se encontraron datos de rotacion de inventario; dejar placeholder para cruce margen vs rotacion en la siguiente iteracion.")
 # =============================================================================
-# TAB 5: MEDIOS DE PAGO
+# MEDIOS DE PAGO
 # =============================================================================
-with tabs[4]:
-    st.markdown("## Analisis de medios de pago")
+elif selected_menu == "💳 Medios de Pago":
+    st.markdown("## 💳 Análisis de medios de pago")
 
     kpi_pago = data.get('kpi_pago')
     tickets_modular = processed_data.get('tickets_modular')
@@ -3169,10 +3550,88 @@ with tabs[4]:
             ''',
             unsafe_allow_html=True
         )
+
+        # -------------------------
+        # OPORTUNIDADES DE ACUERDOS BANCARIOS
+        # -------------------------
+        with st.expander("💰 Oportunidades de Acuerdos Bancarios", expanded=False):
+            st.markdown("""
+            <div style='background: #e8f5e9; border-left: 5px solid #4caf50; padding: 12px; margin-bottom: 15px; border-radius: 8px;'>
+                <p style='margin: 0; font-size: 0.9rem;'>
+                    Análisis de facturación por emisor de tarjeta para priorizar negociaciones.
+                    <b>Mercado Pago ofrece hasta 25% de descuento</b> en supermercados adheridos.
+                </p>
+            </div>
+            """, unsafe_allow_html=True)
+
+            try:
+                detalle_lineas_emp = pd.read_parquet('data/processed/detalle_lineas.parquet')
+
+                emisores = detalle_lineas_emp.groupby('emisor_tarjeta').agg({
+                    'importe_total': 'sum',
+                    'ticket_id': 'nunique'
+                }).reset_index()
+                emisores.columns = ['Emisor', 'Facturación', 'Tickets']
+                emisores['Ticket Promedio'] = emisores['Facturación'] / emisores['Tickets']
+                emisores = emisores[emisores['Emisor'] != 'DESCONOCIDO'].sort_values('Facturación', ascending=False).head(8)
+
+                col_em1, col_em2 = st.columns([2, 1])
+
+                with col_em1:
+                    fig_emisores = px.bar(
+                        emisores,
+                        x='Emisor',
+                        y='Facturación',
+                        title='Facturación por Emisor de Tarjeta',
+                        color='Facturación',
+                        color_continuous_scale='Blues',
+                        text=emisores['Facturación'].apply(lambda x: formatear_moneda_argentina(x, 0))
+                    )
+                    fig_emisores.update_layout(height=380, showlegend=False)
+                    fig_emisores.update_traces(textposition='outside')
+                    fig_emisores.update_coloraxes(showscale=False)
+                    render_plotly(fig_emisores)
+
+                with col_em2:
+                    st.markdown("#### 🎯 Prioridad de Negociación")
+                    for _, row in emisores.head(5).iterrows():
+                        st.markdown(f"""
+                        <div style='background: #f5f5f5; padding: 8px 10px; margin: 4px 0; border-radius: 5px; font-size: 0.9rem;'>
+                            <b>{row['Emisor']}</b><br>
+                            <span style='color: #1976d2;'>{formatear_moneda_argentina(row['Facturación'], 0)}</span>
+                        </div>
+                        """, unsafe_allow_html=True)
+
+                st.markdown("""
+                <div style='background: #00b1ea; padding: 18px; border-radius: 10px; margin-top: 15px; color: white;'>
+                    <h4 style='margin: 0 0 10px 0; color: white;'>📱 Referencia: Promociones Mercado Pago 2025</h4>
+                    <ul style='margin: 0; padding-left: 20px; font-size: 0.9rem;'>
+                        <li><b>Supermercados:</b> Hasta 25% de descuento (Carrefour, Coto, Jumbo, Día, etc.)</li>
+                        <li><b>Reintegros:</b> Inmediatos, sin tope en muchos casos</li>
+                        <li><b>Cuotas:</b> Hasta 3 cuotas sin interés (lunes y miércoles)</li>
+                        <li><b>YPF:</b> 30% descuento los lunes con tarjeta de crédito MP</li>
+                    </ul>
+                    <p style='margin: 10px 0 0 0; font-size: 0.85rem;'>
+                        Fuente: El Destape - Nov 2025
+                    </p>
+                </div>
+                """, unsafe_allow_html=True)
+
+                st.markdown("""
+                <div style='background: #fff3e0; border-left: 5px solid #ff9800; padding: 12px; margin-top: 15px; border-radius: 8px;'>
+                    <b style='color: #e65100;'>💡 Recomendación:</b>
+                    Negociar acuerdos con los emisores top para ofrecer descuentos similares a la competencia
+                    (Carrefour, Coto). Un 10-15% de descuento en días específicos puede atraer tráfico incremental.
+                </div>
+                """, unsafe_allow_html=True)
+
+            except Exception:
+                st.info("No se pudieron cargar los datos de emisores de tarjeta. Verificar detalle_lineas.parquet")
+
 # =============================================================================
-# TAB 6: ESTRATEGIAS PRIORIZADAS
+# ESTRATEGIAS PRIORIZADAS
 # =============================================================================
-with tabs[5]:
+elif selected_menu == "🚀 Estrategias Priorizadas":
     st.markdown("## 🚀 Estrategias Priorizadas - Plan de Acción")
 
     st.markdown("""
@@ -3312,10 +3771,10 @@ with tabs[5]:
 
 
 # =============================================================================
-# TAB 8: INFORME EJECUTIVO
+# INFORME EJECUTIVO
 # =============================================================================
-with tabs[7]:
-    st.markdown("## Y Informe Ejecutivo")
+elif selected_menu == "📋 Informe Ejecutivo":
+    st.markdown("## 📋 Informe Ejecutivo")
 
     alcance = data['alcance'].iloc[0]
     kpis_resumen = data['kpis_base'].iloc[0]
@@ -3430,6 +3889,724 @@ with tabs[7]:
     
 
     st.markdown(informe_html, unsafe_allow_html=True)
+
+# =============================================================================
+# TRIBU PREMIUM
+# =============================================================================
+elif selected_menu == "👑 Tribu Premium":
+    st.markdown("## 👑 Tribu Premium - Los Tickets que Sostienen el Negocio")
+
+    st.markdown("""
+    <div style='background: linear-gradient(135deg, #ff8f00 0%, #ffa000 100%);
+                padding: 1.5rem 2rem; border-radius: 12px; margin-bottom: 2rem; color: white;'>
+        <h3 style='margin: 0 0 0.8rem 0; color: white;'>
+            🎯 El 15.6% de los tickets genera el 51.7% del margen
+        </h3>
+        <p style='margin: 0; font-size: 1rem;'>
+            Esta sección analiza los tickets de alto valor (>$45,000) que representan la "Tribu Premium".
+            Entender su comportamiento es crítico para proteger la rentabilidad del negocio.
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    rentabilidad = data.get('rentabilidad_ticket')
+
+    if rentabilidad is not None and not rentabilidad.empty:
+        # Calcular percentil 85 para definir "Premium"
+        percentil_85 = rentabilidad['monto_total_ticket'].quantile(0.85)
+
+        # Separar tribus
+        tribu_premium = rentabilidad[rentabilidad['monto_total_ticket'] >= percentil_85].copy()
+        tribu_diaria = rentabilidad[rentabilidad['monto_total_ticket'] < percentil_85].copy()
+
+        # Métricas comparativas
+        col1, col2, col3, col4 = st.columns(4)
+
+        with col1:
+            pct_tickets_premium = len(tribu_premium) / len(rentabilidad) * 100
+            st.metric(
+                "% Tickets Premium",
+                f"{pct_tickets_premium:.1f}%",
+                help=f"Tickets con monto > {formatear_moneda_argentina(percentil_85, 0)}"
+            )
+
+        with col2:
+            margen_premium = tribu_premium['margen_ticket'].sum()
+            margen_total = rentabilidad['margen_ticket'].sum()
+            pct_margen_premium = margen_premium / margen_total * 100 if margen_total > 0 else 0
+            st.metric(
+                "% Margen que Generan",
+                f"{pct_margen_premium:.1f}%",
+                delta=f"+{pct_margen_premium - pct_tickets_premium:.1f}pp vs tickets",
+                help="Porcentaje del margen total generado por Tribu Premium"
+            )
+
+        with col3:
+            ticket_prom_premium = tribu_premium['monto_total_ticket'].mean()
+            ticket_prom_diaria = tribu_diaria['monto_total_ticket'].mean()
+            st.metric(
+                "Ticket Promedio Premium",
+                formatear_moneda_argentina(ticket_prom_premium, 0),
+                delta=f"+{((ticket_prom_premium/ticket_prom_diaria)-1)*100:.0f}% vs Diaria"
+            )
+
+        with col4:
+            items_prom_premium = tribu_premium['items_ticket'].mean()
+            items_prom_diaria = tribu_diaria['items_ticket'].mean()
+            st.metric(
+                "Items Promedio Premium",
+                f"{items_prom_premium:.1f}",
+                delta=f"+{items_prom_premium - items_prom_diaria:.1f} vs Diaria"
+            )
+
+        # Gráfico comparativo
+        st.markdown("### 📊 Comparativa: Tribu Premium vs Tribu Diaria")
+
+        comparativa_data = pd.DataFrame({
+            'Tribu': ['Premium', 'Diaria'],
+            'Tickets': [len(tribu_premium), len(tribu_diaria)],
+            'Ventas': [tribu_premium['monto_total_ticket'].sum(), tribu_diaria['monto_total_ticket'].sum()],
+            'Margen': [tribu_premium['margen_ticket'].sum(), tribu_diaria['margen_ticket'].sum()],
+            'Ticket Promedio': [ticket_prom_premium, ticket_prom_diaria],
+            'Items Promedio': [items_prom_premium, items_prom_diaria]
+        })
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            # Torta: Participación en Margen (lo más importante)
+            total_margen = comparativa_data['Margen'].sum()
+            pct_premium = comparativa_data.loc[0, 'Margen'] / total_margen * 100
+            pct_diaria = comparativa_data.loc[1, 'Margen'] / total_margen * 100
+
+            fig_torta = go.Figure(data=[go.Pie(
+                labels=['Premium', 'Diaria'],
+                values=[comparativa_data.loc[0, 'Margen'], comparativa_data.loc[1, 'Margen']],
+                hole=0.5,
+                marker=dict(
+                    colors=['#ff9800', '#90caf9'],
+                    line=dict(color='white', width=3)
+                ),
+                textinfo='percent',
+                textfont=dict(size=18, color='white', family='Arial Black'),
+                hovertemplate='<b>%{label}</b><br>Margen: $%{value:,.0f}<br>%{percent}<extra></extra>',
+                pull=[0.02, 0],
+                direction='clockwise',
+                sort=False
+            )])
+            fig_torta.update_layout(
+                title=dict(
+                    text='<b>Participación en MARGEN</b>',
+                    font=dict(size=18, color='#333'),
+                    x=0.5
+                ),
+                height=420,
+                showlegend=True,
+                legend=dict(
+                    orientation='h',
+                    yanchor='bottom',
+                    y=-0.15,
+                    xanchor='center',
+                    x=0.5,
+                    font=dict(size=14)
+                ),
+                annotations=[
+                    dict(
+                        text=f'<b>${total_margen/1e9:.1f}B</b><br><span style="font-size:12px">Total</span>',
+                        x=0.5, y=0.5,
+                        font=dict(size=20, color='#333'),
+                        showarrow=False
+                    )
+                ],
+                margin=dict(t=60, b=60, l=20, r=20)
+            )
+            render_plotly(fig_torta)
+
+        with col2:
+            # Distribución por día de la semana - Tribu Premium
+            tribu_premium['dia_semana'] = pd.to_datetime(tribu_premium['fecha']).dt.day_name()
+            dias_orden = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+            dias_esp = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
+
+            premium_por_dia = tribu_premium.groupby('dia_semana').size().reindex(dias_orden).fillna(0)
+            premium_por_dia.index = dias_esp
+
+            fig_dia_premium = px.bar(
+                x=premium_por_dia.index,
+                y=premium_por_dia.values,
+                title='🏆 Tickets PREMIUM por Día',
+                labels={'x': 'Día', 'y': 'Tickets'},
+                color=premium_por_dia.values,
+                color_continuous_scale='Oranges'
+            )
+            fig_dia_premium.update_layout(height=350, showlegend=False)
+            fig_dia_premium.update_coloraxes(showscale=False)
+            render_plotly(fig_dia_premium)
+
+        # Gráfico Diaria más pequeño debajo del Premium
+        tribu_diaria['dia_semana'] = pd.to_datetime(tribu_diaria['fecha']).dt.day_name()
+        diaria_por_dia = tribu_diaria.groupby('dia_semana').size().reindex(dias_orden).fillna(0)
+        diaria_por_dia.index = dias_esp
+
+        col_empty, col_diaria = st.columns([1, 1])
+        with col_diaria:
+            fig_dia_diaria = px.bar(
+                x=diaria_por_dia.index,
+                y=diaria_por_dia.values,
+                title='📦 Tickets DIARIA por Día (para comparar)',
+                labels={'x': 'Día', 'y': 'Tickets'},
+                color=diaria_por_dia.values,
+                color_continuous_scale='Blues'
+            )
+            fig_dia_diaria.update_layout(height=250, showlegend=False)
+            fig_dia_diaria.update_coloraxes(showscale=False)
+            render_plotly(fig_dia_diaria)
+
+        # Insight estratégico comparativo
+        dia_max_premium = premium_por_dia.idxmax()
+        dia_max_diaria = diaria_por_dia.idxmax()
+        st.markdown(f"""
+        <div style='background: #fff3e0; border-left: 6px solid #ff9800; padding: 18px; margin: 16px 0; border-radius: 10px;'>
+            <h4 style='color: #e65100; margin: 0;'>💡 Insight Estratégico Comparativo</h4>
+            <p style='margin: 8px 0 0 0;'>
+                <b>🏆 Premium:</b> <b>{dia_max_premium}</b> es el día con más tickets Premium.<br>
+                <b>📦 Diaria:</b> <b>{dia_max_diaria}</b> concentra el mayor volumen de compras rápidas.<br><br>
+                <b>Recomendación:</b> Los {dia_max_premium} enfocarse en upselling y stock completo para Premium.
+                Los {dia_max_diaria} optimizar agilidad en caja para alto volumen de compras menores.
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+
+        # -------------------------
+        # SIMULADOR DE IMPACTO
+        # -------------------------
+        with st.expander("🧮 Simulador de Impacto - Potencial de Crecimiento", expanded=True):
+            st.markdown("""
+            <div style='background: #fce4ec; border-left: 5px solid #c62828; padding: 12px; margin-bottom: 15px; border-radius: 8px;'>
+                <p style='margin: 0; font-size: 0.9rem;'>
+                    <b>Nota:</b> Estas estimaciones son indicativas, basadas en datos históricos.
+                    No representan proyecciones de ROI garantizadas.
+                </p>
+            </div>
+            """, unsafe_allow_html=True)
+
+            margen_premium_sim = tribu_premium['margen_ticket'].sum()
+            margen_total_sim = rentabilidad['margen_ticket'].sum()
+
+            col_sim1, col_sim2, col_sim3 = st.columns(3)
+
+            with col_sim1:
+                st.metric(
+                    "Margen Tribu Premium",
+                    formatear_moneda_argentina(margen_premium_sim, 0),
+                    help="Margen total generado por tickets Premium actualmente"
+                )
+
+            with col_sim2:
+                margen_adicional_10pct = margen_premium_sim * 0.10
+                st.metric(
+                    "Si Retenemos +10% Premium",
+                    f"+{formatear_moneda_argentina(margen_adicional_10pct, 0)}",
+                    delta="+10%",
+                    help="Margen adicional si aumentamos retención en 10%"
+                )
+
+            with col_sim3:
+                potencial_conversion = len(tribu_diaria) * 0.05 * tribu_premium['margen_ticket'].mean()
+                st.metric(
+                    "Si Convertimos 5% a Premium",
+                    f"+{formatear_moneda_argentina(potencial_conversion, 0)}",
+                    delta="+5%",
+                    help="Margen si 5% de Tribu Diaria sube a Premium"
+                )
+
+            st.markdown("""
+            <div style='background: #fff8e1; border-left: 5px solid #ffc107; padding: 12px; margin-top: 15px; border-radius: 8px;'>
+                <b style='color: #f57f17;'>⚠️ Limitaciones del Análisis:</b>
+                <ul style='margin: 8px 0 0 0; padding-left: 20px; font-size: 0.9rem;'>
+                    <li><b>ID de cliente único:</b> No disponible → No podemos medir retención real</li>
+                    <li><b>Costos de implementación:</b> No incluidos en el cálculo</li>
+                    <li><b>Histórico post-implementación:</b> Requerido para validar impacto</li>
+                </ul>
+            </div>
+            """, unsafe_allow_html=True)
+
+    else:
+        st.warning("No hay datos de rentabilidad disponibles para el análisis de Tribu Premium.")
+
+# =============================================================================
+# FORECASTING - MODELO MEJORADO
+# =============================================================================
+elif selected_menu == "🔮 Forecasting":
+    st.markdown("## 🔮 Forecasting - Predicción de Demanda (Tickets)")
+
+    st.markdown("""
+    <div style='background: linear-gradient(135deg, #7b1fa2 0%, #9c27b0 100%);
+                padding: 1.5rem 2rem; border-radius: 12px; margin-bottom: 2rem; color: white;'>
+        <h3 style='margin: 0 0 0.8rem 0; color: white;'>
+            📊 Predicción de Cantidad de Tickets
+        </h3>
+        <p style='margin: 0; font-size: 1rem;'>
+            Modelo predictivo basado en <b>Suavizado Exponencial Triple (Holt-Winters)</b> con estacionalidad.
+            Ideal para planificar personal, stock y operaciones.
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    try:
+        # Cargar datos de tickets
+        tickets_fc = data.get('rentabilidad_ticket')
+
+        if tickets_fc is not None and not tickets_fc.empty:
+            tickets_fc = tickets_fc.copy()
+            tickets_fc['fecha'] = pd.to_datetime(tickets_fc['fecha'])
+
+            # =============================================
+            # PREPARAR DATOS SEMANALES
+            # =============================================
+            tickets_fc['semana'] = tickets_fc['fecha'].dt.to_period('W').dt.start_time
+            semanal = tickets_fc.groupby('semana').agg({
+                'ticket_id': 'count'
+            }).reset_index()
+            semanal.columns = ['semana', 'tickets']
+            semanal = semanal.sort_values('semana').reset_index(drop=True)
+
+            # Excluir última semana si está incompleta
+            if len(semanal) > 2:
+                ultima_semana = semanal.iloc[-1]
+                if ultima_semana['tickets'] < semanal['tickets'].mean() * 0.5:
+                    semanal = semanal.iloc[:-1]
+
+            # =============================================
+            # MODELO HOLT-WINTERS (Triple Exponential Smoothing)
+            # =============================================
+            from statsmodels.tsa.holtwinters import ExponentialSmoothing
+
+            y = semanal['tickets'].values
+
+            # Ajustar modelo con estacionalidad (periodo 4 = mensual aproximado)
+            try:
+                modelo_hw = ExponentialSmoothing(
+                    y,
+                    trend='add',
+                    seasonal='add',
+                    seasonal_periods=4,
+                    damped_trend=True
+                ).fit(optimized=True)
+
+                # Predicción 8 semanas adelante
+                n_pred = 8
+                pred_hw = modelo_hw.forecast(n_pred)
+
+                # Calcular intervalos de confianza (usando residuos)
+                residuos = modelo_hw.resid
+                std_residuos = np.std(residuos)
+                pred_upper = pred_hw + 1.96 * std_residuos
+                pred_lower = pred_hw - 1.96 * std_residuos
+                pred_lower = np.maximum(pred_lower, 0)  # No puede ser negativo
+
+                # Métricas de error en muestra
+                fitted = modelo_hw.fittedvalues
+                mape = np.mean(np.abs((y - fitted) / y)) * 100
+                mae = np.mean(np.abs(y - fitted))
+
+                modelo_ok = True
+            except:
+                modelo_ok = False
+
+            # =============================================
+            # MODELO RESPALDO: Media Móvil Ponderada
+            # =============================================
+            if not modelo_ok:
+                # Media móvil ponderada de últimas 4 semanas
+                pesos = np.array([0.1, 0.2, 0.3, 0.4])
+                ultimas_4 = y[-4:]
+                pred_base = np.average(ultimas_4, weights=pesos)
+
+                n_pred = 8
+                pred_hw = np.full(n_pred, pred_base)
+
+                # Agregar tendencia basada en últimas semanas
+                tendencia = (y[-1] - y[-4]) / 4
+                for i in range(n_pred):
+                    pred_hw[i] = pred_base + tendencia * (i + 1)
+
+                std_hist = np.std(y[-8:])
+                pred_upper = pred_hw + 1.96 * std_hist
+                pred_lower = pred_hw - 1.96 * std_hist
+                pred_lower = np.maximum(pred_lower, 0)
+
+                mape = None
+                mae = None
+
+            # Crear fechas de predicción
+            ultima_fecha = semanal['semana'].max()
+            fechas_pred = pd.date_range(start=ultima_fecha + pd.Timedelta(weeks=1), periods=n_pred, freq='W-MON')
+
+            # =============================================
+            # VISUALIZACIÓN PRINCIPAL
+            # =============================================
+            st.markdown("### 📈 Predicción Semanal de Tickets")
+
+            fig_forecast = go.Figure()
+
+            # Datos históricos
+            fig_forecast.add_trace(go.Scatter(
+                x=semanal['semana'],
+                y=semanal['tickets'],
+                mode='lines+markers',
+                name='Tickets Reales',
+                line=dict(color='#1976d2', width=2),
+                marker=dict(size=6),
+                hovertemplate='<b>%{x|%d/%m/%Y}</b><br>Tickets: %{y:,.0f}<extra></extra>'
+            ))
+
+            # Banda de confianza (primero para que quede detrás)
+            fig_forecast.add_trace(go.Scatter(
+                x=pd.concat([pd.Series(fechas_pred), pd.Series(fechas_pred[::-1])]),
+                y=np.concatenate([pred_upper, pred_lower[::-1]]),
+                fill='toself',
+                fillcolor='rgba(156, 39, 176, 0.15)',
+                line=dict(color='rgba(255,255,255,0)'),
+                name='Intervalo Confianza 95%',
+                showlegend=True,
+                hoverinfo='skip'
+            ))
+
+            # Predicción
+            fig_forecast.add_trace(go.Scatter(
+                x=fechas_pred,
+                y=pred_hw,
+                mode='lines+markers',
+                name='Predicción',
+                line=dict(color='#9c27b0', width=3, dash='dash'),
+                marker=dict(size=10, symbol='diamond', color='#9c27b0'),
+                hovertemplate='<b>%{x|%d/%m/%Y}</b><br>Pred: %{y:,.0f} tickets<extra></extra>'
+            ))
+
+            # Línea de conexión
+            fig_forecast.add_trace(go.Scatter(
+                x=[semanal['semana'].iloc[-1], fechas_pred[0]],
+                y=[semanal['tickets'].iloc[-1], pred_hw[0]],
+                mode='lines',
+                line=dict(color='#9c27b0', width=2, dash='dot'),
+                showlegend=False,
+                hoverinfo='skip'
+            ))
+
+            # Línea de promedio histórico
+            promedio_hist = semanal['tickets'].mean()
+            fig_forecast.add_hline(
+                y=promedio_hist,
+                line_dash="dot",
+                line_color="#666",
+                annotation_text=f"Promedio: {promedio_hist:,.0f}",
+                annotation_position="top right"
+            )
+
+            fig_forecast.update_layout(
+                title=dict(text='<b>Predicción de Tickets por Semana</b>', font=dict(size=18)),
+                xaxis_title='Semana',
+                yaxis_title='Cantidad de Tickets',
+                height=500,
+                hovermode='x unified',
+                yaxis_tickformat=',',
+                legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='center', x=0.5),
+                plot_bgcolor='white',
+                xaxis=dict(gridcolor='#eee'),
+                yaxis=dict(gridcolor='#eee')
+            )
+
+            render_plotly(fig_forecast)
+
+            # =============================================
+            # MÉTRICAS DE PREDICCIÓN
+            # =============================================
+            st.markdown("### 📊 Métricas del Modelo")
+
+            col1, col2, col3, col4 = st.columns(4)
+
+            with col1:
+                pred_prox = int(pred_hw[0])
+                st.metric(
+                    "🎯 Próxima Semana",
+                    f"{pred_prox:,} tickets",
+                    help="Predicción puntual para la próxima semana"
+                )
+
+            with col2:
+                rango = f"{int(pred_lower[0]):,} - {int(pred_upper[0]):,}"
+                st.metric(
+                    "📐 Rango (95%)",
+                    rango,
+                    help="Intervalo de confianza al 95%"
+                )
+
+            with col3:
+                var_vs_prom = ((pred_hw[0] / promedio_hist) - 1) * 100
+                st.metric(
+                    "📈 vs Promedio",
+                    f"{var_vs_prom:+.1f}%",
+                    delta=f"{var_vs_prom:+.1f}%",
+                    help="Comparación con promedio histórico"
+                )
+
+            with col4:
+                if mape is not None:
+                    st.metric(
+                        "🎯 Precisión (MAPE)",
+                        f"{100-mape:.1f}%",
+                        help=f"Error porcentual absoluto medio: {mape:.1f}%"
+                    )
+                else:
+                    st.metric("🎯 Modelo", "Media Móvil")
+
+            # =============================================
+            # TABLA DE PREDICCIONES
+            # =============================================
+            st.markdown("### 📅 Detalle de Predicción (8 semanas)")
+
+            tabla_pred = pd.DataFrame({
+                'Semana': fechas_pred.strftime('%d/%m/%Y'),
+                'Predicción': [f"{int(p):,}" for p in pred_hw],
+                'Mínimo (95%)': [f"{int(p):,}" for p in pred_lower],
+                'Máximo (95%)': [f"{int(p):,}" for p in pred_upper],
+                'vs Promedio': [f"{((p/promedio_hist)-1)*100:+.1f}%" for p in pred_hw]
+            })
+
+            st.dataframe(
+                tabla_pred,
+                use_container_width=True,
+                hide_index=True
+            )
+
+            # =============================================
+            # ANÁLISIS POR DÍA DE LA SEMANA
+            # =============================================
+            st.markdown("### 📆 Patrón por Día de la Semana")
+
+            tickets_fc['dia_semana'] = tickets_fc['fecha'].dt.day_name()
+            dias_orden = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+            dias_esp = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
+
+            tickets_por_dia = tickets_fc.groupby('dia_semana').size().reindex(dias_orden)
+            tickets_por_dia.index = dias_esp
+
+            # Calcular promedio diario
+            n_semanas = len(semanal)
+            prom_diario = tickets_por_dia / n_semanas
+
+            col_dia1, col_dia2 = st.columns(2)
+
+            with col_dia1:
+                fig_dia = px.bar(
+                    x=prom_diario.index,
+                    y=prom_diario.values,
+                    title='<b>Tickets Promedio por Día</b>',
+                    labels={'x': 'Día', 'y': 'Tickets/día'},
+                    color=prom_diario.values,
+                    color_continuous_scale='Purples'
+                )
+                fig_dia.update_layout(height=350, showlegend=False)
+                fig_dia.update_coloraxes(showscale=False)
+                render_plotly(fig_dia)
+
+            with col_dia2:
+                # Predicción diaria para próxima semana
+                factor_dia = prom_diario / prom_diario.sum()
+                pred_diaria = pred_hw[0] * factor_dia
+
+                fig_pred_dia = px.bar(
+                    x=pred_diaria.index,
+                    y=pred_diaria.values,
+                    title='<b>Predicción Diaria (Próx. Semana)</b>',
+                    labels={'x': 'Día', 'y': 'Tickets esperados'},
+                    color=pred_diaria.values,
+                    color_continuous_scale='Oranges'
+                )
+                fig_pred_dia.update_layout(height=350, showlegend=False)
+                fig_pred_dia.update_coloraxes(showscale=False)
+                render_plotly(fig_pred_dia)
+
+            # Día más fuerte
+            dia_max = prom_diario.idxmax()
+            dia_min = prom_diario.idxmin()
+
+            st.markdown(f"""
+            <div style='background: #f3e5f5; border-left: 6px solid #9c27b0; padding: 18px; margin: 16px 0; border-radius: 10px;'>
+                <h4 style='color: #7b1fa2; margin: 0;'>💡 Insights del Modelo</h4>
+                <p style='margin: 12px 0 0 0;'>
+                    • <b>Día más fuerte:</b> {dia_max} ({int(prom_diario[dia_max]):,} tickets promedio)<br>
+                    • <b>Día más bajo:</b> {dia_min} ({int(prom_diario[dia_min]):,} tickets promedio)<br>
+                    • <b>Predicción próxima semana:</b> {int(pred_hw[0]):,} tickets (rango: {int(pred_lower[0]):,} - {int(pred_upper[0]):,})<br>
+                    • <b>Tendencia:</b> {'📈 Al alza' if pred_hw[0] > promedio_hist else '📉 A la baja'} respecto al promedio histórico
+                </p>
+            </div>
+            """, unsafe_allow_html=True)
+
+            # =============================================
+            # PREDICCIÓN POR CATEGORÍA
+            # =============================================
+            st.markdown("---")
+            st.markdown("### 🏷️ Predicción por Categoría")
+
+            try:
+                # Cargar detalle de líneas para categorías
+                detalle_cat = pd.read_parquet('data/processed/detalle_lineas.parquet')
+                detalle_cat['fecha'] = pd.to_datetime(detalle_cat['fecha'])
+                detalle_cat['semana'] = detalle_cat['fecha'].dt.to_period('W').dt.start_time
+
+                # Top 10 categorías por volumen
+                top_categorias = detalle_cat['categoria'].value_counts().head(10).index.tolist()
+
+                # Selector de categoría
+                categoria_sel = st.selectbox(
+                    "Seleccionar categoría:",
+                    top_categorias,
+                    index=0
+                )
+
+                # Filtrar y agrupar por semana
+                cat_data = detalle_cat[detalle_cat['categoria'] == categoria_sel]
+                cat_semanal = cat_data.groupby('semana').agg({
+                    'cantidad': 'sum'
+                }).reset_index()
+                cat_semanal.columns = ['semana', 'unidades']
+                cat_semanal = cat_semanal.sort_values('semana').reset_index(drop=True)
+
+                # Excluir última semana si está incompleta
+                if len(cat_semanal) > 2:
+                    if cat_semanal.iloc[-1]['unidades'] < cat_semanal['unidades'].mean() * 0.5:
+                        cat_semanal = cat_semanal.iloc[:-1]
+
+                # Modelo para categoría
+                y_cat = cat_semanal['unidades'].values
+
+                try:
+                    modelo_cat = ExponentialSmoothing(
+                        y_cat,
+                        trend='add',
+                        seasonal='add',
+                        seasonal_periods=4,
+                        damped_trend=True
+                    ).fit(optimized=True)
+
+                    pred_cat = modelo_cat.forecast(8)
+                    residuos_cat = modelo_cat.resid
+                    std_cat = np.std(residuos_cat)
+                    pred_cat_upper = pred_cat + 1.96 * std_cat
+                    pred_cat_lower = pred_cat - 1.96 * std_cat
+                    pred_cat_lower = np.maximum(pred_cat_lower, 0)
+                except:
+                    # Respaldo: media móvil
+                    pesos = np.array([0.1, 0.2, 0.3, 0.4])
+                    pred_base = np.average(y_cat[-4:], weights=pesos)
+                    pred_cat = np.full(8, pred_base)
+                    std_cat = np.std(y_cat[-8:])
+                    pred_cat_upper = pred_cat + 1.96 * std_cat
+                    pred_cat_lower = pred_cat - 1.96 * std_cat
+                    pred_cat_lower = np.maximum(pred_cat_lower, 0)
+
+                # Fechas predicción
+                ultima_fecha_cat = cat_semanal['semana'].max()
+                fechas_pred_cat = pd.date_range(start=ultima_fecha_cat + pd.Timedelta(weeks=1), periods=8, freq='W-MON')
+
+                # Gráfico
+                fig_cat = go.Figure()
+
+                # Histórico
+                fig_cat.add_trace(go.Scatter(
+                    x=cat_semanal['semana'],
+                    y=cat_semanal['unidades'],
+                    mode='lines+markers',
+                    name='Unidades Reales',
+                    line=dict(color='#1976d2', width=2),
+                    marker=dict(size=5),
+                    hovertemplate='<b>%{x|%d/%m/%Y}</b><br>Unidades: %{y:,.0f}<extra></extra>'
+                ))
+
+                # Banda confianza
+                fig_cat.add_trace(go.Scatter(
+                    x=pd.concat([pd.Series(fechas_pred_cat), pd.Series(fechas_pred_cat[::-1])]),
+                    y=np.concatenate([pred_cat_upper, pred_cat_lower[::-1]]),
+                    fill='toself',
+                    fillcolor='rgba(156, 39, 176, 0.15)',
+                    line=dict(color='rgba(255,255,255,0)'),
+                    name='Intervalo 95%',
+                    hoverinfo='skip'
+                ))
+
+                # Predicción
+                fig_cat.add_trace(go.Scatter(
+                    x=fechas_pred_cat,
+                    y=pred_cat,
+                    mode='lines+markers',
+                    name='Predicción',
+                    line=dict(color='#9c27b0', width=3, dash='dash'),
+                    marker=dict(size=8, symbol='diamond'),
+                    hovertemplate='<b>%{x|%d/%m/%Y}</b><br>Pred: %{y:,.0f} unidades<extra></extra>'
+                ))
+
+                # Conexión
+                fig_cat.add_trace(go.Scatter(
+                    x=[cat_semanal['semana'].iloc[-1], fechas_pred_cat[0]],
+                    y=[cat_semanal['unidades'].iloc[-1], pred_cat[0]],
+                    mode='lines',
+                    line=dict(color='#9c27b0', width=2, dash='dot'),
+                    showlegend=False,
+                    hoverinfo='skip'
+                ))
+
+                fig_cat.update_layout(
+                    title=dict(text=f'<b>Predicción de Unidades - {categoria_sel}</b>', font=dict(size=16)),
+                    xaxis_title='Semana',
+                    yaxis_title='Unidades Vendidas',
+                    height=400,
+                    hovermode='x unified',
+                    yaxis_tickformat=',',
+                    legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='center', x=0.5),
+                    plot_bgcolor='white',
+                    xaxis=dict(gridcolor='#eee'),
+                    yaxis=dict(gridcolor='#eee')
+                )
+
+                render_plotly(fig_cat)
+
+                # Métricas categoría
+                col_cat1, col_cat2, col_cat3 = st.columns(3)
+
+                promedio_cat = cat_semanal['unidades'].mean()
+
+                with col_cat1:
+                    st.metric(
+                        "🎯 Próxima Semana",
+                        f"{int(pred_cat[0]):,} unidades"
+                    )
+
+                with col_cat2:
+                    st.metric(
+                        "📐 Rango (95%)",
+                        f"{int(pred_cat_lower[0]):,} - {int(pred_cat_upper[0]):,}"
+                    )
+
+                with col_cat3:
+                    var_cat = ((pred_cat[0] / promedio_cat) - 1) * 100
+                    st.metric(
+                        "📈 vs Promedio",
+                        f"{var_cat:+.1f}%",
+                        delta=f"{var_cat:+.1f}%"
+                    )
+
+            except Exception as e:
+                st.info(f"No se pudo generar predicción por categoría: {str(e)}")
+
+        else:
+            st.warning("No hay datos de tickets disponibles para el forecasting.")
+
+    except Exception as e:
+        st.error(f"Error en el modelo de forecasting: {str(e)}")
+        import traceback
+        st.code(traceback.format_exc())
 
 # =============================================================================
 # FOOTER
