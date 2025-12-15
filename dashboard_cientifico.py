@@ -3825,6 +3825,14 @@ elif selected_menu == "📋 Informe Ejecutivo":
     medios_texto = ", ".join(principales_medios)
 
     kpi_dia = data['kpi_dia'].copy()
+    # Asegurar que existe dia_semana y ventas
+    if 'fecha' in kpi_dia.columns:
+        kpi_dia['fecha'] = pd.to_datetime(kpi_dia['fecha'])
+        kpi_dia['dia_semana'] = kpi_dia['fecha'].dt.day_name()
+    
+    if 'ventas_totales' in kpi_dia.columns and 'ventas' not in kpi_dia.columns:
+        kpi_dia['ventas'] = kpi_dia['ventas_totales']
+
     dia_map = {
         'Monday': 'los lunes',
         'Tuesday': 'los martes',
