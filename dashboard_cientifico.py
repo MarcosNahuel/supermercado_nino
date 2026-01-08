@@ -635,6 +635,9 @@ def load_processed_data():
         PREDICTIVE_DIR, "prediccion_ventas_semanal_modelos.parquet"
     )
 
+    # Cargar detalle_lineas una sola vez (archivo grande ~620MB)
+    processed["detalle_lineas"] = _load(PROCESSED_DIR, "detalle_lineas.parquet")
+
     # Normalizar categorías en datasets procesados
     datasets_con_categorias = ['kpi_categoria_modular', 'ventas_semanales_categoria']
     for key in datasets_con_categorias:
@@ -1924,8 +1927,8 @@ elif selected_menu == "📈 Análisis Temporal":
             # === EFECTO FERIADOS ===
             st.markdown("#### 🎉 Efecto Feriados")
             try:
-                detalle_lineas_fer = pd.read_parquet('data/processed/detalle_lineas.parquet')
-                if 'es_feriado' in detalle_lineas_fer.columns:
+                detalle_lineas_fer = processed_data.get("detalle_lineas", pd.DataFrame())
+                if not detalle_lineas_fer.empty and 'es_feriado' in detalle_lineas_fer.columns:
                     feriados_analysis = detalle_lineas_fer.groupby('es_feriado').agg({
                         'ticket_id': 'nunique',
                         'importe_total': 'sum',
@@ -3575,7 +3578,9 @@ elif selected_menu == "💳 Medios de Pago":
             """, unsafe_allow_html=True)
 
             try:
-                detalle_lineas_emp = pd.read_parquet('data/processed/detalle_lineas.parquet')
+                detalle_lineas_emp = processed_data.get("detalle_lineas", pd.DataFrame())
+                if detalle_lineas_emp.empty:
+                    raise ValueError("No se encontraron datos")
 
                 emisores = detalle_lineas_emp.groupby('emisor_tarjeta').agg({
                     'importe_total': 'sum',
@@ -4510,8 +4515,10 @@ elif selected_menu == "🔮 Forecasting":
             st.markdown("### 🏷️ Predicción por Categoría")
 
             try:
-                # Cargar detalle de líneas para categorías
-                detalle_cat = pd.read_parquet('data/processed/detalle_lineas.parquet')
+                # Usar detalle de líneas cacheado para categorías
+                detalle_cat = processed_data.get("detalle_lineas", pd.DataFrame()).copy()
+                if detalle_cat.empty:
+                    raise ValueError("No se encontraron datos")
                 detalle_cat['fecha'] = pd.to_datetime(detalle_cat['fecha'])
                 detalle_cat['semana'] = detalle_cat['fecha'].dt.to_period('W').dt.start_time
 
