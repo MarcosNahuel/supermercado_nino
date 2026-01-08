@@ -19,6 +19,11 @@ import subprocess
 import shutil
 from pathlib import Path
 import sys
+import io
+
+# Forzar UTF-8 en stdout para Windows
+if sys.platform == "win32":
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
 
 # Colores para terminal
 class Colors:
@@ -95,6 +100,8 @@ def main():
         "kpi_categoria.parquet",
         "kpi_dia.parquet",
         "kpi_tipo_dia.parquet",
+        "kpi_periodo.parquet",      # NUEVO: KPIs mensuales con datos normalizados
+        "kpi_semana.parquet",       # NUEVO: KPIs semanales con datos normalizados
         "tickets.parquet",
         "reglas.parquet",
         "combos_recomendados.parquet",

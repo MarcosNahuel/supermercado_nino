@@ -32,11 +32,11 @@ plotly_config = {
 }
 
 # Función helper para renderizar gráficos optimizados
-def render_plotly(fig, height=None):
+def render_plotly(fig, height=None, key=None):
     """Renderiza un gráfico de Plotly con configuración optimizada"""
     if height:
         fig.update_layout(height=height)
-    st.plotly_chart(fig, use_container_width=True, config=plotly_config)
+    st.plotly_chart(fig, use_container_width=True, config=plotly_config, key=key)
 
 # Configurar pandas para mejor rendimiento
 pd.options.mode.chained_assignment = None  # Desactivar warnings de copia
@@ -659,6 +659,16 @@ st.markdown("""
     <h2 style='color: #ffd700; margin: 0; font-size: 1.5rem; font-weight: 700;'>
         📊 SUPERMERCADO NINO - DASHBOARD ANALÍTICO
     </h2>
+</div>
+""", unsafe_allow_html=True)
+
+# Nota global sobre normalización de datos - SIEMPRE VISIBLE
+st.markdown("""
+<div style='background: #fff3e0; border-left: 6px solid #ff9800; padding: 10px 14px; margin: 0 0 15px 0; border-radius: 6px; font-size: 0.85rem;'>
+    <b style='color: #e65100;'>⚠️ Nota sobre datos:</b>
+    Los meses de <b>Octubre y Noviembre 2025</b> presentaron pérdida parcial de información en el sistema origen.
+    Las métricas de estos meses fueron <b>normalizadas estadísticamente</b> (factor 3.2x Oct, 1.8x Nov) para mantener consistencia en análisis de tendencias.
+    Los datos de Diciembre 2025 están completos.
 </div>
 """, unsafe_allow_html=True)
 
@@ -2717,7 +2727,7 @@ elif selected_menu == "🛒 Market Basket & Combos":
         else:
             combos_mba = pd.DataFrame()
 
-        def render_vista(reglas_df: pd.DataFrame, combos_df: pd.DataFrame):
+        def render_vista(reglas_df: pd.DataFrame, combos_df: pd.DataFrame, vista_id: str = "default"):
             if reglas_df.empty:
                 st.info("No hay reglas de asociacion para esta seleccion.")
                 return
@@ -2766,7 +2776,7 @@ elif selected_menu == "🛒 Market Basket & Combos":
             fig_scatter.update_layout(height=480, margin=dict(t=60, r=20, l=20, b=40))
             fig_scatter.update_xaxes(tickformat='.1%', title='Soporte (%)')
             fig_scatter.update_yaxes(tickformat='.1%', title='Confianza (%)')
-            render_plotly(fig_scatter)
+            render_plotly(fig_scatter, key=f"mba_scatter_{vista_id}")
 
             # Nota: Se ocultaron "Top combos sugeridos" y "Top 20 reglas" porque
             # el contenido relevante está curado en la sección de Combos Estratégicos más abajo
@@ -2774,12 +2784,12 @@ elif selected_menu == "🛒 Market Basket & Combos":
         general_tab, sin_carniceria_tab = st.tabs(["Vista general", "Sin carniceria"])
 
         with general_tab:
-            render_vista(reglas_mba, combos_mba)
+            render_vista(reglas_mba, combos_mba, "general")
 
         with sin_carniceria_tab:
             reglas_filtradas = reglas_mba[~reglas_mba['con_carniceria']]
             combos_filtrados = combos_mba[~combos_mba['con_carniceria']] if not combos_mba.empty else combos_mba
-            render_vista(reglas_filtradas, combos_filtrados)
+            render_vista(reglas_filtradas, combos_filtrados, "sin_carniceria")
 
         # -------------------------
         # COMBOS ESTRATÉGICOS CURADOS - SECCIÓN PRINCIPAL

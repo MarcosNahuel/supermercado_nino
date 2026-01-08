@@ -11,6 +11,8 @@ from src.features.kpis_basicos import (
     build_kpi_categoria,
     build_kpi_dia,
     build_kpi_medio_pago,
+    build_kpi_periodo,
+    build_kpi_semana,
     build_kpi_tipo_dia,
     export_kpis,
 )
@@ -66,12 +68,17 @@ def main() -> None:
     kpi_tipo_dia = build_kpi_tipo_dia(kpi_dia)
     kpi_categoria = build_kpi_categoria(artifacts.detalle)
     kpi_medio_pago = build_kpi_medio_pago(artifacts.tickets)
+    kpi_periodo = build_kpi_periodo(artifacts.ventas_diarias)
+    kpi_semana = build_kpi_semana(artifacts.ventas_diarias)
+    LOGGER.info("KPI periodo y semana generados con datos NORMALIZADOS (Oct/Nov 2025 ajustados)")
     export_kpis(
         output_dir=PROCESSED_DIR,
         kpi_dia=kpi_dia,
         kpi_tipo_dia=kpi_tipo_dia,
         kpi_categoria=kpi_categoria,
         kpi_medio_pago=kpi_medio_pago,
+        kpi_periodo=kpi_periodo,
+        kpi_semana=kpi_semana,
     )
 
     LOGGER.info("Ejecutando market basket")

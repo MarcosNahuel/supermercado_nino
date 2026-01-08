@@ -33,6 +33,8 @@ COLUMN_MAPPING = {
     "TIPO FACTURA": "tipo_factura",
     "Tipo medio de pago": "tipo_medio_pago",
     "Emisor tarjeta": "emisor_tarjeta",
+    "RENTABILIDAD": "rentabilidad_factor",
+    "mARGEN DE RENTABILIDAD": "margen_rentabilidad_pct",
 }
 
 
@@ -79,6 +81,7 @@ def run_etl(
     feriados: Optional[pd.DataFrame] = None,
     *,
     fallback_rentabilidad: float = 18.0,
+    fecha_corte: str = "2025-12-31",
 ) -> EtlArtifacts:
     """Execute ETL steps and return canonical datasets."""
     rename_columns = {
@@ -88,6 +91,16 @@ def run_etl(
 
     df["fecha"] = pd.to_datetime(df["fecha"], errors="coerce")
     df = df[df["fecha"].notna()].copy()
+
+    # Filtrar hasta fecha de corte (excluir datos incompletos posteriores)
+    df = df[df["fecha"] <= pd.Timestamp(fecha_corte)].copy()
+
+    # Marcar meses con datos incompletos (Oct y Nov 2025 tuvieron pérdida de información)
+    # Estos meses tienen ~30-50% menos transacciones que el promedio
+    df["mes_incompleto"] = (
+        ((df["fecha"].dt.year == 2025) & (df["fecha"].dt.month == 10)) |
+        ((df["fecha"].dt.year == 2025) & (df["fecha"].dt.month == 11))
+    )
 
     df["cantidad"] = pd.to_numeric(
         df["cantidad"].astype(str).str.replace(",", "."), errors="coerce"
@@ -116,14 +129,35 @@ def run_etl(
 
     df = _enrich_temporal(df, feriados)
 
-    rent_dict = rentabilidad.set_index("Departamento")["rentabilidad_pct"].to_dict()
-    clas_dict = rentabilidad.set_index("Departamento")["Clasificacion"].to_dict()
+    # Usar rentabilidad del CSV si está disponible, sino del archivo auxiliar
+    if "margen_rentabilidad_pct" in df.columns and df["margen_rentabilidad_pct"].notna().any():
+        # El CSV ya tiene el porcentaje de margen por línea
+        df["rentabilidad_pct"] = pd.to_numeric(
+            df["margen_rentabilidad_pct"].astype(str).str.replace(",", "."), errors="coerce"
+        ).fillna(fallback_rentabilidad)
+    else:
+        # Fallback: usar archivo RENTABILIDAD.csv por departamento
+        rent_dict = rentabilidad.set_index("Departamento")["rentabilidad_pct"].to_dict()
+        df["rentabilidad_pct"] = df["categoria"].map(rent_dict).fillna(fallback_rentabilidad)
 
-    df["rentabilidad_pct"] = df["categoria"].map(rent_dict).fillna(fallback_rentabilidad)
+    # Clasificación del departamento del archivo auxiliar
+    clas_dict = rentabilidad.set_index("Departamento")["Clasificacion"].to_dict()
     df["clasificacion_departamento"] = df["categoria"].map(clas_dict).fillna(
         "SIN CLASIFICACION"
     )
-    df["margen_linea"] = df["importe_total"] * (df["rentabilidad_pct"] / 100.0)
+
+    # Calcular margen usando rentabilidad del CSV si está disponible
+    if "rentabilidad_factor" in df.columns and df["rentabilidad_factor"].notna().any():
+        # Factor de rentabilidad (ej: 0.28 = 28%)
+        df["rentabilidad_factor_clean"] = pd.to_numeric(
+            df["rentabilidad_factor"].astype(str).str.replace(",", "."), errors="coerce"
+        )
+        df["margen_linea"] = df["importe_total"] * df["rentabilidad_factor_clean"].fillna(
+            df["rentabilidad_pct"] / 100.0
+        )
+        df = df.drop(columns=["rentabilidad_factor_clean"])
+    else:
+        df["margen_linea"] = df["importe_total"] * (df["rentabilidad_pct"] / 100.0)
 
     tickets = (
         df.groupby("ticket_id")
@@ -149,8 +183,30 @@ def run_etl(
             margen_total=("margen_linea", "sum"),
             unidades_totales=("cantidad", "sum"),
             tickets=("ticket_id", "nunique"),
+            mes_incompleto=("mes_incompleto", "first"),
         )
         .reset_index()
+    )
+
+    # Normalización de meses con datos incompletos (Oct y Nov 2025)
+    # Factor basado en: promedio mensual normal ~230K transacciones
+    # Oct 2025: ~72K (factor 3.2), Nov 2025: ~130K (factor 1.8)
+    factor_normalizacion = {
+        (2025, 10): 3.2,  # Oct 2025 perdió ~69% de datos
+        (2025, 11): 1.8,  # Nov 2025 perdió ~44% de datos
+    }
+
+    def get_factor(row):
+        key = (row["anio"], row["mes"])
+        return factor_normalizacion.get(key, 1.0)
+
+    ventas_diarias["factor_norm"] = ventas_diarias.apply(get_factor, axis=1)
+    ventas_diarias["ventas_normalizadas"] = ventas_diarias["ventas_totales"] * ventas_diarias["factor_norm"]
+    ventas_diarias["margen_normalizado"] = ventas_diarias["margen_total"] * ventas_diarias["factor_norm"]
+    ventas_diarias["tickets_normalizados"] = ventas_diarias["tickets"] * ventas_diarias["factor_norm"]
+    ventas_diarias["unidades_normalizadas"] = ventas_diarias["unidades_totales"] * ventas_diarias["factor_norm"]
+    ventas_diarias["nota_datos"] = ventas_diarias["mes_incompleto"].apply(
+        lambda x: "DATOS INCOMPLETOS - NORMALIZADO" if x else ""
     )
 
     ventas_semanales_categoria = (
