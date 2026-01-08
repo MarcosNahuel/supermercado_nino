@@ -4172,22 +4172,51 @@ elif selected_menu == "🔮 Forecasting":
     """, unsafe_allow_html=True)
 
     try:
-        # Cargar datos de tickets
-        tickets_fc = data.get('rentabilidad_ticket')
+        # Cargar datos ORIGINALES desde kpi_dia (sin normalización incorrecta)
+        kpi_dia_orig = pd.read_parquet('data/processed/kpi_dia.parquet')
 
-        if tickets_fc is not None and not tickets_fc.empty:
-            tickets_fc = tickets_fc.copy()
-            tickets_fc['fecha'] = pd.to_datetime(tickets_fc['fecha'])
+        if kpi_dia_orig is not None and not kpi_dia_orig.empty:
+            kpi_dia_orig = kpi_dia_orig.copy()
+            kpi_dia_orig['fecha'] = pd.to_datetime(kpi_dia_orig['fecha'])
 
             # =============================================
-            # PREPARAR DATOS SEMANALES
+            # PREPARAR DATOS SEMANALES DESDE ORIGINALES
             # =============================================
-            tickets_fc['semana'] = tickets_fc['fecha'].dt.to_period('W').dt.start_time
-            semanal = tickets_fc.groupby('semana').agg({
-                'ticket_id': 'count'
-            }).reset_index()
-            semanal.columns = ['semana', 'tickets']
+            kpi_dia_orig['semana'] = kpi_dia_orig['fecha'].dt.to_period('W').dt.start_time
+
+            # Agregar por semana usando tickets ORIGINALES (no normalizados)
+            semanal = kpi_dia_orig.groupby('semana').agg(
+                tickets=('tickets', 'sum')
+            ).reset_index()
             semanal = semanal.sort_values('semana').reset_index(drop=True)
+
+            # Calcular promedio histórico (excluyendo Oct/Nov 2025)
+            mask_normal = ~((semanal['semana'].dt.year == 2025) &
+                           (semanal['semana'].dt.month.isin([10, 11])))
+            promedio_historico = semanal.loc[mask_normal, 'tickets'].mean()
+
+            # NORMALIZAR SOLO Oct/Nov 2025 (datos incompletos en origen)
+            def normalizar_tickets(row):
+                año = row['semana'].year
+                mes = row['semana'].month
+                tickets = row['tickets']
+
+                # Solo normalizar Oct y Nov 2025
+                if año == 2025 and mes in [10, 11]:
+                    # Si el valor es bajo (menos del 70% del promedio), usar promedio
+                    if tickets < promedio_historico * 0.7:
+                        return promedio_historico
+                return tickets
+
+            semanal['tickets'] = semanal.apply(normalizar_tickets, axis=1)
+
+            # Excluir enero 2026 y última semana de dic 2025 (datos incompletos)
+            semanal = semanal[~((semanal['semana'].dt.year == 2026))].copy()
+            # También excluir semana del 29/12/2025 que está incompleta
+            semanal = semanal[semanal['semana'] < '2025-12-29'].copy()
+
+            # Nota informativa
+            st.info(f"ℹ️ **Nota:** Oct/Nov 2025 normalizados al promedio histórico ({promedio_historico:,.0f} tickets/semana). Datos hasta 22/Dic/2025.")
 
             # Excluir última semana si está incompleta
             if len(semanal) > 2:
@@ -4195,12 +4224,15 @@ elif selected_menu == "🔮 Forecasting":
                 if ultima_semana['tickets'] < semanal['tickets'].mean() * 0.5:
                     semanal = semanal.iloc[:-1]
 
+            semanal_modelo = semanal
+
             # =============================================
             # MODELO HOLT-WINTERS (Triple Exponential Smoothing)
             # =============================================
             from statsmodels.tsa.holtwinters import ExponentialSmoothing
 
-            y = semanal['tickets'].values
+            # Usar datos filtrados (sin Oct/Nov 2025) para el modelo
+            y = semanal_modelo['tickets'].values
 
             # Ajustar modelo con estacionalidad (periodo 4 = mensual aproximado)
             try:
@@ -4257,8 +4289,8 @@ elif selected_menu == "🔮 Forecasting":
                 mape = None
                 mae = None
 
-            # Crear fechas de predicción
-            ultima_fecha = semanal['semana'].max()
+            # Crear fechas de predicción (desde el último dato del modelo filtrado)
+            ultima_fecha = semanal_modelo['semana'].max()
             fechas_pred = pd.date_range(start=ultima_fecha + pd.Timedelta(weeks=1), periods=n_pred, freq='W-MON')
 
             # =============================================
@@ -4268,10 +4300,10 @@ elif selected_menu == "🔮 Forecasting":
 
             fig_forecast = go.Figure()
 
-            # Datos históricos
+            # Datos históricos (filtrados - sin Oct/Nov 2025)
             fig_forecast.add_trace(go.Scatter(
-                x=semanal['semana'],
-                y=semanal['tickets'],
+                x=semanal_modelo['semana'],
+                y=semanal_modelo['tickets'],
                 mode='lines+markers',
                 name='Tickets Reales',
                 line=dict(color='#1976d2', width=2),
@@ -4304,16 +4336,16 @@ elif selected_menu == "🔮 Forecasting":
 
             # Línea de conexión
             fig_forecast.add_trace(go.Scatter(
-                x=[semanal['semana'].iloc[-1], fechas_pred[0]],
-                y=[semanal['tickets'].iloc[-1], pred_hw[0]],
+                x=[semanal_modelo['semana'].iloc[-1], fechas_pred[0]],
+                y=[semanal_modelo['tickets'].iloc[-1], pred_hw[0]],
                 mode='lines',
                 line=dict(color='#9c27b0', width=2, dash='dot'),
                 showlegend=False,
                 hoverinfo='skip'
             ))
 
-            # Línea de promedio histórico
-            promedio_hist = semanal['tickets'].mean()
+            # Línea de promedio histórico (de datos filtrados)
+            promedio_hist = semanal_modelo['tickets'].mean()
             fig_forecast.add_hline(
                 y=promedio_hist,
                 line_dash="dot",
@@ -4403,15 +4435,24 @@ elif selected_menu == "🔮 Forecasting":
             # =============================================
             st.markdown("### 📆 Patrón por Día de la Semana")
 
-            tickets_fc['dia_semana'] = tickets_fc['fecha'].dt.day_name()
+            # Usar kpi_dia para análisis por día de la semana (tiene datos normalizados)
+            kpi_dia_fc = data.get('kpi_dia')
             dias_orden = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
             dias_esp = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
 
-            tickets_por_dia = tickets_fc.groupby('dia_semana').size().reindex(dias_orden)
+            if kpi_dia_fc is not None and not kpi_dia_fc.empty and 'dia_semana' in kpi_dia_fc.columns:
+                kpi_dia_fc = kpi_dia_fc.copy()
+                kpi_dia_fc['fecha'] = pd.to_datetime(kpi_dia_fc['fecha'])
+                kpi_dia_fc['dia_semana_en'] = kpi_dia_fc['fecha'].dt.day_name()
+                tickets_por_dia = kpi_dia_fc.groupby('dia_semana_en')['tickets'].sum().reindex(dias_orden)
+            else:
+                # Fallback: distribución uniforme
+                tickets_por_dia = pd.Series([semanal_modelo['tickets'].sum() / 7] * 7, index=dias_orden)
+
             tickets_por_dia.index = dias_esp
 
             # Calcular promedio diario
-            n_semanas = len(semanal)
+            n_semanas = len(semanal_modelo)
             prom_diario = tickets_por_dia / n_semanas
 
             col_dia1, col_dia2 = st.columns(2)
