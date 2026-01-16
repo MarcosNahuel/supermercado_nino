@@ -498,7 +498,6 @@ def load_all_data():
             'combos': 'combos_recomendados.parquet',
             'adjacency': 'adjacency_pairs.parquet',
             'clusters_tickets': 'clusters_tickets.parquet',
-            'clusters_depto': 'clusters_departamento.parquet',
             'kpi_pago': 'kpi_medio_pago.parquet',
             'rentabilidad_ticket': 'rentabilidad_ticket.parquet'
         }
@@ -596,7 +595,7 @@ def load_all_data():
         return None
 
     # Normalizar categorías en todos los datasets que las tengan
-    datasets_con_categorias = ['kpi_categoria', 'pareto_cat', 'pareto_prod', 'clusters_depto']
+    datasets_con_categorias = ['kpi_categoria', 'pareto_cat', 'pareto_prod']
     for key in datasets_con_categorias:
         if key in data and not data[key].empty:
             data[key] = normalizar_categorias(data[key])
