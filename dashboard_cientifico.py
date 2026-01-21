@@ -462,6 +462,7 @@ REQUIRED_FILES = {
     "kpi_periodo": "kpi_periodo.parquet",
     "kpi_semana": "kpi_semana.parquet",
     "kpi_dia": "kpi_dia.parquet",
+    "kpi_tipo_dia": "kpi_tipo_dia.parquet",
     "kpi_categoria": "kpi_categoria.parquet",
     "kpi_hora": "kpi_hora.parquet",
     "pareto_cat": "pareto_cat_global.parquet",
@@ -470,6 +471,7 @@ REQUIRED_FILES = {
     "combos": "combos_recomendados.parquet",
     "adjacency": "adjacency_pairs.parquet",
     "kpi_pago": "kpi_medio_pago.parquet",
+    "ventas_semanales_categoria": "ventas_semanales_categoria.parquet",
 }
 
 # Datasets grandes: se leen solo cuando una sección los necesita.
@@ -645,6 +647,21 @@ def load_rentabilidad_ticket() -> pd.DataFrame:
 
 
 @st.cache_data
+def load_emisores_tarjeta() -> pd.DataFrame:
+    """Carga un resumen precomputado de facturación por emisor de tarjeta (Cloud-friendly)."""
+    path = DATA_DIR / "emisores_tarjeta.parquet"
+    if not path.exists():
+        print(f"⚠️- Missing expected file: {path}")
+        return pd.DataFrame()
+
+    try:
+        return pd.read_parquet(path)
+    except Exception as exc:
+        print(f"⚠️- Error loading {path}: {exc}")
+        return pd.DataFrame()
+
+
+@st.cache_data
 def load_processed_data():
     processed = {}
 
@@ -687,7 +704,6 @@ def load_processed_data():
     return processed
 
 data = load_all_data()
-processed_data = load_processed_data()
 missing_required = []
 if data is None:
     missing_required.append("Error general al cargar datasets (ver logs).")
@@ -1694,7 +1710,7 @@ elif selected_menu == "📈 Análisis Temporal":
                 render_plotly(fig_quincena)
             else:
                 st.info('No hay datos suficientes para el analisis por quincena.')
-        kpi_tipo_mod = processed_data.get("kpi_tipo_dia_modular")
+        kpi_tipo_mod = data.get("kpi_tipo_dia")
         if kpi_tipo_mod is not None and not kpi_tipo_mod.empty:
             st.markdown("### Comparativo por tipo de día")
             kpi_tipo_plot = (
@@ -1987,39 +2003,59 @@ elif selected_menu == "📈 Análisis Temporal":
             # === EFECTO FERIADOS ===
             st.markdown("#### 🎉 Efecto Feriados")
             try:
-                detalle_lineas_fer = processed_data.get("detalle_lineas", pd.DataFrame())
-                if not detalle_lineas_fer.empty and 'es_feriado' in detalle_lineas_fer.columns:
-                    feriados_analysis = detalle_lineas_fer.groupby('es_feriado').agg({
-                        'ticket_id': 'nunique',
-                        'importe_total': 'sum',
-                        'margen_linea': 'sum'
-                    }).reset_index()
-                    feriados_analysis['ticket_promedio'] = feriados_analysis['importe_total'] / feriados_analysis['ticket_id']
+                if rentabilidad_est is None or rentabilidad_est.empty:
+                    raise ValueError("No hay tickets para analizar feriados.")
 
-                    feriado_data = feriados_analysis[feriados_analysis['es_feriado'] == True]
-                    normal_data = feriados_analysis[feriados_analysis['es_feriado'] == False]
+                feriados_analysis = (
+                    rentabilidad_est
+                    .assign(es_feriado=rentabilidad_est["tipo_dia"].astype(str).str.upper().eq("FERIADO"))
+                    .groupby("es_feriado", as_index=False)
+                    .agg(
+                        ticket_id=("ticket_id", "nunique"),
+                        importe_total=("monto_total_ticket", "sum"),
+                        margen_linea=("margen_ticket", "sum"),
+                    )
+                )
+                feriados_analysis["ticket_promedio"] = np.where(
+                    feriados_analysis["ticket_id"] > 0,
+                    feriados_analysis["importe_total"] / feriados_analysis["ticket_id"],
+                    0,
+                )
 
-                    if not feriado_data.empty and not normal_data.empty:
-                        ticket_feriado = float(feriado_data['ticket_promedio'].iloc[0])
-                        ticket_normal = float(normal_data['ticket_promedio'].iloc[0])
-                        variacion_feriado = ((ticket_feriado / ticket_normal) - 1) * 100
+                feriado_data = feriados_analysis[feriados_analysis["es_feriado"] == True]
+                normal_data = feriados_analysis[feriados_analysis["es_feriado"] == False]
 
-                        col_f1, col_f2, col_f3 = st.columns(3)
-                        with col_f1:
-                            st.metric("Tickets en Feriados", formatear_numero_argentino(int(feriado_data['ticket_id'].iloc[0]), 0))
-                        with col_f2:
-                            st.metric("Ticket Prom. Feriado", formatear_moneda_argentina(ticket_feriado, 0), delta=f"{variacion_feriado:+.1f}%")
-                        with col_f3:
-                            st.metric("Margen Feriados", formatear_moneda_argentina(float(feriado_data['margen_linea'].iloc[0]), 0))
+                if not feriado_data.empty and not normal_data.empty:
+                    ticket_feriado = float(feriado_data["ticket_promedio"].iloc[0])
+                    ticket_normal = float(normal_data["ticket_promedio"].iloc[0])
+                    variacion_feriado = ((ticket_feriado / ticket_normal) - 1) * 100
 
-                        if variacion_feriado > 0:
-                            st.success(f"📈 Los feriados generan un ticket {variacion_feriado:.1f}% mayor. Oportunidad para promociones.")
-                    else:
-                        st.info("Datos de feriados insuficientes para comparación.")
+                    col_f1, col_f2, col_f3 = st.columns(3)
+                    with col_f1:
+                        st.metric(
+                            "Tickets en Feriados",
+                            formatear_numero_argentino(int(feriado_data["ticket_id"].iloc[0]), 0),
+                        )
+                    with col_f2:
+                        st.metric(
+                            "Ticket Prom. Feriado",
+                            formatear_moneda_argentina(ticket_feriado, 0),
+                            delta=f"{variacion_feriado:+.1f}%",
+                        )
+                    with col_f3:
+                        st.metric(
+                            "Margen Feriados",
+                            formatear_moneda_argentina(float(feriado_data["margen_linea"].iloc[0]), 0),
+                        )
+
+                    if variacion_feriado > 0:
+                        st.success(
+                            f"📈 Los feriados generan un ticket {variacion_feriado:.1f}% mayor. Oportunidad para promociones."
+                        )
                 else:
-                    st.info("No hay columna 'es_feriado' en los datos.")
+                    st.info("Datos de feriados insuficientes para comparación.")
             except Exception:
-                st.info("No se encontraron datos de feriados.")
+                st.info("No se pudieron calcular métricas de feriados.")
 
             # === ESTACIONALIDAD MENSUAL ===
             st.markdown("#### 📊 Estacionalidad Mensual")
@@ -3490,7 +3526,6 @@ elif selected_menu == "💳 Medios de Pago":
     st.markdown("## 💳 Análisis de medios de pago")
 
     kpi_pago = data.get('kpi_pago')
-    tickets_modular = processed_data.get('tickets_modular')
 
     if kpi_pago is None or kpi_pago.empty:
         st.info("No hay datos de medios de pago disponibles.")
@@ -3643,17 +3678,29 @@ elif selected_menu == "💳 Medios de Pago":
             """, unsafe_allow_html=True)
 
             try:
-                detalle_lineas_emp = processed_data.get("detalle_lineas", pd.DataFrame())
-                if detalle_lineas_emp.empty:
-                    raise ValueError("No se encontraron datos")
+                emisores_src = load_emisores_tarjeta()
+                if emisores_src is None or emisores_src.empty:
+                    raise ValueError("No se encontraron datos de emisores")
 
-                emisores = detalle_lineas_emp.groupby('emisor_tarjeta').agg({
-                    'importe_total': 'sum',
-                    'ticket_id': 'nunique'
-                }).reset_index()
-                emisores.columns = ['Emisor', 'Facturación', 'Tickets']
+                required_cols = {"emisor_tarjeta", "facturacion", "tickets"}
+                if not required_cols.issubset(emisores_src.columns):
+                    raise ValueError("Formato inesperado de emisores_tarjeta.parquet")
+
+                emisores = emisores_src.copy()
+                emisores = emisores.rename(
+                    columns={
+                        "emisor_tarjeta": "Emisor",
+                        "facturacion": "Facturación",
+                        "tickets": "Tickets",
+                    }
+                )
                 emisores['Ticket Promedio'] = emisores['Facturación'] / emisores['Tickets']
-                emisores = emisores[emisores['Emisor'] != 'DESCONOCIDO'].sort_values('Facturación', ascending=False).head(8)
+                emisores = (
+                    emisores.dropna(subset=["Emisor"])
+                    .query("Emisor != 'DESCONOCIDO'")
+                    .sort_values('Facturación', ascending=False)
+                    .head(8)
+                )
 
                 col_em1, col_em2 = st.columns([2, 1])
 
@@ -4585,15 +4632,26 @@ elif selected_menu == "🔮 Forecasting":
             st.markdown("### 🏷️ Predicción por Categoría")
 
             try:
-                # Usar detalle de líneas cacheado para categorías
-                detalle_cat = processed_data.get("detalle_lineas", pd.DataFrame()).copy()
-                if detalle_cat.empty:
-                    raise ValueError("No se encontraron datos")
-                detalle_cat['fecha'] = pd.to_datetime(detalle_cat['fecha'])
-                detalle_cat['semana'] = detalle_cat['fecha'].dt.to_period('W').dt.start_time
+                ventas_cat = data.get("ventas_semanales_categoria")
+                if ventas_cat is None or ventas_cat.empty:
+                    raise ValueError("No se encontraron datos semanales por categoría")
 
-                # Top 10 categorías por volumen
-                top_categorias = detalle_cat['categoria'].value_counts().head(10).index.tolist()
+                ventas_cat = ventas_cat.copy()
+                required_cols = {"semana_iso", "categoria", "unidades_semana"}
+                if not required_cols.issubset(ventas_cat.columns):
+                    raise ValueError("Formato inesperado en ventas_semanales_categoria.parquet")
+
+                ventas_cat["semana"] = ventas_cat["semana_iso"].apply(
+                    lambda s: pd.to_datetime(str(s) + "-1", format="%G-W%V-%u", errors="coerce")
+                )
+                ventas_cat = ventas_cat.dropna(subset=["semana"])
+
+                totales_cat = (
+                    ventas_cat.groupby("categoria", as_index=False)["unidades_semana"]
+                    .sum()
+                    .sort_values("unidades_semana", ascending=False)
+                )
+                top_categorias = totales_cat.head(10)["categoria"].astype(str).tolist()
 
                 # Selector de categoría
                 categoria_sel = st.selectbox(
@@ -4602,13 +4660,16 @@ elif selected_menu == "🔮 Forecasting":
                     index=0
                 )
 
-                # Filtrar y agrupar por semana
-                cat_data = detalle_cat[detalle_cat['categoria'] == categoria_sel]
-                cat_semanal = cat_data.groupby('semana').agg({
-                    'cantidad': 'sum'
-                }).reset_index()
-                cat_semanal.columns = ['semana', 'unidades']
-                cat_semanal = cat_semanal.sort_values('semana').reset_index(drop=True)
+                cat_semanal = (
+                    ventas_cat[ventas_cat["categoria"] == categoria_sel]
+                    .groupby("semana", as_index=False)
+                    .agg(unidades=("unidades_semana", "sum"))
+                    .sort_values("semana")
+                    .reset_index(drop=True)
+                )
+
+                if cat_semanal.empty:
+                    raise ValueError("No se encontraron datos para la categoría seleccionada")
 
                 # Excluir última semana si está incompleta
                 if len(cat_semanal) > 2:
@@ -4618,34 +4679,48 @@ elif selected_menu == "🔮 Forecasting":
                 # Modelo para categoría
                 y_cat = cat_semanal['unidades'].values
 
+                n_pred_cat = 8
+                modelo_ok_cat = False
                 try:
-                    modelo_cat = ExponentialSmoothing(
-                        y_cat,
-                        trend='add',
-                        seasonal='add',
-                        seasonal_periods=4,
-                        damped_trend=True
-                    ).fit(optimized=True)
+                    from statsmodels.tsa.holtwinters import ExponentialSmoothing
 
-                    pred_cat = modelo_cat.forecast(8)
-                    residuos_cat = modelo_cat.resid
-                    std_cat = np.std(residuos_cat)
-                    pred_cat_upper = pred_cat + 1.96 * std_cat
-                    pred_cat_lower = pred_cat - 1.96 * std_cat
-                    pred_cat_lower = np.maximum(pred_cat_lower, 0)
-                except:
-                    # Respaldo: media móvil
+                    if len(y_cat) >= 8:
+                        modelo_cat = ExponentialSmoothing(
+                            y_cat,
+                            trend='add',
+                            seasonal='add',
+                            seasonal_periods=4,
+                            damped_trend=True
+                        ).fit(optimized=True)
+
+                        pred_cat = modelo_cat.forecast(n_pred_cat)
+                        residuos_cat = modelo_cat.resid
+                        std_cat = np.std(residuos_cat)
+                        pred_cat_upper = pred_cat + 1.96 * std_cat
+                        pred_cat_lower = pred_cat - 1.96 * std_cat
+                        pred_cat_lower = np.maximum(pred_cat_lower, 0)
+                        modelo_ok_cat = True
+                except Exception:
+                    modelo_ok_cat = False
+
+                if not modelo_ok_cat:
                     pesos = np.array([0.1, 0.2, 0.3, 0.4])
-                    pred_base = np.average(y_cat[-4:], weights=pesos)
-                    pred_cat = np.full(8, pred_base)
-                    std_cat = np.std(y_cat[-8:])
+                    if len(y_cat) >= 4:
+                        pred_base = np.average(y_cat[-4:], weights=pesos)
+                    elif len(y_cat) > 0:
+                        pred_base = float(np.mean(y_cat))
+                    else:
+                        pred_base = 0.0
+
+                    pred_cat = np.full(n_pred_cat, pred_base)
+                    std_cat = np.std(y_cat[-8:]) if len(y_cat) >= 8 else (np.std(y_cat) if len(y_cat) > 1 else 0.0)
                     pred_cat_upper = pred_cat + 1.96 * std_cat
                     pred_cat_lower = pred_cat - 1.96 * std_cat
                     pred_cat_lower = np.maximum(pred_cat_lower, 0)
 
                 # Fechas predicción
                 ultima_fecha_cat = cat_semanal['semana'].max()
-                fechas_pred_cat = pd.date_range(start=ultima_fecha_cat + pd.Timedelta(weeks=1), periods=8, freq='W-MON')
+                fechas_pred_cat = pd.date_range(start=ultima_fecha_cat + pd.Timedelta(weeks=1), periods=n_pred_cat, freq='W-MON')
 
                 # Gráfico
                 fig_cat = go.Figure()
