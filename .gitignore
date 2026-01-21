@@ -85,6 +85,8 @@ src/
 *.docx
 *.md.bak
 *.txt
+!runtime.txt
+!packages.txt
 
 # Archivos de análisis no necesarios
 **/COMBOS_INTELIGENTES*.md

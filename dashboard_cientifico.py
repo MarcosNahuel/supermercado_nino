@@ -449,6 +449,28 @@ DATA_DIR = Path("data/app_dataset")
 PROCESSED_DIR = Path("data/processed")
 PREDICTIVE_DIR = Path("data/predictivos")
 
+# Datasets mínimos para poder iniciar el dashboard (especialmente en Streamlit Cloud).
+# Si alguno falta o no se puede leer, la app debe mostrar un error claro y detenerse
+# antes de acceder a índices/columnas inexistentes.
+REQUIRED_FILES = {
+    "alcance": "alcance_dataset.parquet",
+    "kpis_base": "kpis_base.parquet",
+    "kpi_diario": "kpi_diario.parquet",
+    "kpi_periodo": "kpi_periodo.parquet",
+    "kpi_semana": "kpi_semana.parquet",
+    "kpi_dia": "kpi_dia.parquet",
+    "kpi_categoria": "kpi_categoria.parquet",
+    "kpi_hora": "kpi_hora.parquet",
+    "pareto_cat": "pareto_cat_global.parquet",
+    "pareto_prod": "pareto_prod_global.parquet",
+    "reglas": "reglas.parquet",
+    "combos": "combos_recomendados.parquet",
+    "adjacency": "adjacency_pairs.parquet",
+    "clusters_tickets": "clusters_tickets.parquet",
+    "kpi_pago": "kpi_medio_pago.parquet",
+    "rentabilidad_ticket": "rentabilidad_ticket.parquet",
+}
+
 def normalizar_categorias(df: pd.DataFrame) -> pd.DataFrame:
     """
     Normaliza los nombres de las categorías en un DataFrame.
@@ -648,7 +670,27 @@ def load_processed_data():
 
 data = load_all_data()
 processed_data = load_processed_data()
-if not data:
+missing_required = []
+if data is None:
+    missing_required.append("Error general al cargar datasets (ver logs).")
+elif not DATA_DIR.exists():
+    missing_required.append(f"Directorio no encontrado: {DATA_DIR.as_posix()}")
+else:
+    for _, filename in REQUIRED_FILES.items():
+        path = DATA_DIR / filename
+        if not path.exists():
+            missing_required.append(filename)
+
+    # Aunque el archivo exista, puede fallar la lectura (dependencias, formato, etc.)
+    for key, filename in REQUIRED_FILES.items():
+        df = data.get(key)
+        if df is None or df.empty:
+            missing_required.append(f"{filename} (vacío o no legible)")
+
+if missing_required:
+    st.error("No se puede iniciar el dashboard: faltan datasets requeridos para el deploy.")
+    st.markdown("Verificá que estos archivos existan y estén versionados en `data/app_dataset/`.")
+    st.code("\n".join(sorted(set(missing_required))))
     st.stop()
 
 # =============================================================================
