@@ -4219,7 +4219,12 @@ elif selected_menu == "🔮 Forecasting":
 
     try:
         # Cargar datos ORIGINALES desde kpi_dia (sin normalización incorrecta)
-        kpi_dia_orig = pd.read_parquet('data/processed/kpi_dia.parquet')
+        processed_kpi_dia_path = PROCESSED_DIR / "kpi_dia.parquet"
+        if processed_kpi_dia_path.exists():
+            kpi_dia_orig = pd.read_parquet(processed_kpi_dia_path)
+        else:
+            kpi_dia_orig = data.get("kpi_dia", pd.DataFrame())
+            st.info("ℹ️ Usando `data/app_dataset/kpi_dia.parquet` (no se encontró `data/processed/kpi_dia.parquet`).")
 
         if kpi_dia_orig is not None and not kpi_dia_orig.empty:
             kpi_dia_orig = kpi_dia_orig.copy()
