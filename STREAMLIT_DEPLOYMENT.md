@@ -4,7 +4,8 @@
 
 ### Datos requeridos:
 
-1. **Main file path:** `dashboard_cientifico.py`
+1. **Main file path (recomendado):** `streamlit_app.py` (wrapper)
+   - Alternativa: `dashboard_cientifico.py`
 2. **Repository:** Tu repositorio de GitHub
 3. **Branch:** `main`
 
@@ -12,6 +13,7 @@
 
 ```
 supermercado_nino definitivo claude/
+├── streamlit_app.py                 (ENTRYPOINT RECOMENDADO)
 ├── dashboard_cientifico.py       (ARCHIVO PRINCIPAL)
 ├── requirements.txt              (DEPENDENCIAS)
 ├── data/
@@ -47,7 +49,7 @@ supermercado_nino definitivo claude/
 4. **Completa los campos:**
    - **Repository:** `user/supermercado_nino definitivo claude`
    - **Branch:** `main`
-   - **Main file path:** `dashboard_cientifico.py`
+   - **Main file path:** `streamlit_app.py`
 5. **Haz clic en** "Deploy"
 
 ### Nota importante sobre .gitignore:

@@ -452,6 +452,9 @@ PREDICTIVE_DIR = Path("data/predictivos")
 # Datasets mínimos para poder iniciar el dashboard (especialmente en Streamlit Cloud).
 # Si alguno falta o no se puede leer, la app debe mostrar un error claro y detenerse
 # antes de acceder a índices/columnas inexistentes.
+#
+# Nota: archivos grandes (p. ej. `rentabilidad_ticket.parquet`) se cargan on-demand
+# para evitar OOM/timeouts en Streamlit Community Cloud.
 REQUIRED_FILES = {
     "alcance": "alcance_dataset.parquet",
     "kpis_base": "kpis_base.parquet",
@@ -466,9 +469,15 @@ REQUIRED_FILES = {
     "reglas": "reglas.parquet",
     "combos": "combos_recomendados.parquet",
     "adjacency": "adjacency_pairs.parquet",
-    "clusters_tickets": "clusters_tickets.parquet",
     "kpi_pago": "kpi_medio_pago.parquet",
+}
+
+# Datasets grandes: se leen solo cuando una sección los necesita.
+ON_DEMAND_FILES = {
     "rentabilidad_ticket": "rentabilidad_ticket.parquet",
+    "clusters_tickets": "clusters_tickets.parquet",
+    "tickets": "tickets.parquet",
+    "detalle_lineas": "detalle_lineas.parquet",
 }
 
 def normalizar_categorias(df: pd.DataFrame) -> pd.DataFrame:
@@ -505,24 +514,7 @@ def load_all_data():
     data = {}
     try:
         # Cargar archivos básicos con manejo de errores específico
-        required_files = {
-            'alcance': 'alcance_dataset.parquet',
-            'kpis_base': 'kpis_base.parquet',
-            'kpi_diario': 'kpi_diario.parquet',
-            'kpi_periodo': 'kpi_periodo.parquet',
-            'kpi_semana': 'kpi_semana.parquet',
-            'kpi_dia': 'kpi_dia.parquet',
-            'kpi_categoria': 'kpi_categoria.parquet',
-            'kpi_hora': 'kpi_hora.parquet',
-            'pareto_cat': 'pareto_cat_global.parquet',
-            'pareto_prod': 'pareto_prod_global.parquet',
-            'reglas': 'reglas.parquet',
-            'combos': 'combos_recomendados.parquet',
-            'adjacency': 'adjacency_pairs.parquet',
-            'clusters_tickets': 'clusters_tickets.parquet',
-            'kpi_pago': 'kpi_medio_pago.parquet',
-            'rentabilidad_ticket': 'rentabilidad_ticket.parquet'
-        }
+        required_files = REQUIRED_FILES
 
         for key, filename in required_files.items():
             try:
@@ -624,6 +616,32 @@ def load_all_data():
             print(f"[OK] Normalized categories in {key}")
 
     return data
+
+
+@st.cache_data
+def load_rentabilidad_ticket() -> pd.DataFrame:
+    """Carga `rentabilidad_ticket.parquet` bajo demanda para evitar OOM/timeouts en Streamlit Cloud."""
+    filename = ON_DEMAND_FILES["rentabilidad_ticket"]
+    path = DATA_DIR / filename
+    if not path.exists():
+        print(f"⚠️- Missing expected file: {path}")
+        return pd.DataFrame()
+
+    try:
+        df = pd.read_parquet(path)
+    except Exception as exc:
+        print(f"⚠️- Error loading {path}: {exc}")
+        return pd.DataFrame()
+
+    # Optimización de memoria: columnas repetitivas como categoría.
+    for col in ("semana_iso", "tipo_dia", "tipo_medio_pago"):
+        if col in df.columns:
+            try:
+                df[col] = df[col].astype("category")
+            except Exception:
+                pass
+
+    return df
 
 
 @st.cache_data
@@ -811,7 +829,7 @@ elif selected_menu == "📈 Análisis Temporal":
     st.markdown("## 📈 Análisis Temporal")
     st.markdown("### Ritmo de comprobantes")
 
-    detalle_tickets = data.get('rentabilidad_ticket')
+    detalle_tickets = load_rentabilidad_ticket()
 
     if detalle_tickets is None or detalle_tickets.empty:
         st.warning("No se encontraron tickets para esta vista temporal.")
@@ -848,9 +866,10 @@ elif selected_menu == "📈 Análisis Temporal":
                 ]
             kpi_periodo_plot['periodo_label'] = kpi_periodo_plot['periodo_dt'].dt.strftime('%Y-%m')
 
-            # Calcular margen % promedio por mes desde rentabilidad_ticket
-            if 'rentabilidad_ticket' in data and data['rentabilidad_ticket'] is not None:
-                detalle_rent = data['rentabilidad_ticket'].copy()
+            # Calcular margen % promedio por mes desde rentabilidad_ticket (on-demand)
+            detalle_rent = load_rentabilidad_ticket()
+            if detalle_rent is not None and not detalle_rent.empty:
+                detalle_rent = detalle_rent.copy()
                 detalle_rent['fecha'] = pd.to_datetime(detalle_rent['fecha'])
                 detalle_rent['periodo'] = detalle_rent['fecha'].dt.to_period('M')
 
@@ -1874,7 +1893,7 @@ elif selected_menu == "📈 Análisis Temporal":
         </div>
         """, unsafe_allow_html=True)
 
-        rentabilidad_est = data.get('rentabilidad_ticket')
+        rentabilidad_est = load_rentabilidad_ticket()
 
         if rentabilidad_est is not None and not rentabilidad_est.empty:
             rentabilidad_est = rentabilidad_est.copy()
@@ -3062,7 +3081,12 @@ elif selected_menu == "🛒 Market Basket & Combos":
 elif selected_menu == "👥 Segmentación":
     st.markdown("## 👥 Segmentación de tickets - personalizar estrategias")
 
-    rentabilidad = data['rentabilidad_ticket'].copy()
+    rentabilidad = load_rentabilidad_ticket()
+    if rentabilidad is None or rentabilidad.empty:
+        st.warning("No se encontraron datos de tickets (rentabilidad) para la segmentaciÃ³n.")
+        st.stop()
+
+    rentabilidad = rentabilidad.copy()
     rentabilidad['rentabilidad_pct'] = rentabilidad['rentabilidad_pct_ticket'] * 100
     rentabilidad = rentabilidad[rentabilidad['rentabilidad_pct'].notna()]
     rentabilidad = rentabilidad[rentabilidad['rentabilidad_pct'] > 0]
@@ -3160,7 +3184,7 @@ elif selected_menu == "👥 Segmentación":
             unsafe_allow_html=True
         )
 
-    tickets_raw = data['rentabilidad_ticket'].copy()
+    tickets_raw = load_rentabilidad_ticket().copy()
     tickets_raw = tickets_raw.dropna(subset=['monto_total_ticket'])
 
     if tickets_raw.empty:
@@ -3973,7 +3997,7 @@ elif selected_menu == "👑 Tribu Premium":
     </div>
     """, unsafe_allow_html=True)
 
-    rentabilidad = data.get('rentabilidad_ticket')
+    rentabilidad = load_rentabilidad_ticket()
 
     if rentabilidad is not None and not rentabilidad.empty:
         # Calcular percentil 85 para definir "Premium"
