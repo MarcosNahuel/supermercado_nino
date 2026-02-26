@@ -48,17 +48,14 @@ def crear_grafico_tickets_vs_cajas(tickets_por_intervalo: pd.DataFrame) -> go.Fi
         title='Distribución de Tickets y Cajas Necesarias (cada 10 minutos)',
         xaxis=dict(
             title='Hora del día',
-            titlefont=dict(size=12),
         ),
         yaxis=dict(
-            title='Tickets emitidos',
-            titlefont=dict(color='#1f77b4', size=12),
+            title=dict(text='Tickets emitidos', font=dict(color='#1f77b4', size=12)),
             tickfont=dict(color='#1f77b4'),
             side='left',
         ),
         yaxis2=dict(
-            title='Cajas necesarias',
-            titlefont=dict(color='#d62728', size=12),
+            title=dict(text='Cajas necesarias', font=dict(color='#d62728', size=12)),
             tickfont=dict(color='#d62728'),
             overlaying='y',
             side='right',
