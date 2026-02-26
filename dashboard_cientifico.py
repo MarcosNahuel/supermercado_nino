@@ -557,15 +557,21 @@ def load_all_data():
                 data[key] = pd.DataFrame()  # Crear DataFrame vacío para evitar errores posteriores
 
         # Cargar datos horarios del CSV
+        # Intentar cargar archivo comprimido primero (para Streamlit Cloud)
+        horario_path_gz = Path('data/raw/comprobantes_ventas_horario.csv.gz')
         horario_path = Path('data/raw/comprobantes_ventas_horario.csv')
-        if horario_path.exists():
+
+        csv_path = horario_path_gz if horario_path_gz.exists() else horario_path
+
+        if csv_path.exists():
             try:
-                print("Loading horario CSV...")
+                print(f"Loading horario from {csv_path.name}...")
                 horario_df = pd.read_csv(
-                    horario_path,
+                    csv_path,
                     sep=';',
                     dtype=str,
-                    engine='python'
+                    engine='python',
+                    compression='gzip' if str(csv_path).endswith('.gz') else None
                 )
                 print(f"[OK] Loaded CSV with {len(horario_df)} rows")
 
