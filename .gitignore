@@ -42,6 +42,7 @@ legacy/outputs/**
 *.csv
 !FASE1_OUTPUT_SAMPLE/*.csv
 !datos/*.csv.gz
+!data/raw/comprobantes_ventas_horario.csv
 
 # Permitir archivos comprimidos pequeños
 !datos/RENTABILIDAD.csv
