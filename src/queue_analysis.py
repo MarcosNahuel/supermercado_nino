@@ -110,3 +110,85 @@ def calcular_estadisticas_distribucion(
     tickets_por_intervalo['dia'] = tickets_por_intervalo['intervalo_10min'].dt.day_name()
 
     return tickets_por_intervalo
+
+
+def procesar_datos_analisis_cajas(horario_df: pd.DataFrame) -> dict:
+    """
+    Procesa datos de comprobantes para análisis de cajas.
+
+    Calcula el intervalo promedio entre tickets, estadísticas de intervalos,
+    y distribución de cajas necesarias por intervalo de 10 minutos.
+
+    Args:
+        horario_df: DataFrame con columna 'Hora' (datetime)
+
+    Returns:
+        dict con:
+        - tiempo_atencion: minutos (intervalo promedio entre tickets)
+        - tickets_por_intervalo: DataFrame con análisis por 10 minutos
+        - estadisticas_intervalos: dict con media, mediana, desviación, percentiles
+        - total_tickets: int (cantidad de comprobantes)
+    """
+    # Manejo de DataFrames vacías
+    if horario_df is None or len(horario_df) == 0:
+        return {
+            'tiempo_atencion': 3.0,
+            'tickets_por_intervalo': pd.DataFrame(),
+            'estadisticas_intervalos': {
+                'media': 0,
+                'mediana': 0,
+                'desviacion': 0,
+                'percentil_25': 0,
+                'percentil_75': 0,
+                'min': 0,
+                'max': 0,
+            },
+            'total_tickets': 0,
+        }
+
+    # 1. Calcular intervalo promedio entre tickets (en minutos)
+    intervalo_promedio = calcular_intervalo_promedio_tickets(horario_df)
+
+    # El tiempo de atención es el intervalo promedio entre tickets
+    # Con fallback a 3.0 minutos si no hay datos válidos
+    tiempo_atencion = intervalo_promedio if intervalo_promedio > 0 else 3.0
+
+    # 2. Calcular estadísticas de intervalos
+    df_sorted = horario_df.sort_values('Hora')
+    intervalos = df_sorted['Hora'].diff().dt.total_seconds() / 60
+    intervalos = intervalos[intervalos > 0]  # Excluir NaN y ceros
+
+    # Calcular estadísticas, manejo de Series vacía
+    if len(intervalos) > 0:
+        estadisticas = {
+            'media': intervalos.mean(),
+            'mediana': intervalos.median(),
+            'desviacion': intervalos.std(),
+            'percentil_25': intervalos.quantile(0.25),
+            'percentil_75': intervalos.quantile(0.75),
+            'min': intervalos.min(),
+            'max': intervalos.max(),
+        }
+    else:
+        estadisticas = {
+            'media': 0,
+            'mediana': 0,
+            'desviacion': 0,
+            'percentil_25': 0,
+            'percentil_75': 0,
+            'min': 0,
+            'max': 0,
+        }
+
+    # 3. Calcular distribución por intervalo de 10 minutos
+    tickets_por_intervalo = calcular_estadisticas_distribucion(
+        horario_df,
+        tiempo_atencion
+    )
+
+    return {
+        'tiempo_atencion': tiempo_atencion,
+        'tickets_por_intervalo': tickets_por_intervalo,
+        'estadisticas_intervalos': estadisticas,
+        'total_tickets': len(horario_df),
+    }

@@ -596,6 +596,16 @@ def load_all_data():
                         data['horario_semana_matrix'] = horario_pivot
                         print(f"[OK] Processed horario data: {horario_semana.shape}")
 
+                        # Calcular análisis de cajas
+                        from src.queue_analysis import procesar_datos_analisis_cajas
+                        try:
+                            analisis_cajas = procesar_datos_analisis_cajas(horario_df)
+                            data['analisis_cajas'] = analisis_cajas
+                            print(f"[OK] Queue analysis processed: {analisis_cajas['total_tickets']} tickets")
+                        except Exception as e:
+                            print(f"[ERROR] Error processing queue analysis: {e}")
+                            data['analisis_cajas'] = None
+
             except Exception as e:
                 print(f"[ERROR] Error processing horario CSV: {e}")
                 data['horario_semana'] = pd.DataFrame()

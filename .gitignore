@@ -79,6 +79,8 @@ _ul/
 final/
 scripts/
 src/
+# Excepciones para módulos necesarios de src/
+!src/queue_analysis.py
 
 # Archivos temporales y de configuración local
 *.bat
