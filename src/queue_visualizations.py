@@ -77,3 +77,104 @@ def crear_grafico_tickets_vs_cajas(tickets_por_intervalo: pd.DataFrame) -> go.Fi
     )
 
     return fig
+
+
+def crear_tabla_metricas(
+    estadisticas: dict,
+    tickets_por_intervalo: pd.DataFrame,
+    tiempo_atencion: float,
+    total_cajas_disponibles: int = 8
+) -> pd.DataFrame:
+    """
+    Crea tabla con métricas de distribución de cajas por hora.
+
+    Agrupa los datos de intervalos de 10 minutos por hora y presenta:
+    - Franja Horaria
+    - Total Tickets
+    - Cajas Necesarias (máximo en esa hora)
+    - Cajas Recomendadas (ajustado al máximo disponible)
+    - Utilización (%)
+    - Tickets/Minuto
+
+    Args:
+        estadisticas: Dict con estadísticas de intervalos (no usado en lógica actual)
+        tickets_por_intervalo: DataFrame con columnas intervalo_10min, tickets, cajas_necesarias
+        tiempo_atencion: Tiempo promedio de atención (no usado en lógica actual)
+        total_cajas_disponibles: Total de cajas disponibles (default: 8)
+
+    Returns:
+        pd.DataFrame con métricas horarias
+    """
+    df = tickets_por_intervalo.copy()
+
+    # Agrupar por hora (no 10 min) para tabla resumen
+    df['hora'] = df['intervalo_10min'].dt.floor('h').dt.strftime('%H:00')
+    df_resumen = df.groupby('hora').agg({
+        'tickets': 'sum',
+        'cajas_necesarias': 'max',  # Max en esa hora
+    }).reset_index()
+
+    # Cajas recomendadas (ajustar al máximo disponible)
+    df_resumen['cajas_recomendadas'] = df_resumen['cajas_necesarias'].apply(
+        lambda x: min(x, total_cajas_disponibles)
+    )
+
+    # Utilización (%)
+    df_resumen['utilizacion_pct'] = (
+        df_resumen['cajas_recomendadas'] / total_cajas_disponibles * 100
+    ).round(1)
+
+    # Tickets por minuto
+    df_resumen['tickets_por_minuto'] = (df_resumen['tickets'] / 60).round(2)
+
+    # Renombrar columnas para presentación
+    df_resumen.columns = [
+        'Franja Horaria',
+        'Total Tickets',
+        'Cajas Necesarias',
+        'Cajas Recomendadas',
+        'Utilización (%)',
+        'Tickets/Minuto'
+    ]
+
+    return df_resumen
+
+
+def crear_tabla_estadisticas_intervalo(estadisticas: dict) -> pd.DataFrame:
+    """
+    Crea tabla con estadísticas de intervalos entre tickets.
+
+    Presenta las métricas estadísticas principales en formato tabular,
+    con valores formateados a 2 decimales.
+
+    Columnas: Métrica, Valor (en minutos)
+
+    Args:
+        estadisticas: Dict con keys: media, mediana, desviacion, percentil_25,
+                     percentil_75, min, max (todos en minutos)
+
+    Returns:
+        pd.DataFrame con 7 filas de estadísticas
+    """
+    datos = {
+        'Métrica': [
+            'Media (minutos)',
+            'Mediana (minutos)',
+            'Desviación Estándar',
+            'Percentil 25 (minutos)',
+            'Percentil 75 (minutos)',
+            'Mínimo (minutos)',
+            'Máximo (minutos)',
+        ],
+        'Valor': [
+            f"{estadisticas['media']:.2f}",
+            f"{estadisticas['mediana']:.2f}",
+            f"{estadisticas['desviacion']:.2f}",
+            f"{estadisticas['percentil_25']:.2f}",
+            f"{estadisticas['percentil_75']:.2f}",
+            f"{estadisticas['min']:.2f}",
+            f"{estadisticas['max']:.2f}",
+        ]
+    }
+
+    return pd.DataFrame(datos)
