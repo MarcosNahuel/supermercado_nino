@@ -1905,6 +1905,62 @@ elif selected_menu == "📈 Análisis Temporal":
         else:
             st.info("No se pudo construir la vista horaria; verificar la fuente `comprobantes_ventas_horario.csv`.")
 
+    # =========== NUEVO: ANÁLISIS DE CAPACIDAD DE CAJAS ===========
+    st.markdown("### Análisis de Capacidad de Cajas")
+
+    analisis_cajas = data.get('analisis_cajas')
+    if analisis_cajas and analisis_cajas.get('tickets_por_intervalo') is not None:
+        from src.queue_visualizations import (
+            crear_grafico_tickets_vs_cajas,
+            crear_tabla_metricas,
+            crear_tabla_estadisticas_intervalo
+        )
+
+        # Gráfico 1: Líneas de tickets vs cajas
+        tickets_por_intervalo = analisis_cajas['tickets_por_intervalo']
+        fig_cajas = crear_grafico_tickets_vs_cajas(tickets_por_intervalo)
+        render_plotly(fig_cajas)
+
+        # Espacio
+        st.divider()
+
+        # Tabla 1: Métricas por hora
+        st.markdown("#### Distribución Horaria de Cajas")
+        tabla_metricas = crear_tabla_metricas(
+            analisis_cajas['estadisticas_intervalos'],
+            tickets_por_intervalo,
+            analisis_cajas['tiempo_atencion'],
+            total_cajas_disponibles=8
+        )
+        st.dataframe(tabla_metricas, use_container_width=True, hide_index=True)
+
+        # Tabla 2: Estadísticas de intervalos
+        st.markdown("#### Estadísticas de Intervalo entre Tickets")
+        st.caption("Basado en diferencia real entre emisión de comprobantes consecutivos")
+        tabla_estadisticas = crear_tabla_estadisticas_intervalo(
+            analisis_cajas['estadisticas_intervalos']
+        )
+        st.dataframe(tabla_estadisticas, use_container_width=True, hide_index=True)
+
+        # Resumen con fuente
+        st.markdown("#### Fuente y Metodología")
+        col1, col2 = st.columns(2)
+        with col1:
+            st.metric("Tiempo promedio de atención",
+                      f"{analisis_cajas['tiempo_atencion']:.2f} minutos")
+            st.metric("Total de comprobantes analizados",
+                      analisis_cajas['total_tickets'])
+
+        with col2:
+            st.info(
+                "**Modelo:** M/M/c (Teoría de Colas - Erlang C)\n"
+                "**Fuente:** ISO 18030 - Gestión Operativa de Servicios\n"
+                "**Cálculo:** Basado en intervalo real entre tickets\n"
+                "**Factor de seguridad:** 80% de utilización máxima"
+            )
+    else:
+        st.info("No se pudo procesar el análisis de cajas. Verificar datos de comprobantes_ventas_horario.csv.")
+
     # -------------------------
     # ESTACIONALIDAD Y EVENTOS (Expander)
     # -------------------------
