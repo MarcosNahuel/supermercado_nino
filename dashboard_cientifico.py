@@ -1071,7 +1071,7 @@ if selected_menu == "📊 Resumen Ejecutivo":
 
     col1, col2, col3, col4 = st.columns(4)
     with col1:
-        st.metric("📅 Período", f"{alcance['min_fecha'].strftime('%d/%m/%Y')}\n{alcance['max_fecha'].strftime('%d/%m/%Y')}")
+        st.metric("📅 Período", f"{alcance['min_fecha'].strftime('%d/%m/%y')} – {alcance['max_fecha'].strftime('%d/%m/%y')}")
     with col2:
         st.metric("🧾 Tickets", formatear_numero_argentino(alcance['n_tickets']))
     with col3:
@@ -2500,7 +2500,14 @@ elif selected_menu == "⏰ Horarios":
                 xaxis_title='Hora del día (bloques de 10 minutos)',
                 yaxis_title='Demora entre tickets (minutos)',
                 hovermode='x unified',
-                margin=dict(l=0, r=0, t=20, b=0)
+                margin=dict(l=0, r=0, t=40, b=0),
+                annotations=[dict(
+                    x=0.5, y=1.08, xref='paper', yref='paper',
+                    text='⚠️ Receso 13:00–16:00 (sin actividad)',
+                    showarrow=False,
+                    font=dict(size=11, color='#888'),
+                    align='center'
+                )]
             )
             fig_demora.update_xaxes(type='category', tickvals=tickvals_ib)
             fig_demora = configurar_grafico_rendimiento(fig_demora)
@@ -2508,7 +2515,7 @@ elif selected_menu == "⏰ Horarios":
             st.caption(
                 "Demora media entre tickets consecutivos dentro del mismo punto de venta (proxy caja), "
                 "por bloque de 10 minutos. Solo intervalos ≤ 30 min (excluye pausas largas). "
-                "Banda = rango intercuartil P25-P75."
+                "Banda = rango intercuartil P25-P75. El corte visible a las 13:00 corresponde al receso del mediodía."
             )
         else:
             st.info("No hay suficientes datos de intervalos para este período.")
