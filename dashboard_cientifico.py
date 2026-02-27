@@ -737,15 +737,125 @@ def load_all_data():
 
                         print(f"[OK] Processed horario data: {horario_semana.shape}")
 
-                        # Calcular análisis de cajas
-                        from src.queue_analysis import procesar_datos_analisis_cajas
-                        try:
-                            analisis_cajas = procesar_datos_analisis_cajas(horario_df)
-                            data['analisis_cajas'] = analisis_cajas
-                            print(f"[OK] Queue analysis processed: {analisis_cajas['total_tickets']} tickets")
-                        except Exception as e:
-                            print(f"[ERROR] Error processing queue analysis: {e}")
-                            data['analisis_cajas'] = None
+                        # Precomputar análisis de horarios por cuatrimestre (solo pagos, per-PV intra-día)
+                        def _get_cuatrimestre(fecha):
+                            q = (fecha.month - 1) // 4 + 1
+                            return f"Q{q} {fecha.year}"
+
+                        # Filtrar solo pagos (Factura A, B, FCE)
+                        horario_df_pagos = horario_df[
+                            horario_df['Comprobante'].str.startswith(
+                                ('Factura A', 'Factura B', 'Factura FCE'), na=False
+                            )
+                        ].copy()
+                        horario_df_pagos['cuatrimestre'] = horario_df_pagos['Fecha'].apply(_get_cuatrimestre)
+                        horario_df_pagos['punto_venta'] = horario_df_pagos['Comprobante'].str.extract(
+                            r'(\d{4})-\d{8}', expand=False
+                        )
+                        horario_df_pagos['fecha_cal'] = horario_df_pagos['Fecha'].dt.normalize()
+
+                        cuatrimestres_disponibles = sorted(horario_df_pagos['cuatrimestre'].unique())
+                        data_horarios = {}
+
+                        for q_key in ['Todos'] + cuatrimestres_disponibles:
+                            df_q = (
+                                horario_df_pagos if q_key == 'Todos'
+                                else horario_df_pagos[horario_df_pagos['cuatrimestre'] == q_key].copy()
+                            )
+                            if df_q.empty:
+                                continue
+
+                            df_q = df_q.copy()
+                            df_q['minuto_dia_10'] = (
+                                df_q['Hora'].dt.hour * 60 + (df_q['Hora'].dt.minute // 10) * 10
+                            )
+                            dias_validos_q = np.sort(df_q['fecha_cal'].dropna().unique())
+                            bloques_10m_q = np.arange(0, 24 * 60, 10, dtype=int)
+
+                            conteo_10m_q = (
+                                df_q.groupby(['fecha_cal', 'minuto_dia_10'])
+                                .size()
+                                .rename('tickets')
+                                .reindex(
+                                    pd.MultiIndex.from_product(
+                                        [dias_validos_q, bloques_10m_q],
+                                        names=['fecha_cal', 'minuto_dia_10']
+                                    ),
+                                    fill_value=0
+                                )
+                                .reset_index()
+                            )
+
+                            stats_10m_q = (
+                                conteo_10m_q.groupby('minuto_dia_10')['tickets']
+                                .agg(
+                                    media='mean',
+                                    mediana='median',
+                                    desv=lambda s: s.std(ddof=0),
+                                    p25=lambda s: s.quantile(0.25),
+                                    p75=lambda s: s.quantile(0.75)
+                                )
+                                .reset_index()
+                                .sort_values('minuto_dia_10')
+                            )
+                            stats_10m_q['hora_label'] = stats_10m_q['minuto_dia_10'].apply(
+                                lambda m: f"{int(m // 60):02d}:{int(m % 60):02d}"
+                            )
+                            stats_10m_q['n_dias'] = int(len(dias_validos_q))
+
+                            # Intervalo entre tickets por bloque horario (per-PV, intra-día, cap 30 min)
+                            df_pv_q = df_q.dropna(subset=['punto_venta', 'timestamp']).sort_values(
+                                ['punto_venta', 'timestamp']
+                            ).copy()
+                            df_pv_q['delta_min'] = (
+                                df_pv_q.groupby(['punto_venta', 'fecha_cal'])['timestamp']
+                                .diff().dt.total_seconds().div(60)
+                            )
+                            df_pv_q = df_pv_q.dropna(subset=['delta_min'])
+                            df_pv_q = df_pv_q[
+                                (df_pv_q['delta_min'] >= 0) & (df_pv_q['delta_min'] <= 30)
+                            ]
+                            df_pv_q['bloque_10min'] = (
+                                df_pv_q['Hora'].dt.hour * 60 + (df_pv_q['Hora'].dt.minute // 10) * 10
+                            )
+
+                            if not df_pv_q.empty:
+                                intervalo_bloque_q = df_pv_q.groupby('bloque_10min')['delta_min'].agg(
+                                    media='mean',
+                                    mediana='median',
+                                    desv='std',
+                                    p25=lambda s: s.quantile(0.25),
+                                    p75=lambda s: s.quantile(0.75),
+                                    n='count'
+                                ).reset_index()
+                                intervalo_bloque_q['hora_label'] = intervalo_bloque_q['bloque_10min'].apply(
+                                    lambda m: f"{int(m // 60):02d}:{int(m % 60):02d}"
+                                )
+                                global_stats_q = {
+                                    'media_min': float(df_pv_q['delta_min'].mean()),
+                                    'mediana_min': float(df_pv_q['delta_min'].median()),
+                                    'desvio_min': float(df_pv_q['delta_min'].std(ddof=0)),
+                                    'p25_min': float(df_pv_q['delta_min'].quantile(0.25)),
+                                    'p75_min': float(df_pv_q['delta_min'].quantile(0.75)),
+                                    'n_intervalos': int(len(df_pv_q)),
+                                }
+                            else:
+                                intervalo_bloque_q = pd.DataFrame()
+                                global_stats_q = {
+                                    'media_min': 0, 'mediana_min': 0, 'desvio_min': 0,
+                                    'p25_min': 0, 'p75_min': 0, 'n_intervalos': 0,
+                                }
+
+                            data_horarios[q_key] = {
+                                'stats_10min': stats_10m_q,
+                                'intervalo_bloque': intervalo_bloque_q,
+                                'global_stats': global_stats_q,
+                                'n_tickets': int(len(df_q)),
+                                'n_dias': int(len(dias_validos_q)),
+                            }
+
+                        data['horarios'] = data_horarios
+                        print(f"[OK] Horarios precomputed: {list(data_horarios.keys())}")
 
             except Exception as e:
                 print(f"[ERROR] Error processing horario CSV: {e}")
@@ -923,6 +1033,7 @@ with st.sidebar:
     menu_options = [
         "📊 Resumen Ejecutivo",
         "📈 Análisis Temporal",
+        "⏰ Horarios",
         "🎯 Pareto & Mix",
         "🛒 Market Basket & Combos",
         "👑 Tribu Premium",
@@ -2040,189 +2151,11 @@ elif selected_menu == "📈 Análisis Temporal":
                     """,
                     unsafe_allow_html=True
                 )
-                horario_10min_stats = data.get('horario_10min_stats')
-                if horario_10min_stats is not None and not horario_10min_stats.empty:
-                    st.markdown("#### Tickets emitidos por bloques de 10 minutos")
-
-                    x_labels = horario_10min_stats['hora_label'].tolist()
-                    n_dias_10m = int(horario_10min_stats['n_dias'].iloc[0]) if 'n_dias' in horario_10min_stats.columns else 0
-                    tickvals_hora = x_labels[::6] if len(x_labels) >= 6 else x_labels
-
-                    fig_10min = go.Figure()
-                    fig_10min.add_trace(
-                        go.Scatter(
-                            x=x_labels,
-                            y=horario_10min_stats['p75_tickets'],
-                            mode='lines',
-                            line=dict(width=0),
-                            showlegend=False,
-                            hoverinfo='skip'
-                        )
-                    )
-                    fig_10min.add_trace(
-                        go.Scatter(
-                            x=x_labels,
-                            y=horario_10min_stats['p25_tickets'],
-                            mode='lines',
-                            line=dict(width=0),
-                            fill='tonexty',
-                            fillcolor='rgba(2, 119, 189, 0.15)',
-                            name='Rango P25-P75',
-                            hovertemplate='Hora: %{x}<br>P25: %{y:.2f} tickets<extra></extra>'
-                        )
-                    )
-                    fig_10min.add_trace(
-                        go.Scatter(
-                            x=x_labels,
-                            y=horario_10min_stats['media_tickets'],
-                            mode='lines',
-                            name='Media',
-                            line=dict(color='#0277bd', width=3),
-                            hovertemplate='Hora: %{x}<br>Media: %{y:.2f} tickets<extra></extra>'
-                        )
-                    )
-                    fig_10min.add_trace(
-                        go.Scatter(
-                            x=x_labels,
-                            y=horario_10min_stats['mediana_tickets'],
-                            mode='lines',
-                            name='Mediana',
-                            line=dict(color='#ef6c00', width=2, dash='dash'),
-                            hovertemplate='Hora: %{x}<br>Mediana: %{y:.2f} tickets<extra></extra>'
-                        )
-                    )
-                    fig_10min.update_layout(
-                        height=420,
-                        xaxis_title='Hora del dia (bloques de 10 minutos)',
-                        yaxis_title='Tickets por bloque',
-                        hovermode='x unified',
-                        margin=dict(l=0, r=0, t=20, b=0)
-                    )
-                    fig_10min.update_xaxes(type='category', tickvals=tickvals_hora)
-                    fig_10min = configurar_grafico_rendimiento(fig_10min)
-                    render_plotly(fig_10min)
-                    st.caption(
-                        f"Media y mediana por bloque de 10 minutos calculadas sobre {formatear_numero_argentino(n_dias_10m)} dias con datos."
-                    )
-
-                intervalo_ticket_stats = data.get('intervalo_ticket_stats')
-                intervalo_ticket_pv = data.get('intervalo_ticket_pv')
-                st.markdown("#### Diferencia entre ticket y el siguiente (minutos)")
-
-                if intervalo_ticket_stats is not None and not intervalo_ticket_stats.empty:
-                    escenarios_intervalo = intervalo_ticket_stats['escenario'].tolist()
-                    idx_default = 1 if len(escenarios_intervalo) > 1 else 0
-                    escenario_intervalo = st.radio(
-                        'Base de calculo',
-                        options=escenarios_intervalo,
-                        horizontal=True,
-                        index=idx_default,
-                        key='escenario_intervalo_tickets'
-                    )
-
-                    fila_intervalo = (
-                        intervalo_ticket_stats.loc[intervalo_ticket_stats['escenario'] == escenario_intervalo]
-                        .iloc[0]
-                    )
-
-                    ci1, ci2, ci3, ci4, ci5 = st.columns(5)
-                    with ci1:
-                        st.metric('Media (min)', formatear_numero_argentino(fila_intervalo['media_min'], 2))
-                    with ci2:
-                        st.metric('Mediana (min)', formatear_numero_argentino(fila_intervalo['mediana_min'], 2))
-                    with ci3:
-                        st.metric('Desvio (min)', formatear_numero_argentino(fila_intervalo['desvio_min'], 2))
-                    with ci4:
-                        st.metric('P25 (min)', formatear_numero_argentino(fila_intervalo['p25_min'], 2))
-                    with ci5:
-                        st.metric('P75 (min)', formatear_numero_argentino(fila_intervalo['p75_min'], 2))
-
-                    st.caption(
-                        f"Intervalos analizados: {formatear_numero_argentino(fila_intervalo['n_intervalos'])}. "
-                        "Para punto de venta se usa el codigo #### en Comprobante como proxy de caja."
-                    )
-
-                    if intervalo_ticket_pv is not None and not intervalo_ticket_pv.empty:
-                        top_pv = (
-                            intervalo_ticket_pv.sort_values('n_intervalos', ascending=False)
-                            .head(10)
-                            .sort_values('media_min')
-                        )
-                        fig_intervalo_pv = px.bar(
-                            top_pv,
-                            x='punto_venta',
-                            y='media_min',
-                            text=top_pv['media_min'].map(lambda x: f"{x:.2f}"),
-                            labels={'punto_venta': 'Punto de venta', 'media_min': 'Media minutos entre tickets'},
-                            title='Media de minutos entre tickets por punto de venta'
-                        )
-                        fig_intervalo_pv.update_traces(marker_color='#00897b', textposition='outside')
-                        fig_intervalo_pv.update_layout(height=340, margin=dict(l=0, r=0, t=45, b=0))
-                        fig_intervalo_pv = configurar_grafico_rendimiento(fig_intervalo_pv)
-                        render_plotly(fig_intervalo_pv)
-                else:
-                    st.info("No hay datos suficientes para calcular intervalos entre tickets.")
             except Exception as e:
                 print(f"[ERROR] Error creating horario chart: {e}")
                 st.info("Error generando gráfico horario. Verificar datos de comprobantes_ventas_horario.csv.")
         else:
             st.info("No se pudo construir la vista horaria; verificar la fuente `comprobantes_ventas_horario.csv`.")
-
-    # =========== NUEVO: ANÁLISIS DE CAPACIDAD DE CAJAS ===========
-    st.markdown("### Análisis de Capacidad de Cajas")
-
-    analisis_cajas = data.get('analisis_cajas')
-    if analisis_cajas and analisis_cajas.get('tickets_por_intervalo') is not None:
-        from src.queue_visualizations import (
-            crear_grafico_tickets_vs_cajas,
-            crear_tabla_metricas,
-            crear_tabla_estadisticas_intervalo
-        )
-
-        # Gráfico 1: Líneas de tickets vs cajas
-        tickets_por_intervalo = analisis_cajas['tickets_por_intervalo']
-        fig_cajas = crear_grafico_tickets_vs_cajas(tickets_por_intervalo)
-        render_plotly(fig_cajas)
-
-        # Espacio
-        st.divider()
-
-        # Tabla 1: Métricas por hora
-        st.markdown("#### Distribución Horaria de Cajas")
-        tabla_metricas = crear_tabla_metricas(
-            analisis_cajas['estadisticas_intervalos'],
-            tickets_por_intervalo,
-            analisis_cajas['tiempo_atencion'],
-            total_cajas_disponibles=8
-        )
-        st.dataframe(tabla_metricas, use_container_width=True, hide_index=True)
-
-        # Tabla 2: Estadísticas de intervalos
-        st.markdown("#### Estadísticas de Intervalo entre Tickets")
-        st.caption("Basado en diferencia real entre emisión de comprobantes consecutivos")
-        tabla_estadisticas = crear_tabla_estadisticas_intervalo(
-            analisis_cajas['estadisticas_intervalos']
-        )
-        st.dataframe(tabla_estadisticas, use_container_width=True, hide_index=True)
-
-        # Resumen con fuente
-        st.markdown("#### Fuente y Metodología")
-        col1, col2 = st.columns(2)
-        with col1:
-            st.metric("Tiempo promedio de atención",
-                      f"{analisis_cajas['tiempo_atencion']:.2f} minutos")
-            st.metric("Total de comprobantes analizados",
-                      analisis_cajas['total_tickets'])
-
-        with col2:
-            st.info(
-                "**Modelo:** M/M/c (Teoría de Colas - Erlang C)\n"
-                "**Fuente:** ISO 18030 - Gestión Operativa de Servicios\n"
-                "**Cálculo:** Basado en intervalo real entre tickets\n"
-                "**Factor de seguridad:** 80% de utilización máxima"
-            )
-    else:
-        st.info("No se pudo procesar el análisis de cajas. Verificar datos de comprobantes_ventas_horario.csv.")
 
     # -------------------------
     # ESTACIONALIDAD Y EVENTOS (Expander)
@@ -2427,6 +2360,180 @@ elif selected_menu == "📈 Análisis Temporal":
             render_plotly(fig_mensual)
         else:
             st.warning("No hay datos disponibles para el análisis de estacionalidad.")
+
+# =============================================================================
+# HORARIOS - ANÁLISIS DE DISTRIBUCIÓN Y DEMORA
+# =============================================================================
+elif selected_menu == "⏰ Horarios":
+    st.markdown("## ⏰ Análisis de Horarios")
+
+    horarios_data = data.get('horarios', {})
+
+    if not horarios_data:
+        st.info("No hay datos de horarios disponibles. Verificar la fuente `comprobantes_ventas_horario.csv`.")
+    else:
+        cuatrimestres_opciones = list(horarios_data.keys())
+        q_sel = st.selectbox(
+            "Período:",
+            cuatrimestres_opciones,
+            key='selector_cuatrimestre_horarios'
+        )
+
+        data_q = horarios_data[q_sel]
+        stats_10min = data_q['stats_10min']
+        intervalo_bloque = data_q['intervalo_bloque']
+        global_stats = data_q['global_stats']
+        n_tickets = data_q['n_tickets']
+        n_dias = data_q['n_dias']
+
+        # KPIs de contexto
+        kh1, kh2, kh3, kh4, kh5 = st.columns(5)
+        with kh1:
+            st.metric("Comprobantes (pagos)", formatear_numero_argentino(n_tickets))
+        with kh2:
+            st.metric("Días con datos", formatear_numero_argentino(n_dias))
+        with kh3:
+            st.metric("Media demora (min)", formatear_numero_argentino(global_stats['media_min'], 2))
+        with kh4:
+            st.metric("Mediana demora (min)", formatear_numero_argentino(global_stats['mediana_min'], 2))
+        with kh5:
+            st.metric("P75 demora (min)", formatear_numero_argentino(global_stats['p75_min'], 2))
+
+        st.caption(
+            f"Demora calculada como diferencia entre tickets consecutivos por caja (punto de venta), "
+            f"intra-día, descartando intervalos > 30 min. N={formatear_numero_argentino(global_stats['n_intervalos'])} intervalos."
+        )
+
+        st.divider()
+
+        # ---- Gráfico 1: Tickets promedio por bloque de 10 min ----
+        st.markdown("### Distribución de tickets por bloque de 10 minutos")
+        if stats_10min is not None and not stats_10min.empty:
+            x_labels = stats_10min['hora_label'].tolist()
+            tickvals_hora = x_labels[::6] if len(x_labels) >= 6 else x_labels
+
+            fig_10min = go.Figure()
+            # Banda P75-P25
+            fig_10min.add_trace(go.Scatter(
+                x=x_labels, y=stats_10min['p75'],
+                mode='lines', line=dict(width=0),
+                showlegend=False, hoverinfo='skip'
+            ))
+            fig_10min.add_trace(go.Scatter(
+                x=x_labels, y=stats_10min['p25'],
+                mode='lines', line=dict(width=0),
+                fill='tonexty', fillcolor='rgba(2, 119, 189, 0.15)',
+                name='Rango P25-P75',
+                hovertemplate='Hora: %{x}<br>P25: %{y:.2f} tickets<extra></extra>'
+            ))
+            # Media
+            fig_10min.add_trace(go.Scatter(
+                x=x_labels, y=stats_10min['media'],
+                mode='lines', name='Media',
+                line=dict(color='#0277bd', width=3),
+                hovertemplate='Hora: %{x}<br>Media: %{y:.2f} tickets<extra></extra>'
+            ))
+            # Mediana
+            fig_10min.add_trace(go.Scatter(
+                x=x_labels, y=stats_10min['mediana'],
+                mode='lines', name='Mediana',
+                line=dict(color='#ef6c00', width=2, dash='dash'),
+                hovertemplate='Hora: %{x}<br>Mediana: %{y:.2f} tickets<extra></extra>'
+            ))
+            fig_10min.update_layout(
+                height=420,
+                xaxis_title='Hora del día (bloques de 10 minutos)',
+                yaxis_title='Tickets promedio por bloque',
+                hovermode='x unified',
+                margin=dict(l=0, r=0, t=20, b=0)
+            )
+            fig_10min.update_xaxes(type='category', tickvals=tickvals_hora)
+            fig_10min = configurar_grafico_rendimiento(fig_10min)
+            render_plotly(fig_10min)
+            st.caption(
+                f"Promedio de tickets emitidos por bloque de 10 minutos, calculado sobre {formatear_numero_argentino(n_dias)} días. "
+                "Solo comprobantes de pago (Factura A, B, FCE). Banda = rango intercuartil P25-P75."
+            )
+        else:
+            st.info("No hay datos de distribución horaria disponibles.")
+
+        st.divider()
+
+        # ---- Gráfico 2: Demora promedio entre tickets por bloque horario ----
+        st.markdown("### Demora entre tickets por bloque de 10 minutos (en minutos)")
+        if intervalo_bloque is not None and not intervalo_bloque.empty:
+            # Solo bloques con actividad significativa
+            ib = intervalo_bloque[intervalo_bloque['n'] >= 10].copy()
+            x_ib = ib['hora_label'].tolist()
+            tickvals_ib = x_ib[::6] if len(x_ib) >= 6 else x_ib
+
+            fig_demora = go.Figure()
+            # Banda P25-P75
+            fig_demora.add_trace(go.Scatter(
+                x=x_ib, y=ib['p75'],
+                mode='lines', line=dict(width=0),
+                showlegend=False, hoverinfo='skip'
+            ))
+            fig_demora.add_trace(go.Scatter(
+                x=x_ib, y=ib['p25'],
+                mode='lines', line=dict(width=0),
+                fill='tonexty', fillcolor='rgba(211, 47, 47, 0.12)',
+                name='Rango P25-P75',
+                hovertemplate='Hora: %{x}<br>P25: %{y:.2f} min<extra></extra>'
+            ))
+            # Media
+            fig_demora.add_trace(go.Scatter(
+                x=x_ib, y=ib['media'],
+                mode='lines', name='Media',
+                line=dict(color='#d32f2f', width=3),
+                hovertemplate='Hora: %{x}<br>Media: %{y:.2f} min<extra></extra>'
+            ))
+            # Mediana
+            fig_demora.add_trace(go.Scatter(
+                x=x_ib, y=ib['mediana'],
+                mode='lines', name='Mediana',
+                line=dict(color='#f57c00', width=2, dash='dash'),
+                hovertemplate='Hora: %{x}<br>Mediana: %{y:.2f} min<extra></extra>'
+            ))
+            fig_demora.update_layout(
+                height=420,
+                xaxis_title='Hora del día (bloques de 10 minutos)',
+                yaxis_title='Demora entre tickets (minutos)',
+                hovermode='x unified',
+                margin=dict(l=0, r=0, t=20, b=0)
+            )
+            fig_demora.update_xaxes(type='category', tickvals=tickvals_ib)
+            fig_demora = configurar_grafico_rendimiento(fig_demora)
+            render_plotly(fig_demora)
+            st.caption(
+                "Demora media entre tickets consecutivos dentro del mismo punto de venta (proxy caja), "
+                "por bloque de 10 minutos. Solo intervalos ≤ 30 min (excluye pausas largas). "
+                "Banda = rango intercuartil P25-P75."
+            )
+        else:
+            st.info("No hay suficientes datos de intervalos para este período.")
+
+        st.divider()
+
+        # ---- Tabla de estadísticas globales ----
+        st.markdown("### Estadísticas de demora entre tickets (minutos)")
+        tabla_stats = pd.DataFrame({
+            'Métrica': ['Media', 'Mediana', 'Desv. estándar', 'Percentil 25', 'Percentil 75'],
+            'Valor (min)': [
+                f"{global_stats['media_min']:.2f}",
+                f"{global_stats['mediana_min']:.2f}",
+                f"{global_stats['desvio_min']:.2f}",
+                f"{global_stats['p25_min']:.2f}",
+                f"{global_stats['p75_min']:.2f}",
+            ]
+        })
+        st.dataframe(tabla_stats, use_container_width=True, hide_index=True)
+
+        st.info(
+            "**Metodología:** Diferencia entre comprobantes consecutivos por punto de venta (caja) dentro del mismo día. "
+            "Se excluyen intervalos > 30 min para evitar distorsión por pausas al mediodía y turnos. "
+            "Solo se consideran comprobantes de pago (Factura A, Factura B, Factura FCE)."
+        )
 
 # =============================================================================
 # MÁRGENES - COSTOS
