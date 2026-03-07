@@ -2096,66 +2096,7 @@ elif selected_menu == "📈 Análisis Temporal":
                 unsafe_allow_html=True
             )
 
-        horario_matrix = data.get('horario_semana_matrix')
-        horario_semana = data.get('horario_semana')
-        st.markdown("### Horario semanal - Comprobantes por hora")
-        if (
-            horario_matrix is not None and hasattr(horario_matrix, 'empty') and not horario_matrix.empty
-            and horario_semana is not None and not horario_semana.empty
-        ):
-            try:
-                fig_horario = go.Figure(
-                    data=go.Heatmap(
-                        z=horario_matrix.values,
-                        x=[f"{int(h):02d}h" for h in horario_matrix.columns],
-                        y=horario_matrix.index.tolist(),
-                        colorscale='Blues',
-                        colorbar=dict(title='Comprobantes')
-                    )
-                )
-                fig_horario.update_layout(
-                    height=420,
-                    xaxis_title="Hora del día",
-                    yaxis_title="Día de la semana",
-                    margin=dict(l=0, r=0, t=30, b=0)
-                )
-                render_plotly(fig_horario)
-
-                top_horas = horario_semana.loc[
-                    horario_semana.groupby('dia_idx')['comprobantes'].idxmax()
-                ].sort_values('dia_idx')
-                global_top = horario_semana.sort_values('comprobantes', ascending=False).head(3)
-
-                resumen_lines = [
-                    f"<li><b>{row['dia']}</b>: pico a las <b>{int(row['hora']):02d}:00</b> con {formatear_numero_argentino(row['comprobantes'])} comprobantes.</li>"
-                    for _, row in top_horas.iterrows()
-                ]
-                global_lines = [
-                    f"<li>{row['dia']} - {int(row['hora']):02d}:00 ({formatear_numero_argentino(row['comprobantes'])} comprobantes)</li>"
-                    for _, row in global_top.iterrows()
-                ]
-                st.markdown(
-                    f"""
-                    <div style='background: #e1f5fe; border-left: 6px solid #039be5;
-                               padding: 18px; margin: 16px 0; border-radius: 10px;'>
-                        <h4 style='color: #0277bd; margin: 0;'>Claves de la semana por hora</h4>
-                        <p style='margin: 8px 0 0 0;'>Picos por día:</p>
-                        <ul style='margin: 6px 0 0 16px;'>
-                            {''.join(resumen_lines)}
-                        </ul>
-                        <p style='margin: 14px 0 0 0;'>Top 3 horarios generales:</p>
-                        <ul style='margin: 6px 0 0 16px;'>
-                            {''.join(global_lines)}
-                        </ul>
-                    </div>
-                    """,
-                    unsafe_allow_html=True
-                )
-            except Exception as e:
-                print(f"[ERROR] Error creating horario chart: {e}")
-                st.info("Error generando gráfico horario. Verificar datos de comprobantes_ventas_horario.csv.")
-        else:
-            st.info("No se pudo construir la vista horaria; verificar la fuente `comprobantes_ventas_horario.csv`.")
+        # Sección "Horario semanal" movida a menú Horarios
 
     # -------------------------
     # ESTACIONALIDAD Y EVENTOS (Expander)
@@ -2541,6 +2482,275 @@ elif selected_menu == "⏰ Horarios":
             "Se excluyen intervalos > 30 min para evitar distorsión por pausas al mediodía y turnos. "
             "Solo se consideran comprobantes de pago (Factura A, Factura B, Factura FCE)."
         )
+
+        st.divider()
+
+        # ---- Bloque: Dotación recomendada de cajas por franja ----
+        st.markdown("### Dotación recomendada de cajas por franja horaria")
+
+        _franjas_def = [
+            (480, 600, '08:00–10:00'),
+            (600, 720, '10:00–12:00'),
+            (720, 780, '12:00–13:00'),
+            (960, 1080, '16:00–18:00'),
+            (1080, 1200, '18:00–20:00'),
+            (1200, 1260, '20:00–21:00'),
+        ]
+
+        df_franjas = pd.DataFrame()
+
+        if stats_10min is not None and not stats_10min.empty:
+            tiempo_atencion = global_stats['media_min']
+            mu = 1.0 / tiempo_atencion if tiempo_atencion > 0 else 1.0
+
+            franjas_rows = []
+            for f_start, f_end, f_label in _franjas_def:
+                mask_f = (stats_10min['minuto_dia_10'] >= f_start) & (stats_10min['minuto_dia_10'] < f_end)
+                bloque_f = stats_10min[mask_f]
+                if bloque_f.empty:
+                    continue
+                avg_tickets_10min = bloque_f['media'].mean()
+                tickets_dia_franja = bloque_f['media'].sum()
+                lam = avg_tickets_10min / 10.0
+                rho = lam / mu
+                cajas = max(1, min(8, int(np.ceil(rho / 0.8))))
+
+                demora_media_f = None
+                demora_p75_f = None
+                if intervalo_bloque is not None and not intervalo_bloque.empty:
+                    mask_ib = (intervalo_bloque['bloque_10min'] >= f_start) & (intervalo_bloque['bloque_10min'] < f_end)
+                    ib_f = intervalo_bloque[mask_ib]
+                    if not ib_f.empty:
+                        demora_media_f = ib_f['media'].mean()
+                        demora_p75_f = ib_f['p75'].mean()
+
+                franjas_rows.append({
+                    'franja': f_label,
+                    'tickets_prom_10min': avg_tickets_10min,
+                    'tickets_prom_dia': tickets_dia_franja,
+                    'lambda': lam,
+                    'rho': rho,
+                    'cajas': cajas,
+                    'demora_media': demora_media_f,
+                    'demora_p75': demora_p75_f,
+                })
+
+            if franjas_rows:
+                df_franjas = pd.DataFrame(franjas_rows)
+
+                def _color_cajas(n):
+                    if n <= 2:
+                        return '#4caf50'
+                    elif n <= 4:
+                        return '#ffc107'
+                    elif n <= 6:
+                        return '#ff9800'
+                    return '#f44336'
+
+                colors_f = [_color_cajas(c) for c in df_franjas['cajas']]
+
+                fig_dotacion = go.Figure()
+                fig_dotacion.add_trace(go.Bar(
+                    y=df_franjas['franja'],
+                    x=df_franjas['cajas'],
+                    orientation='h',
+                    marker_color=colors_f,
+                    text=[f"{c} {'caja' if c == 1 else 'cajas'}" for c in df_franjas['cajas']],
+                    textposition='auto',
+                    hovertemplate=(
+                        'Franja: %{y}<br>'
+                        'Cajas: %{x}<br>'
+                        'Tickets prom/10min: %{customdata[0]:.1f}<br>'
+                        'Tickets prom/día: %{customdata[1]:.0f}<extra></extra>'
+                    ),
+                    customdata=list(zip(df_franjas['tickets_prom_10min'], df_franjas['tickets_prom_dia'])),
+                ))
+                fig_dotacion.update_layout(
+                    height=350,
+                    xaxis_title='Cajas recomendadas',
+                    xaxis=dict(range=[0, 9], dtick=1),
+                    margin=dict(l=0, r=0, t=20, b=0),
+                )
+                fig_dotacion = configurar_grafico_rendimiento(fig_dotacion)
+                render_plotly(fig_dotacion)
+
+                pico_f = df_franjas.loc[df_franjas['cajas'].idxmax()]
+                st.caption(
+                    f"Franja pico: **{pico_f['franja']}** con {int(pico_f['cajas'])} cajas recomendadas "
+                    f"({formatear_numero_argentino(pico_f['tickets_prom_dia'], 1)} tickets promedio/día)."
+                )
+
+                st.info(
+                    f"**Metodología:** Modelo de colas con objetivo de utilización ≤ 80% por caja. "
+                    f"Tasa de servicio: 1 cliente cada {formatear_numero_argentino(tiempo_atencion, 2)} min "
+                    f"(proxy: demora media entre tickets por PV). Máximo 8 cajas físicas."
+                )
+        else:
+            st.info("No hay datos suficientes para calcular la dotación de cajas.")
+
+        st.divider()
+
+        # ---- Bloque: Heatmap intensidad día × franja ----
+        st.markdown("### Mapa de intensidad: Día × Franja horaria")
+
+        horario_matrix_heat = data.get('horario_semana_matrix')
+        if (
+            horario_matrix_heat is not None
+            and hasattr(horario_matrix_heat, 'empty')
+            and not horario_matrix_heat.empty
+        ):
+            _franjas_horas = [
+                ([8, 9], '08–10'),
+                ([10, 11], '10–12'),
+                ([12], '12–13'),
+                ([16, 17], '16–18'),
+                ([18, 19], '18–20'),
+                ([20], '20–21'),
+            ]
+
+            heatmap_cols = {}
+            for horas_h, label_h in _franjas_horas:
+                cols_h = [h for h in horas_h if h in horario_matrix_heat.columns]
+                if cols_h:
+                    heatmap_cols[label_h] = horario_matrix_heat[cols_h].sum(axis=1)
+
+            if heatmap_cols:
+                df_heat = pd.DataFrame(heatmap_cols)
+                dias_ord = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
+                df_heat = df_heat.reindex([d for d in dias_ord if d in df_heat.index])
+
+                fig_heat = go.Figure(data=go.Heatmap(
+                    z=df_heat.values,
+                    x=df_heat.columns.tolist(),
+                    y=df_heat.index.tolist(),
+                    colorscale=[[0, '#4caf50'], [0.5, '#ffc107'], [1, '#f44336']],
+                    text=[[str(int(v)) for v in row] for row in df_heat.values],
+                    texttemplate='%{text}',
+                    hovertemplate='%{y} %{x}<br>Comprobantes: %{z:,.0f}<extra></extra>',
+                    colorbar=dict(title='Comprobantes'),
+                ))
+                fig_heat.update_layout(
+                    height=380,
+                    xaxis_title='Franja horaria',
+                    margin=dict(l=0, r=0, t=20, b=0),
+                )
+                fig_heat = configurar_grafico_rendimiento(fig_heat)
+                render_plotly(fig_heat)
+                st.caption(
+                    "Total de comprobantes por combinación día-franja, acumulado sobre todo el período. "
+                    "Verde = baja actividad, rojo = alta actividad."
+                )
+            else:
+                st.info("No hay datos suficientes para el mapa de intensidad.")
+        else:
+            st.info("No hay datos de horario semanal para el mapa de intensidad.")
+
+        st.divider()
+
+        # ---- Bloque: Tabla resumen exportable ----
+        st.markdown("### Resumen por franja horaria")
+
+        if not df_franjas.empty:
+            tabla_export = pd.DataFrame({
+                'Franja Horaria': df_franjas['franja'],
+                'Tickets Prom/Día': df_franjas['tickets_prom_dia'].apply(
+                    lambda x: formatear_numero_argentino(x, 1)
+                ),
+                'Demora Media (min)': df_franjas['demora_media'].apply(
+                    lambda x: formatear_numero_argentino(x, 2) if pd.notna(x) else '–'
+                ),
+                'Demora P75 (min)': df_franjas['demora_p75'].apply(
+                    lambda x: formatear_numero_argentino(x, 2) if pd.notna(x) else '–'
+                ),
+                'Cajas Recomendadas': df_franjas['cajas'],
+                'Intensidad (ρ)': df_franjas['rho'].apply(
+                    lambda x: formatear_numero_argentino(x, 2)
+                ),
+            })
+            st.dataframe(tabla_export, use_container_width=True, hide_index=True)
+
+            csv_export = pd.DataFrame({
+                'Franja Horaria': df_franjas['franja'],
+                'Tickets Prom/Dia': df_franjas['tickets_prom_dia'].round(1),
+                'Demora Media (min)': df_franjas['demora_media'].round(2),
+                'Demora P75 (min)': df_franjas['demora_p75'].round(2),
+                'Cajas Recomendadas': df_franjas['cajas'],
+                'Intensidad': df_franjas['rho'].round(2),
+            })
+            csv_data = csv_export.to_csv(index=False, sep=';')
+            st.download_button(
+                label="Descargar resumen CSV",
+                data=csv_data,
+                file_name=f"horarios_resumen_{q_sel.replace(' ', '_')}.csv",
+                mime='text/csv',
+            )
+        else:
+            st.info("No hay datos suficientes para generar la tabla resumen.")
+
+        st.divider()
+
+        # ---- Heatmap: Horario semanal - Comprobantes por hora ----
+        st.markdown("### Horario semanal - Comprobantes por hora")
+        horario_matrix = data.get('horario_semana_matrix')
+        horario_semana = data.get('horario_semana')
+        if (
+            horario_matrix is not None and hasattr(horario_matrix, 'empty') and not horario_matrix.empty
+            and horario_semana is not None and not horario_semana.empty
+        ):
+            try:
+                fig_horario = go.Figure(
+                    data=go.Heatmap(
+                        z=horario_matrix.values,
+                        x=[f"{int(h):02d}h" for h in horario_matrix.columns],
+                        y=horario_matrix.index.tolist(),
+                        colorscale='Blues',
+                        colorbar=dict(title='Comprobantes')
+                    )
+                )
+                fig_horario.update_layout(
+                    height=420,
+                    xaxis_title="Hora del día",
+                    yaxis_title="Día de la semana",
+                    margin=dict(l=0, r=0, t=30, b=0)
+                )
+                fig_horario = configurar_grafico_rendimiento(fig_horario)
+                render_plotly(fig_horario)
+
+                top_horas = horario_semana.loc[
+                    horario_semana.groupby('dia_idx')['comprobantes'].idxmax()
+                ].sort_values('dia_idx')
+                global_top = horario_semana.sort_values('comprobantes', ascending=False).head(3)
+
+                resumen_lines = [
+                    f"<li><b>{row['dia']}</b>: pico a las <b>{int(row['hora']):02d}:00</b> con {formatear_numero_argentino(row['comprobantes'])} comprobantes.</li>"
+                    for _, row in top_horas.iterrows()
+                ]
+                global_lines = [
+                    f"<li>{row['dia']} - {int(row['hora']):02d}:00 ({formatear_numero_argentino(row['comprobantes'])} comprobantes)</li>"
+                    for _, row in global_top.iterrows()
+                ]
+                st.markdown(
+                    f"""
+                    <div style='background: #e1f5fe; border-left: 6px solid #039be5;
+                               padding: 18px; margin: 16px 0; border-radius: 10px;'>
+                        <h4 style='color: #0277bd; margin: 0;'>Claves de la semana por hora</h4>
+                        <p style='margin: 8px 0 0 0;'>Picos por día:</p>
+                        <ul style='margin: 6px 0 0 16px;'>
+                            {''.join(resumen_lines)}
+                        </ul>
+                        <p style='margin: 14px 0 0 0;'>Top 3 horarios generales:</p>
+                        <ul style='margin: 6px 0 0 16px;'>
+                            {''.join(global_lines)}
+                        </ul>
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
+            except Exception as e:
+                print(f"[ERROR] Error creating horario chart: {e}")
+                st.info("Error generando gráfico horario. Verificar datos de comprobantes_ventas_horario.csv.")
+        else:
+            st.info("No se pudo construir la vista horaria; verificar la fuente `comprobantes_ventas_horario.csv`.")
 
 # =============================================================================
 # MÁRGENES - COSTOS
