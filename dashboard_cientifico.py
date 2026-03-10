@@ -2353,7 +2353,33 @@ elif selected_menu == "⏰ Horarios":
             x_labels = stats_10min['hora_label'].tolist()
             tickvals_hora = x_labels[::6] if len(x_labels) >= 6 else x_labels
 
+            # Calcular cajas recomendadas por bloque de 10 min (eje secundario)
+            _mu_10min = 1.0 / global_stats['media_min'] if global_stats['media_min'] > 0 else 1.0
+            _lam_10min = stats_10min['media'] / 10.0
+            _rho_10min = _lam_10min / _mu_10min
+
+            def _cajas_color(n):
+                if n == 0: return 'rgba(0,0,0,0)'
+                if n <= 2: return 'rgba(76,175,80,0.35)'
+                if n <= 4: return 'rgba(255,193,7,0.35)'
+                if n <= 6: return 'rgba(255,152,0,0.35)'
+                return 'rgba(244,67,54,0.35)'
+
+            _cajas_10min = _rho_10min.apply(
+                lambda r: max(1, min(8, int(np.ceil(r / 0.8)))) if r > 0.05 else 0
+            )
+            _colors_10min = [_cajas_color(c) for c in _cajas_10min]
+
             fig_10min = go.Figure()
+            # Barras de cajas (fondo, eje secundario)
+            fig_10min.add_trace(go.Bar(
+                x=x_labels, y=_cajas_10min,
+                name='Cajas recomendadas',
+                yaxis='y2',
+                marker_color=_colors_10min,
+                marker_line_width=0,
+                hovertemplate='Hora: %{x}<br>Cajas: %{y}<extra></extra>',
+            ))
             # Banda P75-P25
             fig_10min.add_trace(go.Scatter(
                 x=x_labels, y=stats_10min['p75'],
@@ -2385,15 +2411,26 @@ elif selected_menu == "⏰ Horarios":
                 height=420,
                 xaxis_title='Hora del día (bloques de 10 minutos)',
                 yaxis_title='Tickets promedio por bloque',
+                yaxis2=dict(
+                    title='Cajas recomendadas',
+                    overlaying='y',
+                    side='right',
+                    range=[0, 10],
+                    dtick=1,
+                    showgrid=False,
+                    tickfont=dict(size=11),
+                ),
                 hovermode='x unified',
-                margin=dict(l=0, r=0, t=20, b=0)
+                margin=dict(l=0, r=50, t=20, b=0),
+                barmode='overlay',
             )
             fig_10min.update_xaxes(type='category', tickvals=tickvals_hora)
             fig_10min = configurar_grafico_rendimiento(fig_10min)
             render_plotly(fig_10min)
             st.caption(
                 f"Promedio de tickets emitidos por bloque de 10 minutos, calculado sobre {formatear_numero_argentino(n_dias)} días. "
-                "Solo comprobantes de pago (Factura A, B, FCE). Banda = rango intercuartil P25-P75."
+                "Solo comprobantes de pago (Factura A, B, FCE). Banda = rango intercuartil P25-P75. "
+                "Barras de fondo = cajas recomendadas (eje derecho, colores: verde ≤2, amarillo ≤4, naranja ≤6, rojo 7-8)."
             )
         else:
             st.info("No hay datos de distribución horaria disponibles.")
