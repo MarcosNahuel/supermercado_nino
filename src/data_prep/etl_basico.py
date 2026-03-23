@@ -81,7 +81,7 @@ def run_etl(
     feriados: Optional[pd.DataFrame] = None,
     *,
     fallback_rentabilidad: float = 18.0,
-    fecha_corte: str = "2025-12-31",
+    fecha_corte: str = "2026-03-31",
 ) -> EtlArtifacts:
     """Execute ETL steps and return canonical datasets."""
     rename_columns = {
