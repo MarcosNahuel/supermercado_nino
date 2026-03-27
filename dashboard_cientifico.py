@@ -1035,6 +1035,7 @@ with st.sidebar:
         "📈 Análisis Temporal",
         "⏰ Horarios",
         "🎯 Pareto & Mix",
+        "🍰 Elab. Propia",
         "🛒 Market Basket & Combos",
         "👑 Tribu Premium",
         "👥 Segmentación",
@@ -3460,6 +3461,382 @@ elif selected_menu == "🎯 Pareto & Mix":
             ''',
             unsafe_allow_html=True
         )
+# =============================================================================
+# ELABORACIÓN PROPIA: PASTELERÍA & ROTISERÍA
+# =============================================================================
+elif selected_menu == "🍰 Elab. Propia":
+    st.markdown("## 🍰 Elaboración Propia — Pastelería & Rotisería")
+    st.markdown("Análisis Pareto detallado de los dos departamentos de elaboración propia con mayor potencial de optimización.")
+
+    pareto_prod = data.get('pareto_prod')
+
+    if pareto_prod is None or pareto_prod.empty:
+        st.warning("No hay datos de productos disponibles.")
+    else:
+        tab_past, tab_roti = st.tabs(["🎂 Pastelería", "🍗 Rotisería"])
+
+        # =================================================================
+        # TAB 1: PASTELERÍA
+        # =================================================================
+        with tab_past:
+            st.markdown("### Pareto completo — Repostería y Pastelería")
+
+            df_past = pareto_prod[pareto_prod['categoria'] == 'REPOSTERIA Y PASTELERIA'].copy()
+
+            if df_past.empty:
+                st.info("No hay datos para Repostería y Pastelería.")
+            else:
+                df_past = df_past.sort_values('ventas', ascending=False).reset_index(drop=True)
+                total_ventas_past = df_past['ventas'].sum()
+                total_margen_past = df_past['margen'].sum()
+                df_past['pct_ventas'] = df_past['ventas'] / total_ventas_past * 100
+                df_past['pct_acum'] = df_past['pct_ventas'].cumsum()
+                df_past['segmento'] = df_past['pct_acum'].apply(
+                    lambda x: 'A' if x <= 80 else ('B' if x <= 95 else 'C')
+                )
+
+                # KPIs
+                n_a = len(df_past[df_past['segmento'] == 'A'])
+                n_b = len(df_past[df_past['segmento'] == 'B'])
+                n_c = len(df_past[df_past['segmento'] == 'C'])
+                total_skus = len(df_past)
+
+                col1, col2, col3, col4 = st.columns(4)
+                with col1:
+                    st.metric("Ventas totales", formatear_moneda_argentina(total_ventas_past, 0))
+                with col2:
+                    st.metric("Margen total", formatear_moneda_argentina(total_margen_past, 0))
+                with col3:
+                    st.metric("SKUs totales", f"{total_skus}")
+                with col4:
+                    st.metric("Segmento A (80%)", f"{n_a} productos")
+
+                # Gráfico Pareto completo
+                fig_past = go.Figure()
+                colors_past = ['#1a237e' if s == 'A' else '#7986cb' if s == 'B' else '#c5cae9'
+                               for s in df_past['segmento']]
+                fig_past.add_trace(go.Bar(
+                    x=df_past['descripcion'],
+                    y=df_past['ventas'],
+                    marker_color=colors_past,
+                    name='Ventas',
+                    hovertemplate='<b>%{x}</b><br>Ventas: $%{y:,.0f}<extra></extra>'
+                ))
+                fig_past.add_trace(go.Scatter(
+                    x=df_past['descripcion'],
+                    y=df_past['pct_acum'],
+                    mode='lines+markers',
+                    name='% acumulado',
+                    line=dict(color='#ff7043', width=3),
+                    marker=dict(size=5),
+                    yaxis='y2',
+                    hovertemplate='%{y:.1f}%<extra></extra>'
+                ))
+                fig_past.add_shape(type='line', x0=-0.5, x1=len(df_past)-0.5,
+                                   y0=80, y1=80, yref='y2',
+                                   line=dict(color='green', width=2, dash='dash'))
+                fig_past.add_shape(type='line', x0=-0.5, x1=len(df_past)-0.5,
+                                   y0=95, y1=95, yref='y2',
+                                   line=dict(color='orange', width=1.5, dash='dot'))
+                fig_past.update_layout(
+                    title=f'Pareto Pastelería — {total_skus} productos',
+                    height=550,
+                    margin=dict(t=70, r=50, l=50, b=140),
+                    xaxis=dict(title='', tickangle=-55, tickfont=dict(size=9)),
+                    yaxis=dict(title='Ventas ($)'),
+                    yaxis2=dict(title='% acumulado', overlaying='y', side='right', range=[0, 105]),
+                    hovermode='x unified',
+                    legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1),
+                    bargap=0.15
+                )
+                render_plotly(fig_past, key='pareto_pasteleria')
+
+                # Insight
+                top3_past = df_past.head(3)
+                top3_names = ', '.join(top3_past['descripcion'].tolist())
+                top3_pct = top3_past['pct_ventas'].sum()
+
+                st.markdown(f"""
+                <div style='background: #fce4ec; border-left: 6px solid #e91e63; padding: 18px; margin: 16px 0; border-radius: 10px;'>
+                    <h4 style='color: #880e4f; margin: 0;'>Insight Pastelería</h4>
+                    <p style='margin: 8px 0 0 0;'>
+                        <b>{n_a} productos</b> (de {total_skus}) concentran el 80% de las ventas del departamento.<br>
+                        <b>Top 3:</b> {top3_names} — representan el <b>{top3_pct:.1f}%</b> de las ventas.<br>
+                        <b>Torta Bizcochuelo</b> lidera con {df_past.iloc[0]['pct_ventas']:.1f}% del total — es el producto ancla.<br>
+                        <b>Segmento C ({n_c} productos)</b> genera menos del 5% — evaluar si vale la pena mantener todo el surtido.
+                    </p>
+                </div>
+                """, unsafe_allow_html=True)
+
+                # Tabla completa
+                with st.expander(f"Ver tabla completa ({total_skus} productos)", expanded=False):
+                    tabla_past = df_past[['descripcion', 'ventas', 'margen', 'unidades', 'pct_ventas', 'pct_acum', 'segmento']].copy()
+                    tabla_past.columns = ['Producto', 'Ventas ($)', 'Margen ($)', 'Unidades', '% Ventas', '% Acum.', 'Seg.']
+                    tabla_past['Ventas ($)'] = tabla_past['Ventas ($)'].apply(lambda x: formatear_moneda_argentina(x, 0))
+                    tabla_past['Margen ($)'] = tabla_past['Margen ($)'].apply(lambda x: formatear_moneda_argentina(x, 0))
+                    tabla_past['Unidades'] = tabla_past['Unidades'].apply(lambda x: formatear_numero_argentino(x, 0))
+                    tabla_past['% Ventas'] = tabla_past['% Ventas'].round(1).astype(str) + '%'
+                    tabla_past['% Acum.'] = tabla_past['% Acum.'].round(1).astype(str) + '%'
+                    st.dataframe(tabla_past, use_container_width=True, hide_index=True)
+
+        # =================================================================
+        # TAB 2: ROTISERÍA
+        # =================================================================
+        with tab_roti:
+            st.markdown("### Pareto Rotisería — Productos agrupados por familia")
+
+            df_roti = pareto_prod[pareto_prod['categoria'] == 'ROTISERIA'].copy()
+
+            if df_roti.empty:
+                st.info("No hay datos para Rotisería.")
+            else:
+                import re
+
+                # --- Mapeo de familias para agrupar productos equivalentes ---
+                def clasificar_familia_roti(nombre: str) -> str:
+                    nombre = str(nombre).upper().strip()
+                    # Empanadas por sabor
+                    if re.match(r'EMPANADA\s+CARNE\b', nombre):
+                        return 'EMPANADA CARNE'
+                    if re.match(r'EMPANADA\s+J\s*&\s*Q\b', nombre):
+                        return 'EMPANADA J&Q'
+                    if re.match(r'EMPANADA\s+POLLO\b', nombre):
+                        return 'EMPANADA POLLO'
+                    if re.match(r'EMPANADA\s+VERDURA\b', nombre):
+                        return 'EMPANADA VERDURA'
+                    if re.match(r'EMPANADA\s+HUMITA\b', nombre):
+                        return 'EMPANADA HUMITA'
+                    if re.match(r'EMPANADA\s+CAPRESE\b', nombre):
+                        return 'EMPANADA CAPRESE'
+                    if re.match(r'EMPANADA\s+CEB', nombre):
+                        return 'EMPANADA CEBOLLA/QUESO'
+                    if re.match(r'EMPANADA\s+ATUN', nombre):
+                        return 'EMPANADA ATUN'
+                    if re.match(r'EMPANADA\s+SURTIDA', nombre):
+                        return 'EMPANADA SURTIDAS'
+                    if re.match(r'EMPANADA\s+POR\s+UNIDAD', nombre):
+                        return 'EMPANADA SURTIDAS'
+                    # Migas
+                    if re.match(r'MIGA\s+TRIP', nombre):
+                        return 'MIGA TRIPLE'
+                    if re.match(r'MIGA\s+SIMP', nombre):
+                        return 'MIGA SIMPLE'
+                    if re.match(r'MIGA\s+SAL', nombre):
+                        return 'MIGA SALAME/QUESO'
+                    # Canelones
+                    if 'CANELONES' in nombre and 'CAR' in nombre:
+                        return 'CANELONES CARNE/VERDURA'
+                    if 'CANELONES' in nombre and 'RIC' in nombre:
+                        return 'CANELONES VERDURA/RICOTA'
+                    if 'CANELONES' in nombre and 'HUMITA' in nombre:
+                        return 'CANELONES HUMITA'
+                    # Pizzas
+                    if 'PIZZA' in nombre and 'JAMON' in nombre:
+                        return 'PIZZA JAMON'
+                    if 'PIZZA' in nombre and 'MUZZ' in nombre:
+                        return 'PIZZA MUZZARELLA'
+                    if 'PIZZA' in nombre and 'FUGAZ' in nombre:
+                        return 'PIZZA FUGAZZA'
+                    # Ensaladas
+                    if 'ENSALADA' in nombre and 'RUSA' in nombre:
+                        return 'ENSALADA RUSA'
+                    if 'ENSALADA' in nombre and 'MIXTA' in nombre:
+                        return 'ENSALADA MIXTA'
+                    # Resto: nombre original
+                    return nombre
+
+                df_roti['familia'] = df_roti['descripcion'].apply(clasificar_familia_roti)
+
+                # Vista selector
+                vista_roti = st.radio(
+                    "Vista de análisis:",
+                    ["Agrupado por familia", "Detalle por producto"],
+                    horizontal=True,
+                    key='vista_roti'
+                )
+
+                if vista_roti == "Agrupado por familia":
+                    # Agrupar por familia
+                    df_agrup = df_roti.groupby('familia').agg(
+                        ventas=('ventas', 'sum'),
+                        margen=('margen', 'sum'),
+                        unidades=('unidades', 'sum'),
+                        n_variantes=('descripcion', 'count')
+                    ).sort_values('ventas', ascending=False).reset_index()
+
+                    total_ventas_roti = df_agrup['ventas'].sum()
+                    total_margen_roti = df_agrup['margen'].sum()
+                    df_agrup['pct_ventas'] = df_agrup['ventas'] / total_ventas_roti * 100
+                    df_agrup['pct_acum'] = df_agrup['pct_ventas'].cumsum()
+                    df_agrup['segmento'] = df_agrup['pct_acum'].apply(
+                        lambda x: 'A' if x <= 80 else ('B' if x <= 95 else 'C')
+                    )
+
+                    n_fam = len(df_agrup)
+                    n_a_roti = len(df_agrup[df_agrup['segmento'] == 'A'])
+                    n_b_roti = len(df_agrup[df_agrup['segmento'] == 'B'])
+
+                    # KPIs
+                    col1, col2, col3, col4 = st.columns(4)
+                    with col1:
+                        st.metric("Ventas totales", formatear_moneda_argentina(total_ventas_roti, 0))
+                    with col2:
+                        st.metric("Margen total", formatear_moneda_argentina(total_margen_roti, 0))
+                    with col3:
+                        st.metric("Familias", f"{n_fam} (de {len(df_roti)} SKUs)")
+                    with col4:
+                        st.metric("Familias A (80%)", f"{n_a_roti}")
+
+                    # Calcular total empanadas
+                    mask_emp = df_agrup['familia'].str.startswith('EMPANADA')
+                    total_emp = df_agrup.loc[mask_emp, 'ventas'].sum()
+                    pct_emp = total_emp / total_ventas_roti * 100
+
+                    # Gráfico Pareto agrupado
+                    colors_roti = ['#b71c1c' if s == 'A' else '#ef9a9a' if s == 'B' else '#ffcdd2'
+                                   for s in df_agrup['segmento']]
+                    fig_roti = go.Figure()
+                    fig_roti.add_trace(go.Bar(
+                        x=df_agrup['familia'],
+                        y=df_agrup['ventas'],
+                        marker_color=colors_roti,
+                        name='Ventas',
+                        text=[f'({n}v)' if n > 1 else '' for n in df_agrup['n_variantes']],
+                        textposition='outside',
+                        textfont=dict(size=8, color='#666'),
+                        hovertemplate='<b>%{x}</b><br>Ventas: $%{y:,.0f}<br>Variantes: %{text}<extra></extra>'
+                    ))
+                    fig_roti.add_trace(go.Scatter(
+                        x=df_agrup['familia'],
+                        y=df_agrup['pct_acum'],
+                        mode='lines+markers',
+                        name='% acumulado',
+                        line=dict(color='#ff7043', width=3),
+                        marker=dict(size=5),
+                        yaxis='y2',
+                        hovertemplate='%{y:.1f}%<extra></extra>'
+                    ))
+                    fig_roti.add_shape(type='line', x0=-0.5, x1=n_fam-0.5,
+                                       y0=80, y1=80, yref='y2',
+                                       line=dict(color='green', width=2, dash='dash'))
+                    fig_roti.add_shape(type='line', x0=-0.5, x1=n_fam-0.5,
+                                       y0=95, y1=95, yref='y2',
+                                       line=dict(color='orange', width=1.5, dash='dot'))
+                    fig_roti.update_layout(
+                        title=f'Pareto Rotisería agrupado — {n_fam} familias',
+                        height=550,
+                        margin=dict(t=70, r=50, l=50, b=140),
+                        xaxis=dict(title='', tickangle=-55, tickfont=dict(size=9)),
+                        yaxis=dict(title='Ventas ($)'),
+                        yaxis2=dict(title='% acumulado', overlaying='y', side='right', range=[0, 105]),
+                        hovermode='x unified',
+                        legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1),
+                        bargap=0.15
+                    )
+                    render_plotly(fig_roti, key='pareto_roti_agrup')
+
+                    # Insight agrupado
+                    st.markdown(f"""
+                    <div style='background: #fff3e0; border-left: 6px solid #ff9800; padding: 18px; margin: 16px 0; border-radius: 10px;'>
+                        <h4 style='color: #e65100; margin: 0;'>Insight Rotisería (agrupado)</h4>
+                        <p style='margin: 8px 0 0 0;'>
+                            Al agrupar por familia, {n_a_roti} familias concentran el 80% de las ventas.<br>
+                            <b>Empanadas en conjunto:</b> representan el <b>{pct_emp:.1f}%</b> de las ventas del departamento (${total_emp:,.0f}).<br>
+                            <b>Matambre NINO</b> es el producto individual estrella ({df_agrup.iloc[0]['pct_ventas']:.1f}% si lidera, o alto contribuyente).<br>
+                            <b>Migas, Canelones y Pizzas</b> son familias consolidadas que ganan relevancia al agrupar sus variantes.<br>
+                            La agrupación permite optimizar compras de insumos compartidos por familia.
+                        </p>
+                    </div>
+                    """, unsafe_allow_html=True)
+
+                    # Tabla detalle de agrupación
+                    with st.expander("Ver composición de familias (qué productos se agruparon)", expanded=False):
+                        for _, fam_row in df_agrup.iterrows():
+                            fam_name = fam_row['familia']
+                            variantes = df_roti[df_roti['familia'] == fam_name][['descripcion', 'ventas', 'unidades']].sort_values('ventas', ascending=False)
+                            if len(variantes) > 1:
+                                st.markdown(f"**{fam_name}** ({len(variantes)} variantes, total: {formatear_moneda_argentina(fam_row['ventas'], 0)})")
+                                for _, v in variantes.iterrows():
+                                    st.markdown(f"  - {v['descripcion']}: {formatear_moneda_argentina(v['ventas'], 0)}")
+
+                    # Tabla resumen
+                    with st.expander(f"Ver tabla completa agrupada ({n_fam} familias)", expanded=False):
+                        tabla_roti = df_agrup[['familia', 'ventas', 'margen', 'unidades', 'n_variantes', 'pct_ventas', 'pct_acum', 'segmento']].copy()
+                        tabla_roti.columns = ['Familia', 'Ventas ($)', 'Margen ($)', 'Unidades', 'Variantes', '% Ventas', '% Acum.', 'Seg.']
+                        tabla_roti['Ventas ($)'] = tabla_roti['Ventas ($)'].apply(lambda x: formatear_moneda_argentina(x, 0))
+                        tabla_roti['Margen ($)'] = tabla_roti['Margen ($)'].apply(lambda x: formatear_moneda_argentina(x, 0))
+                        tabla_roti['Unidades'] = tabla_roti['Unidades'].apply(lambda x: formatear_numero_argentino(x, 0))
+                        tabla_roti['% Ventas'] = tabla_roti['% Ventas'].round(1).astype(str) + '%'
+                        tabla_roti['% Acum.'] = tabla_roti['% Acum.'].round(1).astype(str) + '%'
+                        st.dataframe(tabla_roti, use_container_width=True, hide_index=True)
+
+                else:
+                    # Vista detalle (sin agrupar)
+                    df_roti_det = df_roti.sort_values('ventas', ascending=False).reset_index(drop=True)
+                    total_ventas_roti = df_roti_det['ventas'].sum()
+                    df_roti_det['pct_ventas'] = df_roti_det['ventas'] / total_ventas_roti * 100
+                    df_roti_det['pct_acum'] = df_roti_det['pct_ventas'].cumsum()
+                    df_roti_det['segmento'] = df_roti_det['pct_acum'].apply(
+                        lambda x: 'A' if x <= 80 else ('B' if x <= 95 else 'C')
+                    )
+
+                    n_a_det = len(df_roti_det[df_roti_det['segmento'] == 'A'])
+                    total_skus_roti = len(df_roti_det)
+
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        st.metric("Ventas totales", formatear_moneda_argentina(total_ventas_roti, 0))
+                    with col2:
+                        st.metric("SKUs totales", f"{total_skus_roti}")
+                    with col3:
+                        st.metric("SKUs A (80%)", f"{n_a_det}")
+
+                    # Top 25 detalle
+                    vista_top = df_roti_det.head(25)
+                    colors_det = ['#b71c1c' if s == 'A' else '#ef9a9a' if s == 'B' else '#ffcdd2'
+                                  for s in vista_top['segmento']]
+                    fig_det = go.Figure()
+                    fig_det.add_trace(go.Bar(
+                        x=vista_top['descripcion'],
+                        y=vista_top['ventas'],
+                        marker_color=colors_det,
+                        name='Ventas',
+                        hovertemplate='<b>%{x}</b><br>Ventas: $%{y:,.0f}<extra></extra>'
+                    ))
+                    fig_det.add_trace(go.Scatter(
+                        x=vista_top['descripcion'],
+                        y=vista_top['pct_acum'],
+                        mode='lines+markers',
+                        name='% acumulado',
+                        line=dict(color='#ff7043', width=3),
+                        yaxis='y2',
+                        hovertemplate='%{y:.1f}%<extra></extra>'
+                    ))
+                    fig_det.add_shape(type='line', x0=-0.5, x1=len(vista_top)-0.5,
+                                      y0=80, y1=80, yref='y2',
+                                      line=dict(color='green', width=2, dash='dash'))
+                    fig_det.update_layout(
+                        title=f'Pareto Rotisería detalle — Top 25 de {total_skus_roti} SKUs',
+                        height=550,
+                        margin=dict(t=70, r=50, l=50, b=140),
+                        xaxis=dict(title='', tickangle=-55, tickfont=dict(size=8)),
+                        yaxis=dict(title='Ventas ($)'),
+                        yaxis2=dict(title='% acumulado', overlaying='y', side='right', range=[0, 105]),
+                        hovermode='x unified',
+                        legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1)
+                    )
+                    render_plotly(fig_det, key='pareto_roti_detalle')
+
+                    with st.expander(f"Ver tabla completa ({total_skus_roti} productos)", expanded=False):
+                        tabla_det = df_roti_det[['descripcion', 'ventas', 'margen', 'unidades', 'pct_ventas', 'pct_acum', 'segmento']].copy()
+                        tabla_det.columns = ['Producto', 'Ventas ($)', 'Margen ($)', 'Unidades', '% Ventas', '% Acum.', 'Seg.']
+                        tabla_det['Ventas ($)'] = tabla_det['Ventas ($)'].apply(lambda x: formatear_moneda_argentina(x, 0))
+                        tabla_det['Margen ($)'] = tabla_det['Margen ($)'].apply(lambda x: formatear_moneda_argentina(x, 0))
+                        tabla_det['Unidades'] = tabla_det['Unidades'].apply(lambda x: formatear_numero_argentino(x, 0))
+                        tabla_det['% Ventas'] = tabla_det['% Ventas'].round(1).astype(str) + '%'
+                        tabla_det['% Acum.'] = tabla_det['% Acum.'].round(1).astype(str) + '%'
+                        st.dataframe(tabla_det, use_container_width=True, hide_index=True)
+
 # =============================================================================
 # MARKET BASKET & COMBOS
 # =============================================================================
