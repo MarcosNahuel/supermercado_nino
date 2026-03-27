@@ -121,6 +121,7 @@ def run_etl(
             "CREDITO": "TARJETA_CREDITO",
             "TARJETA DEBITO": "TARJETA_DEBITO",
             "TARJETA CREDITO": "TARJETA_CREDITO",
+            "BILLETERA VITUAL": "BILLETERA VIRTUAL",
         }
     )
     df["emisor_tarjeta"] = _normalize_text(
@@ -154,6 +155,12 @@ def run_etl(
         )
         df["margen_linea"] = df["importe_total"] * df["rentabilidad_factor_clean"].fillna(
             df["rentabilidad_pct"] / 100.0
+        )
+        # Corregir rentabilidad_pct: usar factor * 100 como porcentaje real
+        # (el campo margen_rentabilidad_pct del CSV contiene el margen absoluto,
+        #  no el porcentaje — la fuente de verdad es rentabilidad_factor)
+        df["rentabilidad_pct"] = (
+            df["rentabilidad_factor_clean"].fillna(fallback_rentabilidad / 100.0) * 100.0
         )
         df = df.drop(columns=["rentabilidad_factor_clean"])
     else:
