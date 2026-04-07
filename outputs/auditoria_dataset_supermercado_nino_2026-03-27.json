@@ -1,0 +1,527 @@
+{
+  "generated_at": "2026-03-27",
+  "checks": [
+    {
+      "dimension": "1. INTEGRIDAD DE DATOS",
+      "name": "Ventas totales del detalle",
+      "expected": "~ $9,550,000,000.00",
+      "found": "$9,550,165,077.18",
+      "status": "OK",
+      "detail": null,
+      "root_cause": null
+    },
+    {
+      "dimension": "1. INTEGRIDAD DE DATOS",
+      "name": "Tickets distintos en detalle_lineas",
+      "expected": "345,130",
+      "found": "345,130",
+      "status": "OK",
+      "detail": null,
+      "root_cause": null
+    },
+    {
+      "dimension": "1. INTEGRIDAD DE DATOS",
+      "name": "Cruce tickets.parquet vs sum(detalle_lineas) por ticket",
+      "expected": "0 tickets con diferencias materiales",
+      "found": "0 tickets con diff > $0.05 o faltantes",
+      "status": "OK",
+      "detail": "Max diff ventas: $0.00",
+      "root_cause": null
+    },
+    {
+      "dimension": "1. INTEGRIDAD DE DATOS",
+      "name": "Tickets negativos, cero o > $500K",
+      "expected": "0 / 0 / 0",
+      "found": "88 negativos, 449 en cero, 309 > $500K",
+      "status": "REVISAR",
+      "detail": null,
+      "root_cause": null
+    },
+    {
+      "dimension": "1. INTEGRIDAD DE DATOS",
+      "name": "Cantidades negativas o precio_unitario = 0",
+      "expected": "0 / 0",
+      "found": "20328 lineas con cantidad negativa, 5321 con precio 0",
+      "status": "REVISAR",
+      "detail": null,
+      "root_cause": null
+    },
+    {
+      "dimension": "1. INTEGRIDAD DE DATOS",
+      "name": "Rango de fechas del detalle",
+      "expected": "2024-10-01 a 2025-12-31",
+      "found": "2024-10-01 a 2025-12-31 | 0 fuera de rango",
+      "status": "OK",
+      "detail": null,
+      "root_cause": null
+    },
+    {
+      "dimension": "1. INTEGRIDAD DE DATOS",
+      "name": "Meses marcados como incompletos",
+      "expected": "Solo 2025-10 y 2025-11 con flag",
+      "found": "Meses con flag: 2025-10, 2025-11",
+      "status": "OK",
+      "detail": "Faltantes: ninguno | Inesperados: ninguno",
+      "root_cause": null
+    },
+    {
+      "dimension": "1. INTEGRIDAD DE DATOS",
+      "name": "Integridad del campo hora en detalle_lineas",
+      "expected": "Valores horarios reales distribuidos en 0-23",
+      "found": "hora unica = [0]",
+      "status": "ERROR",
+      "detail": null,
+      "root_cause": "El ETL cargo el campo hora en cero para todas las lineas; cualquier analisis horario derivado queda invalidado."
+    },
+    {
+      "dimension": "1. INTEGRIDAD DE DATOS",
+      "name": "Snapshot alcance_dataset vs conteos base",
+      "expected": "n_tickets=345,130 y n_registros=3,334,045",
+      "found": "n_tickets=345,130, n_registros=3,334,045",
+      "status": "OK",
+      "detail": null,
+      "root_cause": null
+    },
+    {
+      "dimension": "2. CONSISTENCIA DE MARGENES",
+      "name": "Formula margen_linea = importe_total * rentabilidad_pct / 100",
+      "expected": "0 lineas fuera de tolerancia de $0.01",
+      "found": "3306662 lineas fuera de tolerancia",
+      "status": "ERROR",
+      "detail": "Max diff: $169,981,184,087.50",
+      "root_cause": "La columna `rentabilidad_pct` esta sobrescrita con el valor absoluto de `margen_linea` en la mayoria de las filas; por eso la formula falla aunque el margen real este bien calculado."
+    },
+    {
+      "dimension": "2. CONSISTENCIA DE MARGENES",
+      "name": "Formula margen_linea = importe_total * rentabilidad_factor",
+      "expected": "0 lineas fuera de tolerancia de $0.01",
+      "found": "0 lineas fuera de tolerancia",
+      "status": "OK",
+      "detail": null,
+      "root_cause": null
+    },
+    {
+      "dimension": "2. CONSISTENCIA DE MARGENES",
+      "name": "rentabilidad_factor por categoria vs RENTABILIDAD.csv",
+      "expected": "Todas las categorias operativas matchean contra la referencia",
+      "found": "46 categorias consistentes, 0 inconsistentes, 2 sin match en referencia",
+      "status": "REVISAR",
+      "detail": "Categorias solo en referencia: 0",
+      "root_cause": "Las categorias sin referencia son `SIN CATEGORIA` y `VENTAS DE UVA`; el resto matchea contra la fuente de verdad."
+    },
+    {
+      "dimension": "2. CONSISTENCIA DE MARGENES",
+      "name": "Categorias de \"Elaboracion Propia\" al 30%",
+      "expected": "Todas al 30%",
+      "found": "9 OK, 0 fuera de 30%",
+      "status": "OK",
+      "detail": null,
+      "root_cause": null
+    },
+    {
+      "dimension": "2. CONSISTENCIA DE MARGENES",
+      "name": "Productos con margen_pct agregado <= 0",
+      "expected": "0, salvo ajustes/impuestos reales",
+      "found": "4 productos",
+      "status": "OK",
+      "detail": null,
+      "root_cause": "Los productos no positivos corresponden al departamento fiscal IVA RED IB GRAL, con rentabilidad 0% en la fuente de verdad; parece ser dato operativo, no error de margen."
+    },
+    {
+      "dimension": "2. CONSISTENCIA DE MARGENES",
+      "name": "Rentabilidad global desde detalle_lineas",
+      "expected": "28.23%",
+      "found": "28.23%",
+      "status": "OK",
+      "detail": null,
+      "root_cause": null
+    },
+    {
+      "dimension": "3. PARETO PASTELERIA",
+      "name": "Ventas totales de Reposteria y Pasteleria",
+      "expected": "~ $93.8M",
+      "found": "$93,793,761.46",
+      "status": "OK",
+      "detail": null,
+      "root_cause": null
+    },
+    {
+      "dimension": "3. PARETO PASTELERIA",
+      "name": "Cantidad de productos en la categoria",
+      "expected": "49",
+      "found": "49",
+      "status": "OK",
+      "detail": null,
+      "root_cause": null
+    },
+    {
+      "dimension": "3. PARETO PASTELERIA",
+      "name": "Productos necesarios para cubrir el 80% de ventas",
+      "expected": "13",
+      "found": "14",
+      "status": "REVISAR",
+      "detail": null,
+      "root_cause": "Con 13 productos el acumulado queda en 78.15%; el producto 14 eleva la cobertura a 80.69%."
+    },
+    {
+      "dimension": "3. PARETO PASTELERIA",
+      "name": "Producto #1 y participacion",
+      "expected": "TORTA BIZCOCHUELO NINO con ~31%",
+      "found": "TORTA BIZCOCHUELO NINO con 30.86%",
+      "status": "OK",
+      "detail": null,
+      "root_cause": null
+    },
+    {
+      "dimension": "3. PARETO PASTELERIA",
+      "name": "Participacion Top 3 (Bizcochuelo + Cheesecake + Tarta Mix)",
+      "expected": "42% a 43%",
+      "found": "42.36%",
+      "status": "OK",
+      "detail": null,
+      "root_cause": null
+    },
+    {
+      "dimension": "3. PARETO PASTELERIA",
+      "name": "Segmento C: cantidad de productos y aporte de ventas",
+      "expected": "25 productos y ~5%",
+      "found": "25 productos y 5.24%",
+      "status": "OK",
+      "detail": null,
+      "root_cause": null
+    },
+    {
+      "dimension": "3. PARETO PASTELERIA",
+      "name": "participacion_acumulada monotona creciente",
+      "expected": "True",
+      "found": "True",
+      "status": "OK",
+      "detail": null,
+      "root_cause": null
+    },
+    {
+      "dimension": "4. PARETO ROTISERIA",
+      "name": "Ventas totales de Rotiseria",
+      "expected": "~ $129.9M",
+      "found": "$129,873,557.80",
+      "status": "OK",
+      "detail": null,
+      "root_cause": null
+    },
+    {
+      "dimension": "4. PARETO ROTISERIA",
+      "name": "SKUs y familias",
+      "expected": "64 SKUs y 38 familias",
+      "found": "64 SKUs y 38 familias",
+      "status": "OK",
+      "detail": null,
+      "root_cause": null
+    },
+    {
+      "dimension": "4. PARETO ROTISERIA",
+      "name": "Ventas familia EMPANADA CARNE",
+      "expected": "~ $34,700,000.00",
+      "found": "$34,678,609.90",
+      "status": "OK",
+      "detail": null,
+      "root_cause": null
+    },
+    {
+      "dimension": "4. PARETO ROTISERIA",
+      "name": "Ventas familia EMPANADA J&Q",
+      "expected": "~ $9,400,000.00",
+      "found": "$9,414,500.00",
+      "status": "OK",
+      "detail": null,
+      "root_cause": null
+    },
+    {
+      "dimension": "4. PARETO ROTISERIA",
+      "name": "Ventas familia MIGA TRIPLE",
+      "expected": "~ $7,300,000.00",
+      "found": "$7,280,830.00",
+      "status": "OK",
+      "detail": null,
+      "root_cause": null
+    },
+    {
+      "dimension": "4. PARETO ROTISERIA",
+      "name": "Ventas familia EMPANADA CEBOLLA/QUESO",
+      "expected": "~ $2,500,000.00",
+      "found": "$2,544,700.00",
+      "status": "OK",
+      "detail": null,
+      "root_cause": null
+    },
+    {
+      "dimension": "4. PARETO ROTISERIA",
+      "name": "Empanadas como share del departamento",
+      "expected": "~50%",
+      "found": "49.85%",
+      "status": "OK",
+      "detail": null,
+      "root_cause": null
+    },
+    {
+      "dimension": "4. PARETO ROTISERIA",
+      "name": "Ranking individual de MATAMBRE NINO",
+      "expected": "#2 con ~ $18M",
+      "found": "#2 con $18,084,116.50",
+      "status": "OK",
+      "detail": null,
+      "root_cause": null
+    },
+    {
+      "dimension": "4. PARETO ROTISERIA",
+      "name": "Familias necesarias para cubrir 80%",
+      "expected": "13",
+      "found": "14",
+      "status": "REVISAR",
+      "detail": null,
+      "root_cause": "Con 13 familias el acumulado queda en 78.36%; la familia 14 lleva el acumulado a 80.51%."
+    },
+    {
+      "dimension": "5. CROSS-CHECKS ENTRE DATASETS",
+      "name": "kpi_categoria mensual vs detalle_lineas mensual",
+      "expected": "0 meses con diff > $0.05",
+      "found": "0 meses con diff > $0.05",
+      "status": "OK",
+      "detail": null,
+      "root_cause": null
+    },
+    {
+      "dimension": "5. CROSS-CHECKS ENTRE DATASETS",
+      "name": "Sum(ventas) pareto_prod_global vs detalle_lineas",
+      "expected": "$9,550,165,077.18",
+      "found": "$9,550,165,077.18",
+      "status": "OK",
+      "detail": null,
+      "root_cause": null
+    },
+    {
+      "dimension": "5. CROSS-CHECKS ENTRE DATASETS",
+      "name": "Top 10 productos en pareto vs calculo directo desde detalle",
+      "expected": "Misma lista y mismo orden",
+      "found": "Coinciden",
+      "status": "OK",
+      "detail": null,
+      "root_cause": null
+    },
+    {
+      "dimension": "5. CROSS-CHECKS ENTRE DATASETS",
+      "name": "alcance_dataset.ventas_total vs sum(tickets.ventas_totales)",
+      "expected": "$9,550,165,077.18",
+      "found": "$9,550,165,077.18",
+      "status": "OK",
+      "detail": null,
+      "root_cause": null
+    },
+    {
+      "dimension": "5. CROSS-CHECKS ENTRE DATASETS",
+      "name": "kpi_hora vs detalle_lineas",
+      "expected": "$9,550,165,077.18",
+      "found": "$700,000.00 y 14 filas horarias",
+      "status": "ERROR",
+      "detail": null,
+      "root_cause": "kpi_hora contiene valores placeholder (100 tickets y $50,000 por hora) y no refleja el dataset real."
+    },
+    {
+      "dimension": "6. ANOMALIAS Y OUTLIERS",
+      "name": "Dias con ventas fuera de +/-3 desvios estandar",
+      "expected": "Idealmente 0 o pocos dias explicables",
+      "found": "7 dias",
+      "status": "REVISAR",
+      "detail": null,
+      "root_cause": null
+    },
+    {
+      "dimension": "6. ANOMALIAS Y OUTLIERS",
+      "name": "Productos con una sola transaccion y venta >= $100K",
+      "expected": "0",
+      "found": "8",
+      "status": "REVISAR",
+      "detail": null,
+      "root_cause": null
+    },
+    {
+      "dimension": "6. ANOMALIAS Y OUTLIERS",
+      "name": "Concentracion de medios de pago",
+      "expected": "Sin un medio dominante > 60%",
+      "found": "Top share: EFECTIVO con 43.87%",
+      "status": "OK",
+      "detail": null,
+      "root_cause": null
+    },
+    {
+      "dimension": "6. ANOMALIAS Y OUTLIERS",
+      "name": "Tickets duplicados (mismo ticket_id, fecha y monto)",
+      "expected": "0",
+      "found": "0",
+      "status": "OK",
+      "detail": null,
+      "root_cause": null
+    },
+    {
+      "dimension": "6. ANOMALIAS Y OUTLIERS",
+      "name": "Categorias con menos de 10 transacciones",
+      "expected": "0 o muy pocas justificadas",
+      "found": "3",
+      "status": "REVISAR",
+      "detail": null,
+      "root_cause": null
+    },
+    {
+      "dimension": "7. CALIDAD DE DATOS TEXTUALES",
+      "name": "Descripciones repetidas con distinto producto_id",
+      "expected": "0",
+      "found": "1924 descripciones",
+      "status": "REVISAR",
+      "detail": null,
+      "root_cause": "La diferencia entre 10,772 product_id unicos y 9,058 descripciones unicas surge de este colapso semantico: el pareto consolida por descripcion, no por codigo."
+    },
+    {
+      "dimension": "7. CALIDAD DE DATOS TEXTUALES",
+      "name": "Categorias con nombres similares potencialmente consolidables",
+      "expected": "Revision manual de candidatos",
+      "found": "6",
+      "status": "REVISAR",
+      "detail": null,
+      "root_cause": null
+    },
+    {
+      "dimension": "7. CALIDAD DE DATOS TEXTUALES",
+      "name": "Descripciones vacias o literales \"NAN\"/\"NULL\"",
+      "expected": "0",
+      "found": "0",
+      "status": "OK",
+      "detail": null,
+      "root_cause": null
+    },
+    {
+      "dimension": "7. CALIDAD DE DATOS TEXTUALES",
+      "name": "Valores textuales con typo en tipo_medio_pago (\"VITUAL\")",
+      "expected": "0",
+      "found": "446,665",
+      "status": "REVISAR",
+      "detail": null,
+      "root_cause": null
+    }
+  ],
+  "scorecard": {
+    "score": 81.1,
+    "by_status": {
+      "OK": 31,
+      "REVISAR": 11,
+      "ERROR": 3
+    },
+    "by_dimension": [
+      {
+        "dimension": "1. INTEGRIDAD DE DATOS",
+        "ERROR": 1,
+        "OK": 6,
+        "REVISAR": 2
+      },
+      {
+        "dimension": "2. CONSISTENCIA DE MARGENES",
+        "ERROR": 1,
+        "OK": 4,
+        "REVISAR": 1
+      },
+      {
+        "dimension": "3. PARETO PASTELERIA",
+        "ERROR": 0,
+        "OK": 6,
+        "REVISAR": 1
+      },
+      {
+        "dimension": "4. PARETO ROTISERIA",
+        "ERROR": 0,
+        "OK": 8,
+        "REVISAR": 1
+      },
+      {
+        "dimension": "5. CROSS-CHECKS ENTRE DATASETS",
+        "ERROR": 1,
+        "OK": 4,
+        "REVISAR": 0
+      },
+      {
+        "dimension": "6. ANOMALIAS Y OUTLIERS",
+        "ERROR": 0,
+        "OK": 2,
+        "REVISAR": 3
+      },
+      {
+        "dimension": "7. CALIDAD DE DATOS TEXTUALES",
+        "ERROR": 0,
+        "OK": 1,
+        "REVISAR": 3
+      }
+    ]
+  },
+  "critical_findings": [
+    {
+      "dimension": "1. INTEGRIDAD DE DATOS",
+      "name": "Integridad del campo hora en detalle_lineas",
+      "expected": "Valores horarios reales distribuidos en 0-23",
+      "found": "hora unica = [0]",
+      "status": "ERROR",
+      "detail": null,
+      "root_cause": "El ETL cargo el campo hora en cero para todas las lineas; cualquier analisis horario derivado queda invalidado."
+    },
+    {
+      "dimension": "2. CONSISTENCIA DE MARGENES",
+      "name": "Formula margen_linea = importe_total * rentabilidad_pct / 100",
+      "expected": "0 lineas fuera de tolerancia de $0.01",
+      "found": "3306662 lineas fuera de tolerancia",
+      "status": "ERROR",
+      "detail": "Max diff: $169,981,184,087.50",
+      "root_cause": "La columna `rentabilidad_pct` esta sobrescrita con el valor absoluto de `margen_linea` en la mayoria de las filas; por eso la formula falla aunque el margen real este bien calculado."
+    },
+    {
+      "dimension": "2. CONSISTENCIA DE MARGENES",
+      "name": "rentabilidad_factor por categoria vs RENTABILIDAD.csv",
+      "expected": "Todas las categorias operativas matchean contra la referencia",
+      "found": "46 categorias consistentes, 0 inconsistentes, 2 sin match en referencia",
+      "status": "REVISAR",
+      "detail": "Categorias solo en referencia: 0",
+      "root_cause": "Las categorias sin referencia son `SIN CATEGORIA` y `VENTAS DE UVA`; el resto matchea contra la fuente de verdad."
+    },
+    {
+      "dimension": "3. PARETO PASTELERIA",
+      "name": "Productos necesarios para cubrir el 80% de ventas",
+      "expected": "13",
+      "found": "14",
+      "status": "REVISAR",
+      "detail": null,
+      "root_cause": "Con 13 productos el acumulado queda en 78.15%; el producto 14 eleva la cobertura a 80.69%."
+    },
+    {
+      "dimension": "4. PARETO ROTISERIA",
+      "name": "Familias necesarias para cubrir 80%",
+      "expected": "13",
+      "found": "14",
+      "status": "REVISAR",
+      "detail": null,
+      "root_cause": "Con 13 familias el acumulado queda en 78.36%; la familia 14 lleva el acumulado a 80.51%."
+    },
+    {
+      "dimension": "5. CROSS-CHECKS ENTRE DATASETS",
+      "name": "kpi_hora vs detalle_lineas",
+      "expected": "$9,550,165,077.18",
+      "found": "$700,000.00 y 14 filas horarias",
+      "status": "ERROR",
+      "detail": null,
+      "root_cause": "kpi_hora contiene valores placeholder (100 tickets y $50,000 por hora) y no refleja el dataset real."
+    },
+    {
+      "dimension": "7. CALIDAD DE DATOS TEXTUALES",
+      "name": "Descripciones repetidas con distinto producto_id",
+      "expected": "0",
+      "found": "1924 descripciones",
+      "status": "REVISAR",
+      "detail": null,
+      "root_cause": "La diferencia entre 10,772 product_id unicos y 9,058 descripciones unicas surge de este colapso semantico: el pareto consolida por descripcion, no por codigo."
+    }
+  ]
+}

@@ -75,6 +75,8 @@ files = [
     f"{EXCEL_DIR}/ReporteMovimientosItemEnComprobantes2.xlsx",
     f"{EXCEL_DIR}/ReporteMovimientosItemEnComprobantes22.xlsx",
     f"{EXCEL_DIR}/ReporteMovimientosItemEnComprobantes3.xlsx",
+    f"{EXCEL_DIR}/ReporteMovimientosItemEnComprobantes18-28.xlsx",
+    f"{EXCEL_DIR}/ReporteMovimientosItemEnComprobantes31.xlsx",
 ]
 dfs = []
 for fp in files:
@@ -82,6 +84,7 @@ for fp in files:
 df = pd.concat(dfs, ignore_index=True)
 df["Fecha"] = pd.to_datetime(df["Fecha"], format="%d/%m/%y", errors="coerce")
 df = df[df["Fecha"].notna()]
+df = df.drop_duplicates(subset=["Fecha", "Comprobante", "Código"])
 date_max = df["Fecha"].max()
 cutoff = date_max - pd.Timedelta(days=30)
 df30 = df[df["Fecha"] >= cutoff].copy()

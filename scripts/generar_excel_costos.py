@@ -126,6 +126,8 @@ excel_files = [
     f"{EXCEL_DIR}/ReporteMovimientosItemEnComprobantes2.xlsx",
     f"{EXCEL_DIR}/ReporteMovimientosItemEnComprobantes22.xlsx",
     f"{EXCEL_DIR}/ReporteMovimientosItemEnComprobantes3.xlsx",
+    f"{EXCEL_DIR}/ReporteMovimientosItemEnComprobantes18-28.xlsx",
+    f"{EXCEL_DIR}/ReporteMovimientosItemEnComprobantes31.xlsx",
 ]
 all_rotis_2026 = []
 for fp in excel_files:
@@ -135,6 +137,7 @@ for fp in excel_files:
         all_rotis_2026.append(df_ex[mask])
 df_2026 = pd.concat(all_rotis_2026, ignore_index=True)
 df_2026["Fecha"] = pd.to_datetime(df_2026["Fecha"], format="%d/%m/%y", errors="coerce")
+df_2026 = df_2026.drop_duplicates(subset=["Fecha", "Comprobante", "Código"])
 df_2026 = df_2026[df_2026["Fecha"].notna()]
 
 date_max_2026 = df_2026["Fecha"].max()
