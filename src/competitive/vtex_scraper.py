@@ -25,22 +25,24 @@ def search_vtex_products(
     page: int = 0,
     count: int = 50,
 ) -> dict:
-    """Busca productos en VTEX Intelligent Search.
+    """Busca productos via VTEX catalog_system API (endpoint legacy estable).
 
     Args:
-        vtex_account: Cuenta VTEX (ej: "carrefourar").
+        vtex_account: Cuenta VTEX (ej: "carrefourar"). Actualmente no usado,
+            se mantiene por compat con firma previa.
         domain: Dominio de la tienda (ej: "www.carrefour.com.ar").
         query: Termino de busqueda (ej: "leche", "bebidas").
-        page: Pagina de resultados.
+        page: Pagina de resultados (0-indexed).
         count: Cantidad de resultados por pagina.
 
     Returns:
-        Dict con respuesta JSON de VTEX.
+        Dict normalizado con clave "products" (lista).
     """
+    _from = page * count
+    _to = _from + count - 1
     url = (
-        f"https://{domain}/api/io/_v/api/intelligent-search/"
-        f"product_search/?query={query}&page={page}&count={count}"
-        f"&locale=es-AR"
+        f"https://{domain}/api/catalog_system/pub/products/search/"
+        f"{query}?_from={_from}&_to={_to}"
     )
 
     headers = {
@@ -50,7 +52,26 @@ def search_vtex_products(
 
     resp = requests.get(url, headers=headers, timeout=REQUEST_TIMEOUT)
     resp.raise_for_status()
-    return resp.json()
+    data = resp.json()
+
+    # VTEX legacy retorna array directo; normalizar a {"products": [...]}
+    if isinstance(data, list):
+        return {"products": data}
+    return data
+
+
+def _extract_teaser_name(teaser: dict) -> str:
+    """Extrae nombre de teaser manejando formato legacy (.NET) y moderno."""
+    if not isinstance(teaser, dict):
+        return ""
+    # Formato moderno (lowercase)
+    if "name" in teaser:
+        return str(teaser.get("name", ""))
+    # Formato legacy .NET: "<Name>k__BackingField"
+    for key, val in teaser.items():
+        if "Name" in key and isinstance(val, str):
+            return val
+    return ""
 
 
 def extract_promos_from_response(
@@ -91,9 +112,11 @@ def extract_promos_from_response(
                         (1 - precio_venta / precio_lista) * 100, 1
                     )
 
-                # Extraer promos/teasers
-                teasers = offer.get("teasers", [])
-                promo_nombres = [t.get("name", "") for t in teasers if t.get("name")]
+                # Extraer promos/teasers (legacy usa "Teasers" mayuscula)
+                teasers = offer.get("teasers") or offer.get("Teasers") or []
+                promo_nombres = [
+                    name for name in (_extract_teaser_name(t) for t in teasers) if name
+                ]
 
                 categories = product.get("categories", [""])
                 categoria = categories[0].strip("/").split("/")[0] if categories else ""
