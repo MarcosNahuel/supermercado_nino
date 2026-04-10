@@ -84,6 +84,8 @@ src/
 # Excepciones para módulos necesarios de src/
 !src/queue_analysis.py
 !src/queue_visualizations.py
+!src/competitive/
+!src/competitive/**
 
 # Archivos temporales y de configuración local
 *.bat
