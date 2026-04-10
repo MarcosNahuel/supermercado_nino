@@ -150,6 +150,9 @@ def compute_price_comparison(
     if vtex_df is not None and not vtex_df.empty:
         vtex_match = match_vtex_to_nino(nino_df, vtex_df)
         vtex_match["fuente"] = "VTEX"
+        # VTEX usa precio_venta; normalizar a precio_promedio para unificar schema
+        if "precio_promedio" not in vtex_match.columns:
+            vtex_match["precio_promedio"] = vtex_match["precio_venta"]
         if "diferencia_pct" not in vtex_match.columns:
             vtex_match["diferencia_abs"] = (
                 vtex_match["nino_precio_promedio"] - vtex_match["precio_venta"]
