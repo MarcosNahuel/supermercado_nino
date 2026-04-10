@@ -102,5 +102,12 @@ src/
 **/ESTRUCTURA_REPOSITORIO.md
 **/ACTUALIZACION_AUTOMATICA.md
 
+# Competitive intelligence data (heavy, regenerable)
+data/competitive/sepa_raw/*.zip
+data/competitive/sepa_raw/*.csv
+data/competitive/sepa_processed/*.parquet
+data/competitive/vtex_promos/*.parquet
+data/competitive/insights/*.parquet
+
 # Directorio .claude (configuración local)
 .claude/
