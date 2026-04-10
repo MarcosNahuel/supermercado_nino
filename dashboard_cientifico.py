@@ -1043,7 +1043,8 @@ with st.sidebar:
         "🚀 Estrategias Priorizadas",
         "💰 Márgenes - Costos",
         "🔮 Forecasting",
-        "📋 Informe Ejecutivo"
+        "📋 Informe Ejecutivo",
+        "🔍 Inteligencia Competitiva"
     ]
 
     selected_menu = st.radio(
@@ -5885,6 +5886,207 @@ elif selected_menu == "🔮 Forecasting":
         st.error(f"Error en el modelo de forecasting: {str(e)}")
         import traceback
         st.code(traceback.format_exc())
+
+# =============================================================================
+# INTELIGENCIA COMPETITIVA
+# =============================================================================
+elif selected_menu == "🔍 Inteligencia Competitiva":
+    st.header("🔍 Inteligencia Competitiva")
+    st.markdown("Comparacion de precios y promociones vs supermercados competidores.")
+
+    # Cargar datos competitivos
+    from pathlib import Path
+    comp_dir = Path("data/competitive")
+
+    sepa_path = comp_dir / "sepa_processed" / "sepa_precios_latest.parquet"
+    vtex_path = comp_dir / "vtex_promos" / "promos_latest.parquet"
+
+    has_sepa = sepa_path.exists()
+    has_vtex = vtex_path.exists()
+
+    if not has_sepa and not has_vtex:
+        st.warning(
+            "No hay datos competitivos disponibles. "
+            "Ejecuta los scripts de actualizacion:\n\n"
+            "```bash\n"
+            "python scripts/competitive/run_sepa_update.py\n"
+            "python scripts/competitive/run_vtex_scrape.py\n"
+            "```"
+        )
+    else:
+        from src.competitive.product_matcher import load_nino_products, compute_price_comparison
+        from src.competitive.insights_engine import generate_digest_report
+
+        # Cargar datos
+        sepa_df = pd.read_parquet(sepa_path) if has_sepa else None
+        vtex_df = pd.read_parquet(vtex_path) if has_vtex else None
+
+        # Cargar productos NINO
+        nino_df = load_nino_products()
+
+        # Generar comparacion
+        comparison = compute_price_comparison(nino_df, sepa_df, vtex_df)
+        report = generate_digest_report(comparison)
+
+        # --- Sub-tabs ---
+        tab1, tab2, tab3, tab4 = st.tabs([
+            "📊 Resumen", "💰 Precios", "🏷️ Promos", "💡 Sugerencias"
+        ])
+
+        # TAB 1: Resumen
+        with tab1:
+            r = report["resumen"]
+            col1, col2, col3, col4 = st.columns(4)
+            col1.metric("Productos Comparados", f"{r['productos_comparados']:,}")
+            col2.metric("Cadenas Analizadas", r['cadenas_analizadas'])
+            col3.metric(
+                "Diferencia Precio Promedio",
+                f"{r['diferencia_precio_promedio']:+.1f}%",
+                delta=f"{'NINO mas barato' if r['diferencia_precio_promedio'] < 0 else 'NINO mas caro'}",
+                delta_color="normal" if r['diferencia_precio_promedio'] < 0 else "inverse",
+            )
+            col4.metric("Promos Competencia", r['promos_activas_competencia'])
+
+            st.subheader("Posicion Competitiva por Categoria")
+            posicion = report["posicion_categorias"]
+
+            # Color por posicion
+            def color_posicion(val):
+                if val == "COMPETITIVO":
+                    return "background-color: #22c55e20; color: #22c55e"
+                elif val == "CARO":
+                    return "background-color: #ef444420; color: #ef4444"
+                return "background-color: #eab30820; color: #eab308"
+
+            st.dataframe(
+                posicion.style.applymap(color_posicion, subset=["posicion"]),
+                use_container_width=True,
+                hide_index=True,
+            )
+
+        # TAB 2: Comparacion de Precios
+        with tab2:
+            st.subheader("Comparacion de Precios NINO vs Mercado")
+
+            # Filtro por categoria
+            cats = sorted(comparison["categoria"].unique())
+            cat_filter = st.selectbox("Filtrar por categoria", ["Todas"] + cats)
+
+            filtered = comparison.copy()
+            if cat_filter != "Todas":
+                filtered = filtered[filtered["categoria"] == cat_filter]
+
+            # Top productos donde NINO es mas caro
+            st.markdown("**Productos donde NINO es mas caro que el mercado:**")
+            caros = filtered[filtered["diferencia_pct"] > 0].sort_values(
+                "diferencia_pct", ascending=False
+            ).head(20)
+
+            if not caros.empty:
+                st.dataframe(
+                    caros[["descripcion", "categoria", "cadena",
+                           "nino_precio_promedio", "precio_promedio",
+                           "diferencia_pct"]].rename(columns={
+                        "descripcion": "Producto",
+                        "categoria": "Categoria",
+                        "cadena": "Cadena",
+                        "nino_precio_promedio": "Precio NINO",
+                        "precio_promedio": "Precio Mercado",
+                        "diferencia_pct": "Diferencia %",
+                    }),
+                    use_container_width=True,
+                    hide_index=True,
+                )
+            else:
+                st.success("NINO es competitivo en todos los productos de esta categoria")
+
+            # Top productos donde NINO es mas barato
+            st.markdown("**Productos donde NINO es mas barato:**")
+            baratos = filtered[filtered["diferencia_pct"] < -5].sort_values(
+                "diferencia_pct"
+            ).head(20)
+
+            if not baratos.empty:
+                st.dataframe(
+                    baratos[["descripcion", "categoria", "cadena",
+                             "nino_precio_promedio", "precio_promedio",
+                             "diferencia_pct"]].rename(columns={
+                        "descripcion": "Producto",
+                        "categoria": "Categoria",
+                        "cadena": "Cadena",
+                        "nino_precio_promedio": "Precio NINO",
+                        "precio_promedio": "Precio Mercado",
+                        "diferencia_pct": "Diferencia %",
+                    }),
+                    use_container_width=True,
+                    hide_index=True,
+                )
+
+        # TAB 3: Promos de la Competencia
+        with tab3:
+            st.subheader("Promociones Activas de la Competencia")
+            promos = report["promos_competencia"]
+
+            if promos.empty:
+                st.info("No se detectaron promociones activas en la competencia")
+            else:
+                # Resumen por cadena
+                promo_by_chain = promos.groupby("cadena").agg(
+                    total_promos=("tiene_promo", "sum"),
+                    descuento_promedio=("descuento_pct", "mean"),
+                ).reset_index()
+                promo_by_chain["descuento_promedio"] = promo_by_chain["descuento_promedio"].round(1)
+
+                st.dataframe(
+                    promo_by_chain.rename(columns={
+                        "cadena": "Cadena",
+                        "total_promos": "Total Promos",
+                        "descuento_promedio": "Descuento Promedio %",
+                    }),
+                    use_container_width=True,
+                    hide_index=True,
+                )
+
+                # Detalle de promos
+                st.markdown("**Detalle de promociones:**")
+                st.dataframe(
+                    promos[["descripcion", "cadena", "promo_nombre",
+                            "precio_lista", "precio_venta", "descuento_pct"]]
+                    .rename(columns={
+                        "descripcion": "Producto",
+                        "cadena": "Cadena",
+                        "promo_nombre": "Promocion",
+                        "precio_lista": "Precio Lista",
+                        "precio_venta": "Precio Promo",
+                        "descuento_pct": "Descuento %",
+                    })
+                    .sort_values("Descuento %", ascending=False),
+                    use_container_width=True,
+                    hide_index=True,
+                )
+
+        # TAB 4: Sugerencias
+        with tab4:
+            st.subheader("💡 Sugerencias de Promociones para NINO")
+            st.markdown(
+                "Basadas en el analisis de precios y promociones de la competencia. "
+                "**Informacion digerida para toma de decisiones.**"
+            )
+
+            sugerencias = report["sugerencias"]
+            if not sugerencias:
+                st.info("No hay sugerencias disponibles con los datos actuales")
+            else:
+                for i, sug in enumerate(sugerencias, 1):
+                    with st.expander(
+                        f"**{i}. {sug['producto']}** — {sug['accion'][:60]}",
+                        expanded=i <= 3,
+                    ):
+                        st.markdown(f"**Categoria:** {sug['categoria']}")
+                        st.markdown(f"**Contexto:** {sug['contexto']}")
+                        st.markdown(f"**Accion sugerida:** {sug['accion']}")
+                        if sug["promos_competencia"]:
+                            st.markdown(f"**Promos de la competencia:** {sug['promos_competencia']}")
 
 # =============================================================================
 # FOOTER
