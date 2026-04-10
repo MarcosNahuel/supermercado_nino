@@ -8,6 +8,8 @@ from pathlib import Path
 
 import pandas as pd
 
+from src.competitive.data_quality import filter_valid_nino_rows
+
 logger = logging.getLogger(__name__)
 
 
@@ -35,12 +37,13 @@ def load_nino_products(
                      "precio_unitario", "cantidad", "importe_total"],
         )
 
-    df = detalle_df.copy()
+    # Limpieza previa: EAN valido + cantidad>0 + precio>0
+    # Evita divide-by-zero en el groupby ponderado y descarta codigos internos
+    clean = filter_valid_nino_rows(detalle_df)
+
+    df = clean.copy()
     df = df.rename(columns={"codigo_barras": "ean"})
     df["ean"] = df["ean"].astype(str).str.strip().str.replace(r"\.0$", "", regex=True)
-
-    # Filtrar EAN validos (numerico, >6 digitos)
-    df = df[df["ean"].str.match(r"^\d{7,}$", na=False)]
 
     # Agregar por EAN: precio ponderado por cantidad
     agg = (
